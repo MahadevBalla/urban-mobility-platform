@@ -1,0 +1,5255 @@
+# Transport Data Ontology
+# Version: 1.0.0
+# Generated: 2025-11-10T17:43:21.714183
+# Source: Python dataclass modules in ONTOLOGY/
+
+@prefix : <http://transport-ontology.org/ontology#> .
+@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+@prefix skos: <http://www.w3.org/2004/02/skos/core#> .
+@prefix dcterms: <http://purl.org/dc/terms/> .
+@prefix foaf: <http://xmlns.com/foaf/0.1/> .
+@prefix geo: <http://www.w3.org/2003/01/geo/wgs84_pos#> .
+@prefix time: <http://www.w3.org/2006/time#> .
+
+# Ontology Metadata
+: a owl:Ontology ;
+    dcterms:title "Transport Data Ontology" ;
+    dcterms:description "Comprehensive ontology for urban transport data integration, aligned with international standards (Transmodel, GTFS, NHTS, Census)" ;
+    dcterms:created "2025-11-10"^^xsd:date ;
+    dcterms:creator "Urban Transit Tool Project" ;
+    owl:versionInfo "1.0.0" .
+
+
+# ==================================================
+# ENUMERATIONS
+# ==================================================
+
+# Enumeration: AlertCause
+:AlertCause a rdfs:Class , owl:Class ;
+    rdfs:label "AlertCause" ;
+    rdfs:subClassOf :Enumeration ;
+    dcterms:source "gtfs module" .
+
+:AlertCause_UNKNOWN_CAUSE a :AlertCause ;
+    rdfs:label "UNKNOWN_CAUSE" ;
+    skos:notation "UNKNOWN_CAUSE" .
+
+:AlertCause_OTHER_CAUSE a :AlertCause ;
+    rdfs:label "OTHER_CAUSE" ;
+    skos:notation "OTHER_CAUSE" .
+
+:AlertCause_TECHNICAL_PROBLEM a :AlertCause ;
+    rdfs:label "TECHNICAL_PROBLEM" ;
+    skos:notation "TECHNICAL_PROBLEM" .
+
+:AlertCause_STRIKE a :AlertCause ;
+    rdfs:label "STRIKE" ;
+    skos:notation "STRIKE" .
+
+:AlertCause_DEMONSTRATION a :AlertCause ;
+    rdfs:label "DEMONSTRATION" ;
+    skos:notation "DEMONSTRATION" .
+
+:AlertCause_ACCIDENT a :AlertCause ;
+    rdfs:label "ACCIDENT" ;
+    skos:notation "ACCIDENT" .
+
+:AlertCause_HOLIDAY a :AlertCause ;
+    rdfs:label "HOLIDAY" ;
+    skos:notation "HOLIDAY" .
+
+:AlertCause_WEATHER a :AlertCause ;
+    rdfs:label "WEATHER" ;
+    skos:notation "WEATHER" .
+
+:AlertCause_MAINTENANCE a :AlertCause ;
+    rdfs:label "MAINTENANCE" ;
+    skos:notation "MAINTENANCE" .
+
+:AlertCause_CONSTRUCTION a :AlertCause ;
+    rdfs:label "CONSTRUCTION" ;
+    skos:notation "CONSTRUCTION" .
+
+:AlertCause_POLICE_ACTIVITY a :AlertCause ;
+    rdfs:label "POLICE_ACTIVITY" ;
+    skos:notation "POLICE_ACTIVITY" .
+
+:AlertCause_MEDICAL_EMERGENCY a :AlertCause ;
+    rdfs:label "MEDICAL_EMERGENCY" ;
+    skos:notation "MEDICAL_EMERGENCY" .
+
+# Enumeration: AlertEffect
+:AlertEffect a rdfs:Class , owl:Class ;
+    rdfs:label "AlertEffect" ;
+    rdfs:subClassOf :Enumeration ;
+    dcterms:source "gtfs module" .
+
+:AlertEffect_NO_SERVICE a :AlertEffect ;
+    rdfs:label "NO_SERVICE" ;
+    skos:notation "NO_SERVICE" .
+
+:AlertEffect_REDUCED_SERVICE a :AlertEffect ;
+    rdfs:label "REDUCED_SERVICE" ;
+    skos:notation "REDUCED_SERVICE" .
+
+:AlertEffect_SIGNIFICANT_DELAYS a :AlertEffect ;
+    rdfs:label "SIGNIFICANT_DELAYS" ;
+    skos:notation "SIGNIFICANT_DELAYS" .
+
+:AlertEffect_DETOUR a :AlertEffect ;
+    rdfs:label "DETOUR" ;
+    skos:notation "DETOUR" .
+
+:AlertEffect_ADDITIONAL_SERVICE a :AlertEffect ;
+    rdfs:label "ADDITIONAL_SERVICE" ;
+    skos:notation "ADDITIONAL_SERVICE" .
+
+:AlertEffect_MODIFIED_SERVICE a :AlertEffect ;
+    rdfs:label "MODIFIED_SERVICE" ;
+    skos:notation "MODIFIED_SERVICE" .
+
+:AlertEffect_OTHER_EFFECT a :AlertEffect ;
+    rdfs:label "OTHER_EFFECT" ;
+    skos:notation "OTHER_EFFECT" .
+
+:AlertEffect_UNKNOWN_EFFECT a :AlertEffect ;
+    rdfs:label "UNKNOWN_EFFECT" ;
+    skos:notation "UNKNOWN_EFFECT" .
+
+:AlertEffect_STOP_MOVED a :AlertEffect ;
+    rdfs:label "STOP_MOVED" ;
+    skos:notation "STOP_MOVED" .
+
+# Enumeration: AmenityType
+:AmenityType a rdfs:Class , owl:Class ;
+    rdfs:label "AmenityType" ;
+    rdfs:subClassOf :Enumeration ;
+    dcterms:source "osm module" .
+
+:AmenityType_RESTAURANT a :AmenityType ;
+    rdfs:label "RESTAURANT" ;
+    skos:notation "RESTAURANT" .
+
+:AmenityType_CAFE a :AmenityType ;
+    rdfs:label "CAFE" ;
+    skos:notation "CAFE" .
+
+:AmenityType_BAR a :AmenityType ;
+    rdfs:label "BAR" ;
+    skos:notation "BAR" .
+
+:AmenityType_SCHOOL a :AmenityType ;
+    rdfs:label "SCHOOL" ;
+    skos:notation "SCHOOL" .
+
+:AmenityType_UNIVERSITY a :AmenityType ;
+    rdfs:label "UNIVERSITY" ;
+    skos:notation "UNIVERSITY" .
+
+:AmenityType_HOSPITAL a :AmenityType ;
+    rdfs:label "HOSPITAL" ;
+    skos:notation "HOSPITAL" .
+
+:AmenityType_CLINIC a :AmenityType ;
+    rdfs:label "CLINIC" ;
+    skos:notation "CLINIC" .
+
+:AmenityType_PHARMACY a :AmenityType ;
+    rdfs:label "PHARMACY" ;
+    skos:notation "PHARMACY" .
+
+:AmenityType_BANK a :AmenityType ;
+    rdfs:label "BANK" ;
+    skos:notation "BANK" .
+
+:AmenityType_POST_OFFICE a :AmenityType ;
+    rdfs:label "POST_OFFICE" ;
+    skos:notation "POST_OFFICE" .
+
+:AmenityType_POLICE a :AmenityType ;
+    rdfs:label "POLICE" ;
+    skos:notation "POLICE" .
+
+:AmenityType_FIRE_STATION a :AmenityType ;
+    rdfs:label "FIRE_STATION" ;
+    skos:notation "FIRE_STATION" .
+
+:AmenityType_PARKING a :AmenityType ;
+    rdfs:label "PARKING" ;
+    skos:notation "PARKING" .
+
+:AmenityType_FUEL a :AmenityType ;
+    rdfs:label "FUEL" ;
+    skos:notation "FUEL" .
+
+:AmenityType_PLACE_OF_WORSHIP a :AmenityType ;
+    rdfs:label "PLACE_OF_WORSHIP" ;
+    skos:notation "PLACE_OF_WORSHIP" .
+
+# Enumeration: BikesAllowed
+:BikesAllowed a rdfs:Class , owl:Class ;
+    rdfs:label "BikesAllowed" ;
+    rdfs:subClassOf :Enumeration ;
+    dcterms:source "gtfs module" .
+
+:BikesAllowed_UNKNOWN a :BikesAllowed ;
+    rdfs:label "UNKNOWN" ;
+    skos:notation "UNKNOWN" .
+
+:BikesAllowed_ALLOWED a :BikesAllowed ;
+    rdfs:label "ALLOWED" ;
+    skos:notation "ALLOWED" .
+
+:BikesAllowed_NOT_ALLOWED a :BikesAllowed ;
+    rdfs:label "NOT_ALLOWED" ;
+    skos:notation "NOT_ALLOWED" .
+
+# Enumeration: BuildingType
+:BuildingType a rdfs:Class , owl:Class ;
+    rdfs:label "BuildingType" ;
+    rdfs:subClassOf :Enumeration ;
+    dcterms:source "osm module" .
+
+:BuildingType_RESIDENTIAL a :BuildingType ;
+    rdfs:label "RESIDENTIAL" ;
+    skos:notation "RESIDENTIAL" .
+
+:BuildingType_APARTMENTS a :BuildingType ;
+    rdfs:label "APARTMENTS" ;
+    skos:notation "APARTMENTS" .
+
+:BuildingType_HOUSE a :BuildingType ;
+    rdfs:label "HOUSE" ;
+    skos:notation "HOUSE" .
+
+:BuildingType_DETACHED a :BuildingType ;
+    rdfs:label "DETACHED" ;
+    skos:notation "DETACHED" .
+
+:BuildingType_COMMERCIAL a :BuildingType ;
+    rdfs:label "COMMERCIAL" ;
+    skos:notation "COMMERCIAL" .
+
+:BuildingType_RETAIL a :BuildingType ;
+    rdfs:label "RETAIL" ;
+    skos:notation "RETAIL" .
+
+:BuildingType_OFFICE a :BuildingType ;
+    rdfs:label "OFFICE" ;
+    skos:notation "OFFICE" .
+
+:BuildingType_INDUSTRIAL a :BuildingType ;
+    rdfs:label "INDUSTRIAL" ;
+    skos:notation "INDUSTRIAL" .
+
+:BuildingType_WAREHOUSE a :BuildingType ;
+    rdfs:label "WAREHOUSE" ;
+    skos:notation "WAREHOUSE" .
+
+:BuildingType_HOTEL a :BuildingType ;
+    rdfs:label "HOTEL" ;
+    skos:notation "HOTEL" .
+
+:BuildingType_HOSPITAL a :BuildingType ;
+    rdfs:label "HOSPITAL" ;
+    skos:notation "HOSPITAL" .
+
+:BuildingType_SCHOOL a :BuildingType ;
+    rdfs:label "SCHOOL" ;
+    skos:notation "SCHOOL" .
+
+:BuildingType_UNIVERSITY a :BuildingType ;
+    rdfs:label "UNIVERSITY" ;
+    skos:notation "UNIVERSITY" .
+
+:BuildingType_PUBLIC a :BuildingType ;
+    rdfs:label "PUBLIC" ;
+    skos:notation "PUBLIC" .
+
+:BuildingType_TRANSPORTATION a :BuildingType ;
+    rdfs:label "TRANSPORTATION" ;
+    skos:notation "TRANSPORTATION" .
+
+:BuildingType_RELIGIOUS a :BuildingType ;
+    rdfs:label "RELIGIOUS" ;
+    skos:notation "RELIGIOUS" .
+
+# Enumeration: CDREventType
+:CDREventType a rdfs:Class , owl:Class ;
+    rdfs:label "CDREventType" ;
+    rdfs:subClassOf :Enumeration ;
+    dcterms:source "mobile module" .
+
+:CDREventType_CALL_OUTGOING a :CDREventType ;
+    rdfs:label "CALL_OUTGOING" ;
+    skos:notation "CALL_OUTGOING" .
+
+:CDREventType_CALL_INCOMING a :CDREventType ;
+    rdfs:label "CALL_INCOMING" ;
+    skos:notation "CALL_INCOMING" .
+
+:CDREventType_SMS_OUTGOING a :CDREventType ;
+    rdfs:label "SMS_OUTGOING" ;
+    skos:notation "SMS_OUTGOING" .
+
+:CDREventType_SMS_INCOMING a :CDREventType ;
+    rdfs:label "SMS_INCOMING" ;
+    skos:notation "SMS_INCOMING" .
+
+:CDREventType_DATA_SESSION a :CDREventType ;
+    rdfs:label "DATA_SESSION" ;
+    skos:notation "DATA_SESSION" .
+
+:CDREventType_LOCATION_UPDATE a :CDREventType ;
+    rdfs:label "LOCATION_UPDATE" ;
+    skos:notation "LOCATION_UPDATE" .
+
+# Enumeration: CongestionLevel
+:CongestionLevel a rdfs:Class , owl:Class ;
+    rdfs:label "CongestionLevel" ;
+    rdfs:subClassOf :Enumeration ;
+    dcterms:source "probe module" .
+
+:CongestionLevel_FREE_FLOW a :CongestionLevel ;
+    rdfs:label "FREE_FLOW" ;
+    skos:notation "FREE_FLOW" .
+
+:CongestionLevel_MODERATE a :CongestionLevel ;
+    rdfs:label "MODERATE" ;
+    skos:notation "MODERATE" .
+
+:CongestionLevel_HEAVY a :CongestionLevel ;
+    rdfs:label "HEAVY" ;
+    skos:notation "HEAVY" .
+
+:CongestionLevel_SEVERE a :CongestionLevel ;
+    rdfs:label "SEVERE" ;
+    skos:notation "SEVERE" .
+
+# Enumeration: DataQuality
+:DataQuality a rdfs:Class , owl:Class ;
+    rdfs:label "DataQuality" ;
+    rdfs:subClassOf :Enumeration ;
+    dcterms:source "base module" .
+
+:DataQuality_HIGH a :DataQuality ;
+    rdfs:label "HIGH" ;
+    skos:notation "HIGH" .
+
+:DataQuality_MEDIUM a :DataQuality ;
+    rdfs:label "MEDIUM" ;
+    skos:notation "MEDIUM" .
+
+:DataQuality_LOW a :DataQuality ;
+    rdfs:label "LOW" ;
+    skos:notation "LOW" .
+
+:DataQuality_VERY_LOW a :DataQuality ;
+    rdfs:label "VERY_LOW" ;
+    skos:notation "VERY_LOW" .
+
+:DataQuality_UNKNOWN a :DataQuality ;
+    rdfs:label "UNKNOWN" ;
+    skos:notation "UNKNOWN" .
+
+# Enumeration: DayType
+:DayType a rdfs:Class , owl:Class ;
+    rdfs:label "DayType" ;
+    rdfs:subClassOf :Enumeration ;
+    dcterms:source "base module" .
+
+:DayType_WEEKDAY a :DayType ;
+    rdfs:label "WEEKDAY" ;
+    skos:notation "WEEKDAY" .
+
+:DayType_SATURDAY a :DayType ;
+    rdfs:label "SATURDAY" ;
+    skos:notation "SATURDAY" .
+
+:DayType_SUNDAY a :DayType ;
+    rdfs:label "SUNDAY" ;
+    skos:notation "SUNDAY" .
+
+:DayType_HOLIDAY a :DayType ;
+    rdfs:label "HOLIDAY" ;
+    skos:notation "HOLIDAY" .
+
+# Enumeration: DeviceType
+:DeviceType a rdfs:Class , owl:Class ;
+    rdfs:label "DeviceType" ;
+    rdfs:subClassOf :Enumeration ;
+    dcterms:source "mobile module" .
+
+:DeviceType_SMARTPHONE a :DeviceType ;
+    rdfs:label "SMARTPHONE" ;
+    skos:notation "SMARTPHONE" .
+
+:DeviceType_FEATURE_PHONE a :DeviceType ;
+    rdfs:label "FEATURE_PHONE" ;
+    skos:notation "FEATURE_PHONE" .
+
+:DeviceType_TABLET a :DeviceType ;
+    rdfs:label "TABLET" ;
+    skos:notation "TABLET" .
+
+:DeviceType_IOT_DEVICE a :DeviceType ;
+    rdfs:label "IOT_DEVICE" ;
+    skos:notation "IOT_DEVICE" .
+
+# Enumeration: DwellingType
+:DwellingType a rdfs:Class , owl:Class ;
+    rdfs:label "DwellingType" ;
+    rdfs:subClassOf :Enumeration ;
+    dcterms:source "census module" .
+
+:DwellingType_SINGLE_FAMILY_DETACHED a :DwellingType ;
+    rdfs:label "SINGLE_FAMILY_DETACHED" ;
+    skos:notation "SINGLE_FAMILY_DETACHED" .
+
+:DwellingType_SINGLE_FAMILY_ATTACHED a :DwellingType ;
+    rdfs:label "SINGLE_FAMILY_ATTACHED" ;
+    skos:notation "SINGLE_FAMILY_ATTACHED" .
+
+:DwellingType_APARTMENT_2_4_UNITS a :DwellingType ;
+    rdfs:label "APARTMENT_2_4_UNITS" ;
+    skos:notation "APARTMENT_2_4_UNITS" .
+
+:DwellingType_APARTMENT_5_PLUS_UNITS a :DwellingType ;
+    rdfs:label "APARTMENT_5_PLUS_UNITS" ;
+    skos:notation "APARTMENT_5_PLUS_UNITS" .
+
+:DwellingType_MOBILE_HOME a :DwellingType ;
+    rdfs:label "MOBILE_HOME" ;
+    skos:notation "MOBILE_HOME" .
+
+:DwellingType_OTHER a :DwellingType ;
+    rdfs:label "OTHER" ;
+    skos:notation "OTHER" .
+
+# Enumeration: EducationLevel
+:EducationLevel a rdfs:Class , owl:Class ;
+    rdfs:label "EducationLevel" ;
+    rdfs:subClassOf :Enumeration ;
+    dcterms:source "base module" .
+
+:EducationLevel_LESS_THAN_HS a :EducationLevel ;
+    rdfs:label "LESS_THAN_HS" ;
+    skos:notation "LESS_THAN_HS" .
+
+:EducationLevel_HS_DIPLOMA a :EducationLevel ;
+    rdfs:label "HS_DIPLOMA" ;
+    skos:notation "HS_DIPLOMA" .
+
+:EducationLevel_SOME_COLLEGE a :EducationLevel ;
+    rdfs:label "SOME_COLLEGE" ;
+    skos:notation "SOME_COLLEGE" .
+
+:EducationLevel_ASSOCIATES a :EducationLevel ;
+    rdfs:label "ASSOCIATES" ;
+    skos:notation "ASSOCIATES" .
+
+:EducationLevel_BACHELORS a :EducationLevel ;
+    rdfs:label "BACHELORS" ;
+    skos:notation "BACHELORS" .
+
+:EducationLevel_MASTERS a :EducationLevel ;
+    rdfs:label "MASTERS" ;
+    skos:notation "MASTERS" .
+
+:EducationLevel_DOCTORAL a :EducationLevel ;
+    rdfs:label "DOCTORAL" ;
+    skos:notation "DOCTORAL" .
+
+# Enumeration: EmploymentStatus
+:EmploymentStatus a rdfs:Class , owl:Class ;
+    rdfs:label "EmploymentStatus" ;
+    rdfs:subClassOf :Enumeration ;
+    dcterms:source "base module" .
+
+:EmploymentStatus_EMPLOYED_FULL_TIME a :EmploymentStatus ;
+    rdfs:label "EMPLOYED_FULL_TIME" ;
+    skos:notation "EMPLOYED_FULL_TIME" .
+
+:EmploymentStatus_EMPLOYED_PART_TIME a :EmploymentStatus ;
+    rdfs:label "EMPLOYED_PART_TIME" ;
+    skos:notation "EMPLOYED_PART_TIME" .
+
+:EmploymentStatus_UNEMPLOYED a :EmploymentStatus ;
+    rdfs:label "UNEMPLOYED" ;
+    skos:notation "UNEMPLOYED" .
+
+:EmploymentStatus_NOT_IN_LABOR_FORCE a :EmploymentStatus ;
+    rdfs:label "NOT_IN_LABOR_FORCE" ;
+    skos:notation "NOT_IN_LABOR_FORCE" .
+
+:EmploymentStatus_STUDENT a :EmploymentStatus ;
+    rdfs:label "STUDENT" ;
+    skos:notation "STUDENT" .
+
+:EmploymentStatus_RETIRED a :EmploymentStatus ;
+    rdfs:label "RETIRED" ;
+    skos:notation "RETIRED" .
+
+# Enumeration: Ethnicity
+:Ethnicity a rdfs:Class , owl:Class ;
+    rdfs:label "Ethnicity" ;
+    rdfs:subClassOf :Enumeration ;
+    dcterms:source "census module" .
+
+:Ethnicity_HISPANIC a :Ethnicity ;
+    rdfs:label "HISPANIC" ;
+    skos:notation "HISPANIC" .
+
+:Ethnicity_NON_HISPANIC a :Ethnicity ;
+    rdfs:label "NON_HISPANIC" ;
+    skos:notation "NON_HISPANIC" .
+
+# Enumeration: GTFSRouteType
+:GTFSRouteType a rdfs:Class , owl:Class ;
+    rdfs:label "GTFSRouteType" ;
+    rdfs:subClassOf :Enumeration ;
+    dcterms:source "base module" .
+
+:GTFSRouteType_TRAM a :GTFSRouteType ;
+    rdfs:label "TRAM" ;
+    skos:notation "TRAM" .
+
+:GTFSRouteType_SUBWAY a :GTFSRouteType ;
+    rdfs:label "SUBWAY" ;
+    skos:notation "SUBWAY" .
+
+:GTFSRouteType_RAIL a :GTFSRouteType ;
+    rdfs:label "RAIL" ;
+    skos:notation "RAIL" .
+
+:GTFSRouteType_BUS a :GTFSRouteType ;
+    rdfs:label "BUS" ;
+    skos:notation "BUS" .
+
+:GTFSRouteType_FERRY a :GTFSRouteType ;
+    rdfs:label "FERRY" ;
+    skos:notation "FERRY" .
+
+:GTFSRouteType_CABLE_TRAM a :GTFSRouteType ;
+    rdfs:label "CABLE_TRAM" ;
+    skos:notation "CABLE_TRAM" .
+
+:GTFSRouteType_AERIAL_LIFT a :GTFSRouteType ;
+    rdfs:label "AERIAL_LIFT" ;
+    skos:notation "AERIAL_LIFT" .
+
+:GTFSRouteType_FUNICULAR a :GTFSRouteType ;
+    rdfs:label "FUNICULAR" ;
+    skos:notation "FUNICULAR" .
+
+:GTFSRouteType_TROLLEYBUS a :GTFSRouteType ;
+    rdfs:label "TROLLEYBUS" ;
+    skos:notation "TROLLEYBUS" .
+
+:GTFSRouteType_MONORAIL a :GTFSRouteType ;
+    rdfs:label "MONORAIL" ;
+    skos:notation "MONORAIL" .
+
+# Enumeration: GeographyType
+:GeographyType a rdfs:Class , owl:Class ;
+    rdfs:label "GeographyType" ;
+    rdfs:subClassOf :Enumeration ;
+    dcterms:source "base module" .
+
+:GeographyType_STATE a :GeographyType ;
+    rdfs:label "STATE" ;
+    skos:notation "STATE" .
+
+:GeographyType_COUNTY a :GeographyType ;
+    rdfs:label "COUNTY" ;
+    skos:notation "COUNTY" .
+
+:GeographyType_TRACT a :GeographyType ;
+    rdfs:label "TRACT" ;
+    skos:notation "TRACT" .
+
+:GeographyType_BLOCK_GROUP a :GeographyType ;
+    rdfs:label "BLOCK_GROUP" ;
+    skos:notation "BLOCK_GROUP" .
+
+:GeographyType_PUMA a :GeographyType ;
+    rdfs:label "PUMA" ;
+    skos:notation "PUMA" .
+
+:GeographyType_TAZ a :GeographyType ;
+    rdfs:label "TAZ" ;
+    skos:notation "TAZ" .
+
+:GeographyType_H3_HEX a :GeographyType ;
+    rdfs:label "H3_HEX" ;
+    skos:notation "H3_HEX" .
+
+:GeographyType_CUSTOM a :GeographyType ;
+    rdfs:label "CUSTOM" ;
+    skos:notation "CUSTOM" .
+
+# Enumeration: HighwayClass
+:HighwayClass a rdfs:Class , owl:Class ;
+    rdfs:label "HighwayClass" ;
+    rdfs:subClassOf :Enumeration ;
+    dcterms:source "base module" .
+
+:HighwayClass_MOTORWAY a :HighwayClass ;
+    rdfs:label "MOTORWAY" ;
+    skos:notation "MOTORWAY" .
+
+:HighwayClass_TRUNK a :HighwayClass ;
+    rdfs:label "TRUNK" ;
+    skos:notation "TRUNK" .
+
+:HighwayClass_PRIMARY a :HighwayClass ;
+    rdfs:label "PRIMARY" ;
+    skos:notation "PRIMARY" .
+
+:HighwayClass_SECONDARY a :HighwayClass ;
+    rdfs:label "SECONDARY" ;
+    skos:notation "SECONDARY" .
+
+:HighwayClass_TERTIARY a :HighwayClass ;
+    rdfs:label "TERTIARY" ;
+    skos:notation "TERTIARY" .
+
+:HighwayClass_RESIDENTIAL a :HighwayClass ;
+    rdfs:label "RESIDENTIAL" ;
+    skos:notation "RESIDENTIAL" .
+
+:HighwayClass_SERVICE a :HighwayClass ;
+    rdfs:label "SERVICE" ;
+    skos:notation "SERVICE" .
+
+:HighwayClass_CYCLEWAY a :HighwayClass ;
+    rdfs:label "CYCLEWAY" ;
+    skos:notation "CYCLEWAY" .
+
+:HighwayClass_FOOTWAY a :HighwayClass ;
+    rdfs:label "FOOTWAY" ;
+    skos:notation "FOOTWAY" .
+
+:HighwayClass_PATH a :HighwayClass ;
+    rdfs:label "PATH" ;
+    skos:notation "PATH" .
+
+# Enumeration: HouseholdType
+:HouseholdType a rdfs:Class , owl:Class ;
+    rdfs:label "HouseholdType" ;
+    rdfs:subClassOf :Enumeration ;
+    dcterms:source "census module" .
+
+:HouseholdType_SINGLE_PERSON a :HouseholdType ;
+    rdfs:label "SINGLE_PERSON" ;
+    skos:notation "SINGLE_PERSON" .
+
+:HouseholdType_MARRIED_COUPLE a :HouseholdType ;
+    rdfs:label "MARRIED_COUPLE" ;
+    skos:notation "MARRIED_COUPLE" .
+
+:HouseholdType_MARRIED_WITH_CHILDREN a :HouseholdType ;
+    rdfs:label "MARRIED_WITH_CHILDREN" ;
+    skos:notation "MARRIED_WITH_CHILDREN" .
+
+:HouseholdType_SINGLE_PARENT a :HouseholdType ;
+    rdfs:label "SINGLE_PARENT" ;
+    skos:notation "SINGLE_PARENT" .
+
+:HouseholdType_NON_FAMILY a :HouseholdType ;
+    rdfs:label "NON_FAMILY" ;
+    skos:notation "NON_FAMILY" .
+
+:HouseholdType_OTHER a :HouseholdType ;
+    rdfs:label "OTHER" ;
+    skos:notation "OTHER" .
+
+# Enumeration: IncidentSeverity
+:IncidentSeverity a rdfs:Class , owl:Class ;
+    rdfs:label "IncidentSeverity" ;
+    rdfs:subClassOf :Enumeration ;
+    dcterms:source "base module" .
+
+:IncidentSeverity_MINOR a :IncidentSeverity ;
+    rdfs:label "MINOR" ;
+    skos:notation "MINOR" .
+
+:IncidentSeverity_MODERATE a :IncidentSeverity ;
+    rdfs:label "MODERATE" ;
+    skos:notation "MODERATE" .
+
+:IncidentSeverity_MAJOR a :IncidentSeverity ;
+    rdfs:label "MAJOR" ;
+    skos:notation "MAJOR" .
+
+:IncidentSeverity_CRITICAL a :IncidentSeverity ;
+    rdfs:label "CRITICAL" ;
+    skos:notation "CRITICAL" .
+
+# Enumeration: IncomeBracket
+:IncomeBracket a rdfs:Class , owl:Class ;
+    rdfs:label "IncomeBracket" ;
+    rdfs:subClassOf :Enumeration ;
+    dcterms:source "census module" .
+
+:IncomeBracket_LESS_THAN_15K a :IncomeBracket ;
+    rdfs:label "LESS_THAN_15K" ;
+    skos:notation "LESS_THAN_15K" .
+
+:IncomeBracket_FROM_15K_TO_25K a :IncomeBracket ;
+    rdfs:label "FROM_15K_TO_25K" ;
+    skos:notation "FROM_15K_TO_25K" .
+
+:IncomeBracket_FROM_25K_TO_35K a :IncomeBracket ;
+    rdfs:label "FROM_25K_TO_35K" ;
+    skos:notation "FROM_25K_TO_35K" .
+
+:IncomeBracket_FROM_35K_TO_50K a :IncomeBracket ;
+    rdfs:label "FROM_35K_TO_50K" ;
+    skos:notation "FROM_35K_TO_50K" .
+
+:IncomeBracket_FROM_50K_TO_75K a :IncomeBracket ;
+    rdfs:label "FROM_50K_TO_75K" ;
+    skos:notation "FROM_50K_TO_75K" .
+
+:IncomeBracket_FROM_75K_TO_100K a :IncomeBracket ;
+    rdfs:label "FROM_75K_TO_100K" ;
+    skos:notation "FROM_75K_TO_100K" .
+
+:IncomeBracket_FROM_100K_TO_150K a :IncomeBracket ;
+    rdfs:label "FROM_100K_TO_150K" ;
+    skos:notation "FROM_100K_TO_150K" .
+
+:IncomeBracket_FROM_150K_TO_200K a :IncomeBracket ;
+    rdfs:label "FROM_150K_TO_200K" ;
+    skos:notation "FROM_150K_TO_200K" .
+
+:IncomeBracket_ABOVE_200K a :IncomeBracket ;
+    rdfs:label "ABOVE_200K" ;
+    skos:notation "ABOVE_200K" .
+
+# Enumeration: LandUseType
+:LandUseType a rdfs:Class , owl:Class ;
+    rdfs:label "LandUseType" ;
+    rdfs:subClassOf :Enumeration ;
+    dcterms:source "base module" .
+
+:LandUseType_RESIDENTIAL_SINGLE a :LandUseType ;
+    rdfs:label "RESIDENTIAL_SINGLE" ;
+    skos:notation "RESIDENTIAL_SINGLE" .
+
+:LandUseType_RESIDENTIAL_MULTI a :LandUseType ;
+    rdfs:label "RESIDENTIAL_MULTI" ;
+    skos:notation "RESIDENTIAL_MULTI" .
+
+:LandUseType_COMMERCIAL_RETAIL a :LandUseType ;
+    rdfs:label "COMMERCIAL_RETAIL" ;
+    skos:notation "COMMERCIAL_RETAIL" .
+
+:LandUseType_COMMERCIAL_OFFICE a :LandUseType ;
+    rdfs:label "COMMERCIAL_OFFICE" ;
+    skos:notation "COMMERCIAL_OFFICE" .
+
+:LandUseType_INDUSTRIAL_LIGHT a :LandUseType ;
+    rdfs:label "INDUSTRIAL_LIGHT" ;
+    skos:notation "INDUSTRIAL_LIGHT" .
+
+:LandUseType_INDUSTRIAL_HEAVY a :LandUseType ;
+    rdfs:label "INDUSTRIAL_HEAVY" ;
+    skos:notation "INDUSTRIAL_HEAVY" .
+
+:LandUseType_INSTITUTIONAL_SCHOOL a :LandUseType ;
+    rdfs:label "INSTITUTIONAL_SCHOOL" ;
+    skos:notation "INSTITUTIONAL_SCHOOL" .
+
+:LandUseType_INSTITUTIONAL_HOSPITAL a :LandUseType ;
+    rdfs:label "INSTITUTIONAL_HOSPITAL" ;
+    skos:notation "INSTITUTIONAL_HOSPITAL" .
+
+:LandUseType_INSTITUTIONAL_GOVERNMENT a :LandUseType ;
+    rdfs:label "INSTITUTIONAL_GOVERNMENT" ;
+    skos:notation "INSTITUTIONAL_GOVERNMENT" .
+
+:LandUseType_RECREATIONAL a :LandUseType ;
+    rdfs:label "RECREATIONAL" ;
+    skos:notation "RECREATIONAL" .
+
+:LandUseType_AGRICULTURAL a :LandUseType ;
+    rdfs:label "AGRICULTURAL" ;
+    skos:notation "AGRICULTURAL" .
+
+:LandUseType_VACANT a :LandUseType ;
+    rdfs:label "VACANT" ;
+    skos:notation "VACANT" .
+
+:LandUseType_MIXED_USE a :LandUseType ;
+    rdfs:label "MIXED_USE" ;
+    skos:notation "MIXED_USE" .
+
+:LandUseType_TRANSPORTATION a :LandUseType ;
+    rdfs:label "TRANSPORTATION" ;
+    skos:notation "TRANSPORTATION" .
+
+# Enumeration: LocationType
+:LocationType a rdfs:Class , owl:Class ;
+    rdfs:label "LocationType" ;
+    rdfs:subClassOf :Enumeration ;
+    dcterms:source "gtfs module" .
+
+:LocationType_STOP a :LocationType ;
+    rdfs:label "STOP" ;
+    skos:notation "STOP" .
+
+:LocationType_STATION a :LocationType ;
+    rdfs:label "STATION" ;
+    skos:notation "STATION" .
+
+:LocationType_ENTRANCE_EXIT a :LocationType ;
+    rdfs:label "ENTRANCE_EXIT" ;
+    skos:notation "ENTRANCE_EXIT" .
+
+:LocationType_GENERIC_NODE a :LocationType ;
+    rdfs:label "GENERIC_NODE" ;
+    skos:notation "GENERIC_NODE" .
+
+:LocationType_BOARDING_AREA a :LocationType ;
+    rdfs:label "BOARDING_AREA" ;
+    skos:notation "BOARDING_AREA" .
+
+# Enumeration: NetworkTechnology
+:NetworkTechnology a rdfs:Class , owl:Class ;
+    rdfs:label "NetworkTechnology" ;
+    rdfs:subClassOf :Enumeration ;
+    dcterms:source "mobile module" .
+
+:NetworkTechnology_GSM_2G a :NetworkTechnology ;
+    rdfs:label "GSM_2G" ;
+    skos:notation "GSM_2G" .
+
+:NetworkTechnology_UMTS_3G a :NetworkTechnology ;
+    rdfs:label "UMTS_3G" ;
+    skos:notation "UMTS_3G" .
+
+:NetworkTechnology_LTE_4G a :NetworkTechnology ;
+    rdfs:label "LTE_4G" ;
+    skos:notation "LTE_4G" .
+
+:NetworkTechnology_NR_5G a :NetworkTechnology ;
+    rdfs:label "NR_5G" ;
+    skos:notation "NR_5G" .
+
+# Enumeration: OccupancyStatus
+:OccupancyStatus a rdfs:Class , owl:Class ;
+    rdfs:label "OccupancyStatus" ;
+    rdfs:subClassOf :Enumeration ;
+    dcterms:source "gtfs module" .
+
+:OccupancyStatus_EMPTY a :OccupancyStatus ;
+    rdfs:label "EMPTY" ;
+    skos:notation "EMPTY" .
+
+:OccupancyStatus_MANY_SEATS a :OccupancyStatus ;
+    rdfs:label "MANY_SEATS" ;
+    skos:notation "MANY_SEATS" .
+
+:OccupancyStatus_FEW_SEATS a :OccupancyStatus ;
+    rdfs:label "FEW_SEATS" ;
+    skos:notation "FEW_SEATS" .
+
+:OccupancyStatus_STANDING_ROOM a :OccupancyStatus ;
+    rdfs:label "STANDING_ROOM" ;
+    skos:notation "STANDING_ROOM" .
+
+:OccupancyStatus_CRUSHED a :OccupancyStatus ;
+    rdfs:label "CRUSHED" ;
+    skos:notation "CRUSHED" .
+
+:OccupancyStatus_FULL a :OccupancyStatus ;
+    rdfs:label "FULL" ;
+    skos:notation "FULL" .
+
+:OccupancyStatus_NOT_ACCEPTING a :OccupancyStatus ;
+    rdfs:label "NOT_ACCEPTING" ;
+    skos:notation "NOT_ACCEPTING" .
+
+# Enumeration: ParkingType
+:ParkingType a rdfs:Class , owl:Class ;
+    rdfs:label "ParkingType" ;
+    rdfs:subClassOf :Enumeration ;
+    dcterms:source "hts module" .
+
+:ParkingType_FREE_LOT a :ParkingType ;
+    rdfs:label "FREE_LOT" ;
+    skos:notation "FREE_LOT" .
+
+:ParkingType_FREE_STREET a :ParkingType ;
+    rdfs:label "FREE_STREET" ;
+    skos:notation "FREE_STREET" .
+
+:ParkingType_PAID_LOT a :ParkingType ;
+    rdfs:label "PAID_LOT" ;
+    skos:notation "PAID_LOT" .
+
+:ParkingType_PAID_GARAGE a :ParkingType ;
+    rdfs:label "PAID_GARAGE" ;
+    skos:notation "PAID_GARAGE" .
+
+:ParkingType_PAID_STREET a :ParkingType ;
+    rdfs:label "PAID_STREET" ;
+    skos:notation "PAID_STREET" .
+
+:ParkingType_NONE a :ParkingType ;
+    rdfs:label "NONE" ;
+    skos:notation "NONE" .
+
+# Enumeration: PickupDropoffType
+:PickupDropoffType a rdfs:Class , owl:Class ;
+    rdfs:label "PickupDropoffType" ;
+    rdfs:subClassOf :Enumeration ;
+    dcterms:source "hts module" .
+
+:PickupDropoffType_REGULAR a :PickupDropoffType ;
+    rdfs:label "REGULAR" ;
+    skos:notation "REGULAR" .
+
+:PickupDropoffType_NOT_AVAILABLE a :PickupDropoffType ;
+    rdfs:label "NOT_AVAILABLE" ;
+    skos:notation "NOT_AVAILABLE" .
+
+:PickupDropoffType_PHONE_AGENCY a :PickupDropoffType ;
+    rdfs:label "PHONE_AGENCY" ;
+    skos:notation "PHONE_AGENCY" .
+
+:PickupDropoffType_COORDINATE_WITH_DRIVER a :PickupDropoffType ;
+    rdfs:label "COORDINATE_WITH_DRIVER" ;
+    skos:notation "COORDINATE_WITH_DRIVER" .
+
+# Enumeration: ProbeProvider
+:ProbeProvider a rdfs:Class , owl:Class ;
+    rdfs:label "ProbeProvider" ;
+    rdfs:subClassOf :Enumeration ;
+    dcterms:source "probe module" .
+
+:ProbeProvider_TOMTOM a :ProbeProvider ;
+    rdfs:label "TOMTOM" ;
+    skos:notation "TOMTOM" .
+
+:ProbeProvider_HERE a :ProbeProvider ;
+    rdfs:label "HERE" ;
+    skos:notation "HERE" .
+
+:ProbeProvider_INRIX a :ProbeProvider ;
+    rdfs:label "INRIX" ;
+    skos:notation "INRIX" .
+
+:ProbeProvider_STREETLIGHT a :ProbeProvider ;
+    rdfs:label "STREETLIGHT" ;
+    skos:notation "STREETLIGHT" .
+
+:ProbeProvider_OTHER a :ProbeProvider ;
+    rdfs:label "OTHER" ;
+    skos:notation "OTHER" .
+
+# Enumeration: Race
+:Race a rdfs:Class , owl:Class ;
+    rdfs:label "Race" ;
+    rdfs:subClassOf :Enumeration ;
+    dcterms:source "census module" .
+
+:Race_WHITE a :Race ;
+    rdfs:label "WHITE" ;
+    skos:notation "WHITE" .
+
+:Race_BLACK a :Race ;
+    rdfs:label "BLACK" ;
+    skos:notation "BLACK" .
+
+:Race_ASIAN a :Race ;
+    rdfs:label "ASIAN" ;
+    skos:notation "ASIAN" .
+
+:Race_PACIFIC_ISLANDER a :Race ;
+    rdfs:label "PACIFIC_ISLANDER" ;
+    skos:notation "PACIFIC_ISLANDER" .
+
+:Race_NATIVE_AMERICAN a :Race ;
+    rdfs:label "NATIVE_AMERICAN" ;
+    skos:notation "NATIVE_AMERICAN" .
+
+:Race_TWO_OR_MORE a :Race ;
+    rdfs:label "TWO_OR_MORE" ;
+    skos:notation "TWO_OR_MORE" .
+
+:Race_OTHER a :Race ;
+    rdfs:label "OTHER" ;
+    skos:notation "OTHER" .
+
+# Enumeration: RelationshipType
+:RelationshipType a rdfs:Class , owl:Class ;
+    rdfs:label "RelationshipType" ;
+    rdfs:subClassOf :Enumeration ;
+    dcterms:source "base module" .
+
+:RelationshipType_IS_A a :RelationshipType ;
+    rdfs:label "IS_A" ;
+    skos:notation "IS_A" .
+
+:RelationshipType_HAS_A a :RelationshipType ;
+    rdfs:label "HAS_A" ;
+    skos:notation "HAS_A" .
+
+:RelationshipType_PART_OF a :RelationshipType ;
+    rdfs:label "PART_OF" ;
+    skos:notation "PART_OF" .
+
+:RelationshipType_LOCATED_IN a :RelationshipType ;
+    rdfs:label "LOCATED_IN" ;
+    skos:notation "LOCATED_IN" .
+
+:RelationshipType_CONNECTED_TO a :RelationshipType ;
+    rdfs:label "CONNECTED_TO" ;
+    skos:notation "CONNECTED_TO" .
+
+:RelationshipType_SERVED_BY a :RelationshipType ;
+    rdfs:label "SERVED_BY" ;
+    skos:notation "SERVED_BY" .
+
+:RelationshipType_USES a :RelationshipType ;
+    rdfs:label "USES" ;
+    skos:notation "USES" .
+
+:RelationshipType_PRODUCES a :RelationshipType ;
+    rdfs:label "PRODUCES" ;
+    skos:notation "PRODUCES" .
+
+:RelationshipType_CONSUMES a :RelationshipType ;
+    rdfs:label "CONSUMES" ;
+    skos:notation "CONSUMES" .
+
+:RelationshipType_FLOWS_TO a :RelationshipType ;
+    rdfs:label "FLOWS_TO" ;
+    skos:notation "FLOWS_TO" .
+
+# Enumeration: ScheduleRelationship
+:ScheduleRelationship a rdfs:Class , owl:Class ;
+    rdfs:label "ScheduleRelationship" ;
+    rdfs:subClassOf :Enumeration ;
+    dcterms:source "gtfs module" .
+
+:ScheduleRelationship_SCHEDULED a :ScheduleRelationship ;
+    rdfs:label "SCHEDULED" ;
+    skos:notation "SCHEDULED" .
+
+:ScheduleRelationship_ADDED a :ScheduleRelationship ;
+    rdfs:label "ADDED" ;
+    skos:notation "ADDED" .
+
+:ScheduleRelationship_UNSCHEDULED a :ScheduleRelationship ;
+    rdfs:label "UNSCHEDULED" ;
+    skos:notation "UNSCHEDULED" .
+
+:ScheduleRelationship_CANCELED a :ScheduleRelationship ;
+    rdfs:label "CANCELED" ;
+    skos:notation "CANCELED" .
+
+:ScheduleRelationship_SKIPPED a :ScheduleRelationship ;
+    rdfs:label "SKIPPED" ;
+    skos:notation "SKIPPED" .
+
+# Enumeration: Sex
+:Sex a rdfs:Class , owl:Class ;
+    rdfs:label "Sex" ;
+    rdfs:subClassOf :Enumeration ;
+    dcterms:source "base module" .
+
+:Sex_MALE a :Sex ;
+    rdfs:label "MALE" ;
+    skos:notation "MALE" .
+
+:Sex_FEMALE a :Sex ;
+    rdfs:label "FEMALE" ;
+    skos:notation "FEMALE" .
+
+:Sex_OTHER a :Sex ;
+    rdfs:label "OTHER" ;
+    skos:notation "OTHER" .
+
+:Sex_UNKNOWN a :Sex ;
+    rdfs:label "UNKNOWN" ;
+    skos:notation "UNKNOWN" .
+
+# Enumeration: ShopType
+:ShopType a rdfs:Class , owl:Class ;
+    rdfs:label "ShopType" ;
+    rdfs:subClassOf :Enumeration ;
+    dcterms:source "osm module" .
+
+:ShopType_SUPERMARKET a :ShopType ;
+    rdfs:label "SUPERMARKET" ;
+    skos:notation "SUPERMARKET" .
+
+:ShopType_CONVENIENCE a :ShopType ;
+    rdfs:label "CONVENIENCE" ;
+    skos:notation "CONVENIENCE" .
+
+:ShopType_MALL a :ShopType ;
+    rdfs:label "MALL" ;
+    skos:notation "MALL" .
+
+:ShopType_DEPARTMENT_STORE a :ShopType ;
+    rdfs:label "DEPARTMENT_STORE" ;
+    skos:notation "DEPARTMENT_STORE" .
+
+:ShopType_CLOTHES a :ShopType ;
+    rdfs:label "CLOTHES" ;
+    skos:notation "CLOTHES" .
+
+:ShopType_ELECTRONICS a :ShopType ;
+    rdfs:label "ELECTRONICS" ;
+    skos:notation "ELECTRONICS" .
+
+:ShopType_BAKERY a :ShopType ;
+    rdfs:label "BAKERY" ;
+    skos:notation "BAKERY" .
+
+:ShopType_BUTCHER a :ShopType ;
+    rdfs:label "BUTCHER" ;
+    skos:notation "BUTCHER" .
+
+:ShopType_GREENGROCER a :ShopType ;
+    rdfs:label "GREENGROCER" ;
+    skos:notation "GREENGROCER" .
+
+# Enumeration: SubscriptionType
+:SubscriptionType a rdfs:Class , owl:Class ;
+    rdfs:label "SubscriptionType" ;
+    rdfs:subClassOf :Enumeration ;
+    dcterms:source "mobile module" .
+
+:SubscriptionType_PREPAID a :SubscriptionType ;
+    rdfs:label "PREPAID" ;
+    skos:notation "PREPAID" .
+
+:SubscriptionType_POSTPAID a :SubscriptionType ;
+    rdfs:label "POSTPAID" ;
+    skos:notation "POSTPAID" .
+
+# Enumeration: SurfaceType
+:SurfaceType a rdfs:Class , owl:Class ;
+    rdfs:label "SurfaceType" ;
+    rdfs:subClassOf :Enumeration ;
+    dcterms:source "osm module" .
+
+:SurfaceType_PAVED a :SurfaceType ;
+    rdfs:label "PAVED" ;
+    skos:notation "PAVED" .
+
+:SurfaceType_ASPHALT a :SurfaceType ;
+    rdfs:label "ASPHALT" ;
+    skos:notation "ASPHALT" .
+
+:SurfaceType_CONCRETE a :SurfaceType ;
+    rdfs:label "CONCRETE" ;
+    skos:notation "CONCRETE" .
+
+:SurfaceType_UNPAVED a :SurfaceType ;
+    rdfs:label "UNPAVED" ;
+    skos:notation "UNPAVED" .
+
+:SurfaceType_GRAVEL a :SurfaceType ;
+    rdfs:label "GRAVEL" ;
+    skos:notation "GRAVEL" .
+
+:SurfaceType_DIRT a :SurfaceType ;
+    rdfs:label "DIRT" ;
+    skos:notation "DIRT" .
+
+:SurfaceType_GROUND a :SurfaceType ;
+    rdfs:label "GROUND" ;
+    skos:notation "GROUND" .
+
+# Enumeration: Tenure
+:Tenure a rdfs:Class , owl:Class ;
+    rdfs:label "Tenure" ;
+    rdfs:subClassOf :Enumeration ;
+    dcterms:source "census module" .
+
+:Tenure_OWNER_OCCUPIED a :Tenure ;
+    rdfs:label "OWNER_OCCUPIED" ;
+    skos:notation "OWNER_OCCUPIED" .
+
+:Tenure_RENTER_OCCUPIED a :Tenure ;
+    rdfs:label "RENTER_OCCUPIED" ;
+    skos:notation "RENTER_OCCUPIED" .
+
+# Enumeration: TimeOfDay
+:TimeOfDay a rdfs:Class , owl:Class ;
+    rdfs:label "TimeOfDay" ;
+    rdfs:subClassOf :Enumeration ;
+    dcterms:source "base module" .
+
+:TimeOfDay_EARLY_MORNING a :TimeOfDay ;
+    rdfs:label "EARLY_MORNING" ;
+    skos:notation "EARLY_MORNING" .
+
+:TimeOfDay_AM_PEAK a :TimeOfDay ;
+    rdfs:label "AM_PEAK" ;
+    skos:notation "AM_PEAK" .
+
+:TimeOfDay_MIDDAY a :TimeOfDay ;
+    rdfs:label "MIDDAY" ;
+    skos:notation "MIDDAY" .
+
+:TimeOfDay_PM_PEAK a :TimeOfDay ;
+    rdfs:label "PM_PEAK" ;
+    skos:notation "PM_PEAK" .
+
+:TimeOfDay_EVENING a :TimeOfDay ;
+    rdfs:label "EVENING" ;
+    skos:notation "EVENING" .
+
+:TimeOfDay_NIGHT a :TimeOfDay ;
+    rdfs:label "NIGHT" ;
+    skos:notation "NIGHT" .
+
+# Enumeration: Timepoint
+:Timepoint a rdfs:Class , owl:Class ;
+    rdfs:label "Timepoint" ;
+    rdfs:subClassOf :Enumeration ;
+    dcterms:source "gtfs module" .
+
+:Timepoint_APPROXIMATE a :Timepoint ;
+    rdfs:label "APPROXIMATE" ;
+    skos:notation "APPROXIMATE" .
+
+:Timepoint_EXACT a :Timepoint ;
+    rdfs:label "EXACT" ;
+    skos:notation "EXACT" .
+
+# Enumeration: TransitPass
+:TransitPass a rdfs:Class , owl:Class ;
+    rdfs:label "TransitPass" ;
+    rdfs:subClassOf :Enumeration ;
+    dcterms:source "hts module" .
+
+:TransitPass_NONE a :TransitPass ;
+    rdfs:label "NONE" ;
+    skos:notation "NONE" .
+
+:TransitPass_MONTHLY a :TransitPass ;
+    rdfs:label "MONTHLY" ;
+    skos:notation "MONTHLY" .
+
+:TransitPass_ANNUAL a :TransitPass ;
+    rdfs:label "ANNUAL" ;
+    skos:notation "ANNUAL" .
+
+:TransitPass_EMPLOYER_PROVIDED a :TransitPass ;
+    rdfs:label "EMPLOYER_PROVIDED" ;
+    skos:notation "EMPLOYER_PROVIDED" .
+
+:TransitPass_STUDENT a :TransitPass ;
+    rdfs:label "STUDENT" ;
+    skos:notation "STUDENT" .
+
+:TransitPass_SENIOR a :TransitPass ;
+    rdfs:label "SENIOR" ;
+    skos:notation "SENIOR" .
+
+# Enumeration: TransportMode
+:TransportMode a rdfs:Class , owl:Class ;
+    rdfs:label "TransportMode" ;
+    rdfs:subClassOf :Enumeration ;
+    dcterms:source "base module" .
+
+:TransportMode_WALK a :TransportMode ;
+    rdfs:label "WALK" ;
+    skos:notation "WALK" .
+
+:TransportMode_BICYCLE a :TransportMode ;
+    rdfs:label "BICYCLE" ;
+    skos:notation "BICYCLE" .
+
+:TransportMode_EBIKE a :TransportMode ;
+    rdfs:label "EBIKE" ;
+    skos:notation "EBIKE" .
+
+:TransportMode_ESCOOTER a :TransportMode ;
+    rdfs:label "ESCOOTER" ;
+    skos:notation "ESCOOTER" .
+
+:TransportMode_CAR_DRIVER a :TransportMode ;
+    rdfs:label "CAR_DRIVER" ;
+    skos:notation "CAR_DRIVER" .
+
+:TransportMode_CAR_PASSENGER a :TransportMode ;
+    rdfs:label "CAR_PASSENGER" ;
+    skos:notation "CAR_PASSENGER" .
+
+:TransportMode_MOTORCYCLE a :TransportMode ;
+    rdfs:label "MOTORCYCLE" ;
+    skos:notation "MOTORCYCLE" .
+
+:TransportMode_TAXI a :TransportMode ;
+    rdfs:label "TAXI" ;
+    skos:notation "TAXI" .
+
+:TransportMode_RIDESHARE a :TransportMode ;
+    rdfs:label "RIDESHARE" ;
+    skos:notation "RIDESHARE" .
+
+:TransportMode_BUS a :TransportMode ;
+    rdfs:label "BUS" ;
+    skos:notation "BUS" .
+
+:TransportMode_METRO a :TransportMode ;
+    rdfs:label "METRO" ;
+    skos:notation "METRO" .
+
+:TransportMode_TRAM a :TransportMode ;
+    rdfs:label "TRAM" ;
+    skos:notation "TRAM" .
+
+:TransportMode_RAIL a :TransportMode ;
+    rdfs:label "RAIL" ;
+    skos:notation "RAIL" .
+
+:TransportMode_FERRY a :TransportMode ;
+    rdfs:label "FERRY" ;
+    skos:notation "FERRY" .
+
+:TransportMode_SCHOOL_BUS a :TransportMode ;
+    rdfs:label "SCHOOL_BUS" ;
+    skos:notation "SCHOOL_BUS" .
+
+:TransportMode_AUTO_RICKSHAW a :TransportMode ;
+    rdfs:label "AUTO_RICKSHAW" ;
+    skos:notation "AUTO_RICKSHAW" .
+
+:TransportMode_OTHER a :TransportMode ;
+    rdfs:label "OTHER" ;
+    skos:notation "OTHER" .
+
+# Enumeration: TripPurpose
+:TripPurpose a rdfs:Class , owl:Class ;
+    rdfs:label "TripPurpose" ;
+    rdfs:subClassOf :Enumeration ;
+    dcterms:source "base module" .
+
+:TripPurpose_HOME a :TripPurpose ;
+    rdfs:label "HOME" ;
+    skos:notation "HOME" .
+
+:TripPurpose_WORK a :TripPurpose ;
+    rdfs:label "WORK" ;
+    skos:notation "WORK" .
+
+:TripPurpose_SCHOOL a :TripPurpose ;
+    rdfs:label "SCHOOL" ;
+    skos:notation "SCHOOL" .
+
+:TripPurpose_SHOPPING a :TripPurpose ;
+    rdfs:label "SHOPPING" ;
+    skos:notation "SHOPPING" .
+
+:TripPurpose_SOCIAL_RECREATION a :TripPurpose ;
+    rdfs:label "SOCIAL_RECREATION" ;
+    skos:notation "SOCIAL_RECREATION" .
+
+:TripPurpose_EAT_MEAL a :TripPurpose ;
+    rdfs:label "EAT_MEAL" ;
+    skos:notation "EAT_MEAL" .
+
+:TripPurpose_PERSONAL_BUSINESS a :TripPurpose ;
+    rdfs:label "PERSONAL_BUSINESS" ;
+    skos:notation "PERSONAL_BUSINESS" .
+
+:TripPurpose_ESCORT a :TripPurpose ;
+    rdfs:label "ESCORT" ;
+    skos:notation "ESCORT" .
+
+:TripPurpose_MEDICAL a :TripPurpose ;
+    rdfs:label "MEDICAL" ;
+    skos:notation "MEDICAL" .
+
+:TripPurpose_OTHER a :TripPurpose ;
+    rdfs:label "OTHER" ;
+    skos:notation "OTHER" .
+
+# Enumeration: VehicleStopStatus
+:VehicleStopStatus a rdfs:Class , owl:Class ;
+    rdfs:label "VehicleStopStatus" ;
+    rdfs:subClassOf :Enumeration ;
+    dcterms:source "gtfs module" .
+
+:VehicleStopStatus_INCOMING a :VehicleStopStatus ;
+    rdfs:label "INCOMING" ;
+    skos:notation "INCOMING" .
+
+:VehicleStopStatus_STOPPED a :VehicleStopStatus ;
+    rdfs:label "STOPPED" ;
+    skos:notation "STOPPED" .
+
+:VehicleStopStatus_IN_TRANSIT a :VehicleStopStatus ;
+    rdfs:label "IN_TRANSIT" ;
+    skos:notation "IN_TRANSIT" .
+
+# Enumeration: VehicleType
+:VehicleType a rdfs:Class , owl:Class ;
+    rdfs:label "VehicleType" ;
+    rdfs:subClassOf :Enumeration ;
+    dcterms:source "probe module" .
+
+:VehicleType_PASSENGER_CAR a :VehicleType ;
+    rdfs:label "PASSENGER_CAR" ;
+    skos:notation "PASSENGER_CAR" .
+
+:VehicleType_COMMERCIAL_VEHICLE a :VehicleType ;
+    rdfs:label "COMMERCIAL_VEHICLE" ;
+    skos:notation "COMMERCIAL_VEHICLE" .
+
+:VehicleType_TAXI a :VehicleType ;
+    rdfs:label "TAXI" ;
+    skos:notation "TAXI" .
+
+:VehicleType_BUS a :VehicleType ;
+    rdfs:label "BUS" ;
+    skos:notation "BUS" .
+
+:VehicleType_TRUCK_LIGHT a :VehicleType ;
+    rdfs:label "TRUCK_LIGHT" ;
+    skos:notation "TRUCK_LIGHT" .
+
+:VehicleType_TRUCK_HEAVY a :VehicleType ;
+    rdfs:label "TRUCK_HEAVY" ;
+    skos:notation "TRUCK_HEAVY" .
+
+:VehicleType_MOTORCYCLE a :VehicleType ;
+    rdfs:label "MOTORCYCLE" ;
+    skos:notation "MOTORCYCLE" .
+
+# Enumeration: WeatherCondition
+:WeatherCondition a rdfs:Class , owl:Class ;
+    rdfs:label "WeatherCondition" ;
+    rdfs:subClassOf :Enumeration ;
+    dcterms:source "hts module" .
+
+:WeatherCondition_CLEAR a :WeatherCondition ;
+    rdfs:label "CLEAR" ;
+    skos:notation "CLEAR" .
+
+:WeatherCondition_PARTLY_CLOUDY a :WeatherCondition ;
+    rdfs:label "PARTLY_CLOUDY" ;
+    skos:notation "PARTLY_CLOUDY" .
+
+:WeatherCondition_OVERCAST a :WeatherCondition ;
+    rdfs:label "OVERCAST" ;
+    skos:notation "OVERCAST" .
+
+:WeatherCondition_RAIN a :WeatherCondition ;
+    rdfs:label "RAIN" ;
+    skos:notation "RAIN" .
+
+:WeatherCondition_HEAVY_RAIN a :WeatherCondition ;
+    rdfs:label "HEAVY_RAIN" ;
+    skos:notation "HEAVY_RAIN" .
+
+:WeatherCondition_SNOW a :WeatherCondition ;
+    rdfs:label "SNOW" ;
+    skos:notation "SNOW" .
+
+:WeatherCondition_FOG a :WeatherCondition ;
+    rdfs:label "FOG" ;
+    skos:notation "FOG" .
+
+# Enumeration: WheelchairAccessible
+:WheelchairAccessible a rdfs:Class , owl:Class ;
+    rdfs:label "WheelchairAccessible" ;
+    rdfs:subClassOf :Enumeration ;
+    dcterms:source "gtfs module" .
+
+:WheelchairAccessible_UNKNOWN a :WheelchairAccessible ;
+    rdfs:label "UNKNOWN" ;
+    skos:notation "UNKNOWN" .
+
+:WheelchairAccessible_ACCESSIBLE a :WheelchairAccessible ;
+    rdfs:label "ACCESSIBLE" ;
+    skos:notation "ACCESSIBLE" .
+
+:WheelchairAccessible_NOT_ACCESSIBLE a :WheelchairAccessible ;
+    rdfs:label "NOT_ACCESSIBLE" ;
+    skos:notation "NOT_ACCESSIBLE" .
+
+
+# ==================================================
+# CLASSES
+# ==================================================
+
+# Class: Activity
+# Activity episode at a location
+:Activity a rdfs:Class , owl:Class ;
+    rdfs:label "Activity" ;
+    rdfs:comment "Activity episode at a location" ;
+    rdfs:subClassOf :TransportEntity ;
+    dcterms:source "hts module" .
+
+# Class: ActivityEntity
+# Base for activities (trips, tours)
+:ActivityEntity a rdfs:Class , owl:Class ;
+    rdfs:label "ActivityEntity" ;
+    rdfs:comment "Base for activities (trips, tours)" ;
+    rdfs:subClassOf :TransportEntity ;
+    dcterms:source "base module" .
+
+# Class: Agency
+# Transit agency
+:Agency a rdfs:Class , owl:Class ;
+    rdfs:label "Agency" ;
+    rdfs:comment "Transit agency" ;
+    rdfs:subClassOf :TransportEntity ;
+    dcterms:source "gtfs module" .
+
+# Class: AgentEntity
+# Base for agents (people, vehicles, organizations)
+:AgentEntity a rdfs:Class , owl:Class ;
+    rdfs:label "AgentEntity" ;
+    rdfs:comment "Base for agents (people, vehicles, organizations)" ;
+    rdfs:subClassOf :TransportEntity ;
+    dcterms:source "base module" .
+
+# Class: AnonymizedUser
+# Anonymized mobile user
+:AnonymizedUser a rdfs:Class , owl:Class ;
+    rdfs:label "AnonymizedUser" ;
+    rdfs:comment "Anonymized mobile user" ;
+    rdfs:subClassOf :TransportEntity ;
+    dcterms:source "mobile module" .
+
+# Class: Barrier
+# Major barrier (river, rail corridor, etc.)
+:Barrier a rdfs:Class , owl:Class ;
+    rdfs:label "Barrier" ;
+    rdfs:comment "Major barrier (river, rail corridor, etc.)" ;
+    rdfs:subClassOf :SpatialEntity ;
+    dcterms:source "osm module" .
+
+# Class: Building
+# OSM building
+:Building a rdfs:Class , owl:Class ;
+    rdfs:label "Building" ;
+    rdfs:comment "OSM building" ;
+    rdfs:subClassOf :SpatialEntity ;
+    dcterms:source "osm module" .
+
+# Class: CDREvent
+# Call Detail Record event
+:CDREvent a rdfs:Class , owl:Class ;
+    rdfs:label "CDREvent" ;
+    rdfs:comment "Call Detail Record event" ;
+    rdfs:subClassOf :TransportEntity ;
+    dcterms:source "mobile module" .
+
+# Class: Calendar
+# Service calendar
+:Calendar a rdfs:Class , owl:Class ;
+    rdfs:label "Calendar" ;
+    rdfs:comment "Service calendar" ;
+    rdfs:subClassOf :TransportEntity ;
+    dcterms:source "gtfs module" .
+
+# Class: CalendarDate
+# Calendar exceptions
+:CalendarDate a rdfs:Class , owl:Class ;
+    rdfs:label "CalendarDate" ;
+    rdfs:comment "Calendar exceptions" ;
+    rdfs:subClassOf :TransportEntity ;
+    dcterms:source "gtfs module" .
+
+# Class: CellTower
+# Cell tower / base station
+:CellTower a rdfs:Class , owl:Class ;
+    rdfs:label "CellTower" ;
+    rdfs:comment "Cell tower / base station" ;
+    rdfs:subClassOf :SpatialEntity ;
+    dcterms:source "mobile module" .
+
+# Class: ControlTotal
+# Population synthesis control total
+:ControlTotal a rdfs:Class , owl:Class ;
+    rdfs:label "ControlTotal" ;
+    rdfs:comment "Population synthesis control total" ;
+    dcterms:source "census module" .
+
+# Class: GPSTracePoint
+# Individual GPS trace point
+:GPSTracePoint a rdfs:Class , owl:Class ;
+    rdfs:label "GPSTracePoint" ;
+    rdfs:comment "Individual GPS trace point" ;
+    rdfs:subClassOf :SpatialEntity ;
+    rdfs:subClassOf :TemporalEntity ;
+    dcterms:source "probe module" .
+
+# Class: GeographicUnit
+# Census geographic unit (PUMA, Tract, Block Group, etc.)
+:GeographicUnit a rdfs:Class , owl:Class ;
+    rdfs:label "GeographicUnit" ;
+    rdfs:comment "Census geographic unit (PUMA, Tract, Block Group, etc.)" ;
+    rdfs:subClassOf :SpatialEntity ;
+    dcterms:source "census module" .
+
+# Class: Household
+# Census household unit
+:Household a rdfs:Class , owl:Class ;
+    rdfs:label "Household" ;
+    rdfs:comment "Census household unit" ;
+    rdfs:subClassOf :AgentEntity ;
+    dcterms:source "census module" .
+
+# Class: InferredTrip
+# Trip inferred from CDR data
+:InferredTrip a rdfs:Class , owl:Class ;
+    rdfs:label "InferredTrip" ;
+    rdfs:comment "Trip inferred from CDR data" ;
+    rdfs:subClassOf :ActivityEntity ;
+    dcterms:source "mobile module" .
+
+# Class: InfrastructureEntity
+# Base for infrastructure (facilities, sensors)
+:InfrastructureEntity a rdfs:Class , owl:Class ;
+    rdfs:label "InfrastructureEntity" ;
+    rdfs:comment "Base for infrastructure (facilities, sensors)" ;
+    rdfs:subClassOf :SpatialEntity ;
+    dcterms:source "base module" .
+
+# Class: Intersection
+# Road intersection/junction
+:Intersection a rdfs:Class , owl:Class ;
+    rdfs:label "Intersection" ;
+    rdfs:comment "Road intersection/junction" ;
+    rdfs:subClassOf :SpatialEntity ;
+    dcterms:source "osm module" .
+
+# Class: Location
+# Generic location
+:Location a rdfs:Class , owl:Class ;
+    rdfs:label "Location" ;
+    rdfs:comment "Generic location" ;
+    dcterms:source "base module" .
+
+# Class: MatchedTrace
+# GPS trace matched to road network
+:MatchedTrace a rdfs:Class , owl:Class ;
+    rdfs:label "MatchedTrace" ;
+    rdfs:comment "GPS trace matched to road network" ;
+    rdfs:subClassOf :SpatialEntity ;
+    dcterms:source "probe module" .
+
+# Class: MobileOperator
+# Mobile network operator
+:MobileOperator a rdfs:Class , owl:Class ;
+    rdfs:label "MobileOperator" ;
+    rdfs:comment "Mobile network operator" ;
+    rdfs:subClassOf :TransportEntity ;
+    dcterms:source "mobile module" .
+
+# Class: MobilityPattern
+# Aggregate mobility pattern from mobile data
+:MobilityPattern a rdfs:Class , owl:Class ;
+    rdfs:label "MobilityPattern" ;
+    rdfs:comment "Aggregate mobility pattern from mobile data" ;
+    dcterms:source "mobile module" .
+
+# Class: ODMatrix_Mobile
+# OD matrix derived from mobile phone data
+:ODMatrix_Mobile a rdfs:Class , owl:Class ;
+    rdfs:label "ODMatrix_Mobile" ;
+    rdfs:comment "OD matrix derived from mobile phone data" ;
+    rdfs:subClassOf :TransportEntity ;
+    dcterms:source "mobile module" .
+
+# Class: ODPair
+# Origin-Destination Pair
+:ODPair a rdfs:Class , owl:Class ;
+    rdfs:label "ODPair" ;
+    rdfs:comment "Origin-Destination Pair" ;
+    dcterms:source "base module" .
+
+# Class: ODTrajectory
+# Complete vehicle trajectory (trip)
+:ODTrajectory a rdfs:Class , owl:Class ;
+    rdfs:label "ODTrajectory" ;
+    rdfs:comment "Complete vehicle trajectory (trip)" ;
+    rdfs:subClassOf :TransportEntity ;
+    dcterms:source "probe module" .
+
+# Class: OSMNode
+# OSM node (point)
+:OSMNode a rdfs:Class , owl:Class ;
+    rdfs:label "OSMNode" ;
+    rdfs:comment "OSM node (point)" ;
+    rdfs:subClassOf :SpatialEntity ;
+    dcterms:source "osm module" .
+
+# Class: OSMWay
+# OSM way (line or polygon)
+:OSMWay a rdfs:Class , owl:Class ;
+    rdfs:label "OSMWay" ;
+    rdfs:comment "OSM way (line or polygon)" ;
+    rdfs:subClassOf :SpatialEntity ;
+    dcterms:source "osm module" .
+
+# Class: Person
+# Census person/individual
+:Person a rdfs:Class , owl:Class ;
+    rdfs:label "Person" ;
+    rdfs:comment "Census person/individual" ;
+    rdfs:subClassOf :AgentEntity ;
+    dcterms:source "census module" .
+
+# Class: PointOfInterest
+# OSM Point of Interest
+:PointOfInterest a rdfs:Class , owl:Class ;
+    rdfs:label "PointOfInterest" ;
+    rdfs:comment "OSM Point of Interest" ;
+    rdfs:subClassOf :SpatialEntity ;
+    dcterms:source "osm module" .
+
+# Class: ProbeDataProvider
+# GPS probe data provider organization
+:ProbeDataProvider a rdfs:Class , owl:Class ;
+    rdfs:label "ProbeDataProvider" ;
+    rdfs:comment "GPS probe data provider organization" ;
+    rdfs:subClassOf :TransportEntity ;
+    dcterms:source "probe module" .
+
+# Class: ProbeVehicle
+# Probe vehicle (anonymized)
+:ProbeVehicle a rdfs:Class , owl:Class ;
+    rdfs:label "ProbeVehicle" ;
+    rdfs:comment "Probe vehicle (anonymized)" ;
+    rdfs:subClassOf :TransportEntity ;
+    dcterms:source "probe module" .
+
+# Class: Relationship
+# Relationship between two entities
+:Relationship a rdfs:Class , owl:Class ;
+    rdfs:label "Relationship" ;
+    rdfs:comment "Relationship between two entities" ;
+    dcterms:source "base module" .
+
+# Class: RoadSegment
+# Processed road segment for routing
+:RoadSegment a rdfs:Class , owl:Class ;
+    rdfs:label "RoadSegment" ;
+    rdfs:comment "Processed road segment for routing" ;
+    rdfs:subClassOf :SpatialEntity ;
+    dcterms:source "osm module" .
+
+# Class: Route
+# Transit route
+:Route a rdfs:Class , owl:Class ;
+    rdfs:label "Route" ;
+    rdfs:comment "Transit route" ;
+    rdfs:subClassOf :TransportEntity ;
+    dcterms:source "gtfs module" .
+
+# Class: ServiceAlert
+# Service alert
+:ServiceAlert a rdfs:Class , owl:Class ;
+    rdfs:label "ServiceAlert" ;
+    rdfs:comment "Service alert" ;
+    rdfs:subClassOf :TemporalEntity ;
+    dcterms:source "gtfs module" .
+
+# Class: Shape
+# Route shape
+:Shape a rdfs:Class , owl:Class ;
+    rdfs:label "Shape" ;
+    rdfs:comment "Route shape" ;
+    rdfs:subClassOf :SpatialEntity ;
+    dcterms:source "gtfs module" .
+
+# Class: SpatialEntity
+# Base for entities with spatial attributes
+:SpatialEntity a rdfs:Class , owl:Class ;
+    rdfs:label "SpatialEntity" ;
+    rdfs:comment "Base for entities with spatial attributes" ;
+    rdfs:subClassOf :TransportEntity ;
+    dcterms:source "base module" .
+
+# Class: SpeedObservation
+# Speed observation on road segment
+:SpeedObservation a rdfs:Class , owl:Class ;
+    rdfs:label "SpeedObservation" ;
+    rdfs:comment "Speed observation on road segment" ;
+    rdfs:subClassOf :TemporalEntity ;
+    dcterms:source "probe module" .
+
+# Class: StayPoint
+# Detected stay point (dwell location)
+:StayPoint a rdfs:Class , owl:Class ;
+    rdfs:label "StayPoint" ;
+    rdfs:comment "Detected stay point (dwell location)" ;
+    rdfs:subClassOf :SpatialEntity ;
+    dcterms:source "mobile module" .
+
+# Class: Stop
+# Transit stop or station
+:Stop a rdfs:Class , owl:Class ;
+    rdfs:label "Stop" ;
+    rdfs:comment "Transit stop or station" ;
+    rdfs:subClassOf :SpatialEntity ;
+    dcterms:source "gtfs module" .
+
+# Class: StopTime
+# Stop time in trip sequence
+:StopTime a rdfs:Class , owl:Class ;
+    rdfs:label "StopTime" ;
+    rdfs:comment "Stop time in trip sequence" ;
+    rdfs:subClassOf :TransportEntity ;
+    dcterms:source "gtfs module" .
+
+# Class: StopTimeUpdate
+# Real-time stop time update
+:StopTimeUpdate a rdfs:Class , owl:Class ;
+    rdfs:label "StopTimeUpdate" ;
+    rdfs:comment "Real-time stop time update" ;
+    dcterms:source "gtfs module" .
+
+# Class: Survey
+# Travel survey metadata
+:Survey a rdfs:Class , owl:Class ;
+    rdfs:label "Survey" ;
+    rdfs:comment "Travel survey metadata" ;
+    rdfs:subClassOf :TransportEntity ;
+    dcterms:source "hts module" .
+
+# Class: SurveyHousehold
+# Household in travel survey (extends Census Household)
+:SurveyHousehold a rdfs:Class , owl:Class ;
+    rdfs:label "SurveyHousehold" ;
+    rdfs:comment "Household in travel survey (extends Census Household)" ;
+    rdfs:subClassOf :AgentEntity ;
+    dcterms:source "hts module" .
+
+# Class: SurveyPerson
+# Person in travel survey (extends Census Person)
+:SurveyPerson a rdfs:Class , owl:Class ;
+    rdfs:label "SurveyPerson" ;
+    rdfs:comment "Person in travel survey (extends Census Person)" ;
+    rdfs:subClassOf :AgentEntity ;
+    dcterms:source "hts module" .
+
+# Class: SyntheticPopulation
+# Synthetic population metadata (from PopulationSim)
+:SyntheticPopulation a rdfs:Class , owl:Class ;
+    rdfs:label "SyntheticPopulation" ;
+    rdfs:comment "Synthetic population metadata (from PopulationSim)" ;
+    dcterms:source "census module" .
+
+# Class: TemporalEntity
+# Base for entities with temporal validity
+:TemporalEntity a rdfs:Class , owl:Class ;
+    rdfs:label "TemporalEntity" ;
+    rdfs:comment "Base for entities with temporal validity" ;
+    rdfs:subClassOf :TransportEntity ;
+    dcterms:source "base module" .
+
+# Class: TimePeriod
+# Time period definition
+:TimePeriod a rdfs:Class , owl:Class ;
+    rdfs:label "TimePeriod" ;
+    rdfs:comment "Time period definition" ;
+    dcterms:source "base module" .
+
+# Class: Tour
+# Tour (chain of trips with return to origin)
+:Tour a rdfs:Class , owl:Class ;
+    rdfs:label "Tour" ;
+    rdfs:comment "Tour (chain of trips with return to origin)" ;
+    rdfs:subClassOf :TransportEntity ;
+    dcterms:source "hts module" .
+
+# Class: TrafficFlow
+# Traffic flow on road segment
+:TrafficFlow a rdfs:Class , owl:Class ;
+    rdfs:label "TrafficFlow" ;
+    rdfs:comment "Traffic flow on road segment" ;
+    rdfs:subClassOf :TemporalEntity ;
+    dcterms:source "probe module" .
+
+# Class: TransitStop
+# OSM transit stop
+:TransitStop a rdfs:Class , owl:Class ;
+    rdfs:label "TransitStop" ;
+    rdfs:comment "OSM transit stop" ;
+    rdfs:subClassOf :SpatialEntity ;
+    dcterms:source "osm module" .
+
+# Class: TransportEntity
+# Abstract base class for all ontology entities
+:TransportEntity a rdfs:Class , owl:Class ;
+    rdfs:label "TransportEntity" ;
+    rdfs:comment "Abstract base class for all ontology entities" ;
+    dcterms:source "base module" .
+
+# Class: TravelTimeSegment
+# Travel time on road segment
+:TravelTimeSegment a rdfs:Class , owl:Class ;
+    rdfs:label "TravelTimeSegment" ;
+    rdfs:comment "Travel time on road segment" ;
+    rdfs:subClassOf :TemporalEntity ;
+    dcterms:source "probe module" .
+
+# Class: Trip
+# Transit trip
+:Trip a rdfs:Class , owl:Class ;
+    rdfs:label "Trip" ;
+    rdfs:comment "Transit trip" ;
+    rdfs:subClassOf :TransportEntity ;
+    dcterms:source "gtfs module" .
+
+# Class: TripChain
+# Complete trip chain for a person on survey day
+:TripChain a rdfs:Class , owl:Class ;
+    rdfs:label "TripChain" ;
+    rdfs:comment "Complete trip chain for a person on survey day" ;
+    dcterms:source "hts module" .
+
+# Class: TripUpdate
+# Real-time trip update
+:TripUpdate a rdfs:Class , owl:Class ;
+    rdfs:label "TripUpdate" ;
+    rdfs:comment "Real-time trip update" ;
+    rdfs:subClassOf :TemporalEntity ;
+    dcterms:source "gtfs module" .
+
+# Class: VehiclePosition
+# Real-time vehicle position
+:VehiclePosition a rdfs:Class , owl:Class ;
+    rdfs:label "VehiclePosition" ;
+    rdfs:comment "Real-time vehicle position" ;
+    rdfs:subClassOf :SpatialEntity ;
+    rdfs:subClassOf :TemporalEntity ;
+    dcterms:source "gtfs module" .
+
+# Class: Zone
+# Traffic Analysis Zone
+:Zone a rdfs:Class , owl:Class ;
+    rdfs:label "Zone" ;
+    rdfs:comment "Traffic Analysis Zone" ;
+    dcterms:source "base module" .
+
+
+# ==================================================
+# PROPERTIES (from dataclass fields)
+# ==================================================
+
+:absolute_error a owl:DatatypeProperty ;
+    rdfs:label "absolute_error" ;
+    rdfs:domain :ControlTotal ;
+    rdfs:range xsd:integer .
+
+:acceleration_mps2 a owl:DatatypeProperty ;
+    rdfs:label "acceleration_mps2" ;
+    rdfs:domain :GPSTracePoint ;
+    rdfs:range xsd:float .
+
+:access a owl:DatatypeProperty ;
+    rdfs:label "access" ;
+    rdfs:domain :RoadSegment ;
+    rdfs:range xsd:string .
+
+:accuracy_m a owl:DatatypeProperty ;
+    rdfs:label "accuracy_m" ;
+    rdfs:domain :GPSTracePoint ;
+    rdfs:range xsd:float .
+
+:achieved_value a owl:DatatypeProperty ;
+    rdfs:label "achieved_value" ;
+    rdfs:domain :ControlTotal ;
+    rdfs:range xsd:integer .
+
+:active_period_end a owl:DatatypeProperty ;
+    rdfs:label "active_period_end" ;
+    rdfs:domain :ServiceAlert ;
+    rdfs:range xsd:dateTime .
+
+:active_period_start a owl:DatatypeProperty ;
+    rdfs:label "active_period_start" ;
+    rdfs:domain :ServiceAlert ;
+    rdfs:range xsd:dateTime .
+
+:activities a owl:DatatypeProperty ;
+    rdfs:label "activities" ;
+    rdfs:domain :TripChain ;
+    rdfs:range rdf:List .
+
+:activity_category a owl:DatatypeProperty ;
+    rdfs:label "activity_category" ;
+    rdfs:domain :Activity ;
+    rdfs:range xsd:string .
+
+:activity_id a owl:DatatypeProperty ;
+    rdfs:label "activity_id" ;
+    rdfs:domain :Activity ;
+    rdfs:range xsd:string .
+
+:activity_num a owl:DatatypeProperty ;
+    rdfs:label "activity_num" ;
+    rdfs:domain :Activity ;
+    rdfs:range xsd:integer .
+
+:activity_type a owl:DatatypeProperty ;
+    rdfs:label "activity_type" ;
+    rdfs:domain [ a owl:Class ; owl:unionOf ( :Activity :StayPoint ) ] ;
+    rdfs:range xsd:string .
+
+:addr_city a owl:DatatypeProperty ;
+    rdfs:label "addr_city" ;
+    rdfs:domain :Building ;
+    rdfs:range xsd:string .
+
+:addr_housenumber a owl:DatatypeProperty ;
+    rdfs:label "addr_housenumber" ;
+    rdfs:domain :Building ;
+    rdfs:range xsd:string .
+
+:addr_postcode a owl:DatatypeProperty ;
+    rdfs:label "addr_postcode" ;
+    rdfs:domain :Building ;
+    rdfs:range xsd:string .
+
+:addr_street a owl:DatatypeProperty ;
+    rdfs:label "addr_street" ;
+    rdfs:domain :Building ;
+    rdfs:range xsd:string .
+
+:address a owl:DatatypeProperty ;
+    rdfs:label "address" ;
+    rdfs:domain :Location ;
+    rdfs:range xsd:string .
+
+:affected_routes a owl:DatatypeProperty ;
+    rdfs:label "affected_routes" ;
+    rdfs:domain :ServiceAlert ;
+    rdfs:range rdf:List .
+
+:affected_stops a owl:DatatypeProperty ;
+    rdfs:label "affected_stops" ;
+    rdfs:domain :ServiceAlert ;
+    rdfs:range rdf:List .
+
+:affected_trips a owl:DatatypeProperty ;
+    rdfs:label "affected_trips" ;
+    rdfs:domain :ServiceAlert ;
+    rdfs:range rdf:List .
+
+:age a owl:DatatypeProperty ;
+    rdfs:label "age" ;
+    rdfs:domain [ a owl:Class ; owl:unionOf ( :Person :SurveyPerson ) ] ;
+    rdfs:range xsd:integer .
+
+:agency_email a owl:DatatypeProperty ;
+    rdfs:label "agency_email" ;
+    rdfs:domain :Agency ;
+    rdfs:range xsd:string .
+
+:agency_fare_url a owl:DatatypeProperty ;
+    rdfs:label "agency_fare_url" ;
+    rdfs:domain :Agency ;
+    rdfs:range xsd:string .
+
+:agency_id a owl:DatatypeProperty ;
+    rdfs:label "agency_id" ;
+    rdfs:domain [ a owl:Class ; owl:unionOf ( :Agency :Route ) ] ;
+    rdfs:range xsd:string .
+
+:agency_lang a owl:DatatypeProperty ;
+    rdfs:label "agency_lang" ;
+    rdfs:domain :Agency ;
+    rdfs:range xsd:string .
+
+:agency_name a owl:DatatypeProperty ;
+    rdfs:label "agency_name" ;
+    rdfs:domain :Agency ;
+    rdfs:range xsd:string .
+
+:agency_phone a owl:DatatypeProperty ;
+    rdfs:label "agency_phone" ;
+    rdfs:domain :Agency ;
+    rdfs:range xsd:string .
+
+:agency_timezone a owl:DatatypeProperty ;
+    rdfs:label "agency_timezone" ;
+    rdfs:domain :Agency ;
+    rdfs:range xsd:string .
+
+:agency_url a owl:DatatypeProperty ;
+    rdfs:label "agency_url" ;
+    rdfs:domain :Agency ;
+    rdfs:range xsd:string .
+
+:agent_category a owl:DatatypeProperty ;
+    rdfs:label "agent_category" ;
+    rdfs:domain [ a owl:Class ; owl:unionOf ( :AgentEntity :Household :Person :SurveyHousehold :SurveyPerson ) ] ;
+    rdfs:range xsd:string .
+
+:agent_name a owl:DatatypeProperty ;
+    rdfs:label "agent_name" ;
+    rdfs:domain [ a owl:Class ; owl:unionOf ( :AgentEntity :Household :Person :SurveyHousehold :SurveyPerson ) ] ;
+    rdfs:range xsd:string .
+
+:alert_id a owl:DatatypeProperty ;
+    rdfs:label "alert_id" ;
+    rdfs:domain :ServiceAlert ;
+    rdfs:range xsd:string .
+
+:altitude_m a owl:DatatypeProperty ;
+    rdfs:label "altitude_m" ;
+    rdfs:domain :GPSTracePoint ;
+    rdfs:range xsd:float .
+
+:amenity a owl:DatatypeProperty ;
+    rdfs:label "amenity" ;
+    rdfs:domain :PointOfInterest ;
+    rdfs:range xsd:string .
+
+:anchor_location a owl:DatatypeProperty ;
+    rdfs:label "anchor_location" ;
+    rdfs:domain :Tour ;
+    rdfs:range xsd:string .
+
+:anon_user_id a owl:DatatypeProperty ;
+    rdfs:label "anon_user_id" ;
+    rdfs:domain [ a owl:Class ; owl:unionOf ( :AnonymizedUser :CDREvent :InferredTrip :StayPoint ) ] ;
+    rdfs:range xsd:string .
+
+:area_km2 a owl:DatatypeProperty ;
+    rdfs:label "area_km2" ;
+    rdfs:domain :Zone ;
+    rdfs:range xsd:float .
+
+:area_land_km2 a owl:DatatypeProperty ;
+    rdfs:label "area_land_km2" ;
+    rdfs:domain :GeographicUnit ;
+    rdfs:range xsd:float .
+
+:area_water_km2 a owl:DatatypeProperty ;
+    rdfs:label "area_water_km2" ;
+    rdfs:domain :GeographicUnit ;
+    rdfs:range xsd:float .
+
+:arrival_delay_seconds a owl:DatatypeProperty ;
+    rdfs:label "arrival_delay_seconds" ;
+    rdfs:domain :StopTimeUpdate ;
+    rdfs:range xsd:integer .
+
+:arrival_time a owl:DatatypeProperty ;
+    rdfs:label "arrival_time" ;
+    rdfs:domain [ a owl:Class ; owl:unionOf ( :InferredTrip :StayPoint :StopTime :StopTimeUpdate ) ] ;
+    rdfs:range xsd:dateTime .
+
+:arrival_uncertainty a owl:DatatypeProperty ;
+    rdfs:label "arrival_uncertainty" ;
+    rdfs:domain :StopTimeUpdate ;
+    rdfs:range xsd:integer .
+
+:attributes a owl:DatatypeProperty ;
+    rdfs:label "attributes" ;
+    rdfs:domain [ a owl:Class ; owl:unionOf ( :AgentEntity :Household :Person :SurveyHousehold :SurveyPerson ) ] ;
+    rdfs:range xsd:string .
+
+:average_speed_kmh a owl:DatatypeProperty ;
+    rdfs:label "average_speed_kmh" ;
+    rdfs:domain [ a owl:Class ; owl:unionOf ( :ODTrajectory :SpeedObservation ) ] ;
+    rdfs:range xsd:float .
+
+:average_travel_time_minutes a owl:DatatypeProperty ;
+    rdfs:label "average_travel_time_minutes" ;
+    rdfs:domain [ a owl:Class ; owl:unionOf ( :ODPair :ODMatrix_Mobile ) ] ;
+    rdfs:range xsd:float .
+
+:azimuth_degrees a owl:DatatypeProperty ;
+    rdfs:label "azimuth_degrees" ;
+    rdfs:domain :CellTower ;
+    rdfs:range xsd:float .
+
+:backward_cost a owl:DatatypeProperty ;
+    rdfs:label "backward_cost" ;
+    rdfs:domain :RoadSegment ;
+    rdfs:range xsd:float .
+
+:barrier_id a owl:DatatypeProperty ;
+    rdfs:label "barrier_id" ;
+    rdfs:domain :Barrier ;
+    rdfs:range xsd:string .
+
+:barrier_type a owl:DatatypeProperty ;
+    rdfs:label "barrier_type" ;
+    rdfs:domain :Barrier ;
+    rdfs:range xsd:string .
+
+:bbox a owl:DatatypeProperty ;
+    rdfs:label "bbox" ;
+    rdfs:domain [ a owl:Class ; owl:unionOf ( :InfrastructureEntity :SpatialEntity :GeographicUnit :CellTower :StayPoint ) ] ;
+    rdfs:range xsd:float .
+
+:bearing a owl:DatatypeProperty ;
+    rdfs:label "bearing" ;
+    rdfs:domain :VehiclePosition ;
+    rdfs:range xsd:float .
+
+:bench a owl:DatatypeProperty ;
+    rdfs:label "bench" ;
+    rdfs:domain :TransitStop ;
+    rdfs:range xsd:boolean .
+
+:bicycles_available a owl:DatatypeProperty ;
+    rdfs:label "bicycles_available" ;
+    rdfs:domain :Household ;
+    rdfs:range xsd:integer .
+
+:bikes_allowed a owl:DatatypeProperty ;
+    rdfs:label "bikes_allowed" ;
+    rdfs:domain :Trip ;
+    rdfs:range xsd:string .
+
+:bin a owl:DatatypeProperty ;
+    rdfs:label "bin" ;
+    rdfs:domain :TransitStop ;
+    rdfs:range xsd:boolean .
+
+:block_id a owl:DatatypeProperty ;
+    rdfs:label "block_id" ;
+    rdfs:domain :Trip ;
+    rdfs:range xsd:string .
+
+:brand a owl:DatatypeProperty ;
+    rdfs:label "brand" ;
+    rdfs:domain :PointOfInterest ;
+    rdfs:range xsd:string .
+
+:bridge a owl:DatatypeProperty ;
+    rdfs:label "bridge" ;
+    rdfs:domain :RoadSegment ;
+    rdfs:range xsd:boolean .
+
+:buffer_distance_m a owl:DatatypeProperty ;
+    rdfs:label "buffer_distance_m" ;
+    rdfs:domain :Barrier ;
+    rdfs:range xsd:float .
+
+:buffered_geometry a owl:DatatypeProperty ;
+    rdfs:label "buffered_geometry" ;
+    rdfs:domain :Barrier ;
+    rdfs:range xsd:anyType .
+
+:building_id a owl:DatatypeProperty ;
+    rdfs:label "building_id" ;
+    rdfs:domain :Building ;
+    rdfs:range xsd:string .
+
+:building_levels a owl:DatatypeProperty ;
+    rdfs:label "building_levels" ;
+    rdfs:domain :Building ;
+    rdfs:range xsd:integer .
+
+:building_type a owl:DatatypeProperty ;
+    rdfs:label "building_type" ;
+    rdfs:domain :Building ;
+    rdfs:range xsd:string .
+
+:capacity a owl:DatatypeProperty ;
+    rdfs:label "capacity" ;
+    rdfs:domain :InfrastructureEntity ;
+    rdfs:range xsd:integer .
+
+:capacity_veh_per_hour a owl:DatatypeProperty ;
+    rdfs:label "capacity_veh_per_hour" ;
+    rdfs:domain :RoadSegment ;
+    rdfs:range xsd:integer .
+
+:cause a owl:DatatypeProperty ;
+    rdfs:label "cause" ;
+    rdfs:domain :ServiceAlert ;
+    rdfs:range xsd:string .
+
+:cell_id a owl:DatatypeProperty ;
+    rdfs:label "cell_id" ;
+    rdfs:domain :CellTower ;
+    rdfs:range xsd:string .
+
+:centroid a owl:DatatypeProperty ;
+    rdfs:label "centroid" ;
+    rdfs:domain [ a owl:Class ; owl:unionOf ( :InfrastructureEntity :SpatialEntity :Zone :GeographicUnit :CellTower ) ] ;
+    rdfs:range xsd:float .
+
+:chain_id a owl:DatatypeProperty ;
+    rdfs:label "chain_id" ;
+    rdfs:domain :TripChain ;
+    rdfs:range xsd:string .
+
+:changeset_id a owl:DatatypeProperty ;
+    rdfs:label "changeset_id" ;
+    rdfs:domain [ a owl:Class ; owl:unionOf ( :OSMNode :OSMWay ) ] ;
+    rdfs:range xsd:integer .
+
+:commute_mode a owl:DatatypeProperty ;
+    rdfs:label "commute_mode" ;
+    rdfs:domain :Person ;
+    rdfs:range xsd:string .
+
+:commute_time_minutes a owl:DatatypeProperty ;
+    rdfs:label "commute_time_minutes" ;
+    rdfs:domain :Person ;
+    rdfs:range xsd:integer .
+
+:completed_diary a owl:DatatypeProperty ;
+    rdfs:label "completed_diary" ;
+    rdfs:domain :SurveyPerson ;
+    rdfs:range xsd:boolean .
+
+:confidence a owl:DatatypeProperty ;
+    rdfs:label "confidence" ;
+    rdfs:domain :TrafficFlow ;
+    rdfs:range xsd:float .
+
+:confidence_interval_95 a owl:DatatypeProperty ;
+    rdfs:label "confidence_interval_95" ;
+    rdfs:domain :ODMatrix_Mobile ;
+    rdfs:range xsd:integer .
+
+:confidence_interval_95_lower a owl:DatatypeProperty ;
+    rdfs:label "confidence_interval_95_lower" ;
+    rdfs:domain :TravelTimeSegment ;
+    rdfs:range xsd:float .
+
+:confidence_interval_95_upper a owl:DatatypeProperty ;
+    rdfs:label "confidence_interval_95_upper" ;
+    rdfs:domain :TravelTimeSegment ;
+    rdfs:range xsd:float .
+
+:confidence_score a owl:DatatypeProperty ;
+    rdfs:label "confidence_score" ;
+    rdfs:domain :InferredTrip ;
+    rdfs:range xsd:float .
+
+:congestion_level a owl:DatatypeProperty ;
+    rdfs:label "congestion_level" ;
+    rdfs:domain [ a owl:Class ; owl:unionOf ( :SpeedObservation :VehiclePosition ) ] ;
+    rdfs:range xsd:string .
+
+:congestion_ratio a owl:DatatypeProperty ;
+    rdfs:label "congestion_ratio" ;
+    rdfs:domain :TravelTimeSegment ;
+    rdfs:range xsd:float .
+
+:connected_segments a owl:DatatypeProperty ;
+    rdfs:label "connected_segments" ;
+    rdfs:domain :Intersection ;
+    rdfs:range rdf:List .
+
+:continuous_drop_off a owl:DatatypeProperty ;
+    rdfs:label "continuous_drop_off" ;
+    rdfs:domain [ a owl:Class ; owl:unionOf ( :Route :StopTime ) ] ;
+    rdfs:range xsd:string .
+
+:continuous_pickup a owl:DatatypeProperty ;
+    rdfs:label "continuous_pickup" ;
+    rdfs:domain [ a owl:Class ; owl:unionOf ( :Route :StopTime ) ] ;
+    rdfs:range xsd:string .
+
+:control_category a owl:DatatypeProperty ;
+    rdfs:label "control_category" ;
+    rdfs:domain :ControlTotal ;
+    rdfs:range xsd:string .
+
+:control_id a owl:DatatypeProperty ;
+    rdfs:label "control_id" ;
+    rdfs:domain :ControlTotal ;
+    rdfs:range xsd:string .
+
+:control_name a owl:DatatypeProperty ;
+    rdfs:label "control_name" ;
+    rdfs:domain :ControlTotal ;
+    rdfs:range xsd:string .
+
+:controls_applied a owl:DatatypeProperty ;
+    rdfs:label "controls_applied" ;
+    rdfs:domain :SyntheticPopulation ;
+    rdfs:range xsd:string .
+
+:convergence_achieved a owl:DatatypeProperty ;
+    rdfs:label "convergence_achieved" ;
+    rdfs:domain :SyntheticPopulation ;
+    rdfs:range xsd:boolean .
+
+:country_code a owl:DatatypeProperty ;
+    rdfs:label "country_code" ;
+    rdfs:domain :MobileOperator ;
+    rdfs:range xsd:string .
+
+:coverage_area a owl:DatatypeProperty ;
+    rdfs:label "coverage_area" ;
+    rdfs:domain :MobileOperator ;
+    rdfs:range xsd:string .
+
+:coverage_radius_m a owl:DatatypeProperty ;
+    rdfs:label "coverage_radius_m" ;
+    rdfs:domain :CellTower ;
+    rdfs:range xsd:float .
+
+:coverage_region a owl:DatatypeProperty ;
+    rdfs:label "coverage_region" ;
+    rdfs:domain :ProbeDataProvider ;
+    rdfs:range xsd:string .
+
+:created_at a owl:DatatypeProperty ;
+    rdfs:label "created_at" ;
+    rdfs:domain [ a owl:Class ; owl:unionOf ( :ActivityEntity :AgentEntity :InfrastructureEntity :Relationship :SpatialEntity ) ] ;
+    rdfs:range xsd:dateTime .
+
+:created_date a owl:DatatypeProperty ;
+    rdfs:label "created_date" ;
+    rdfs:domain :SyntheticPopulation ;
+    rdfs:range xsd:dateTime .
+
+:creation_method a owl:DatatypeProperty ;
+    rdfs:label "creation_method" ;
+    rdfs:domain :SyntheticPopulation ;
+    rdfs:range xsd:string .
+
+:cuisine a owl:DatatypeProperty ;
+    rdfs:label "cuisine" ;
+    rdfs:domain :PointOfInterest ;
+    rdfs:range xsd:string .
+
+:current_status a owl:DatatypeProperty ;
+    rdfs:label "current_status" ;
+    rdfs:domain :VehiclePosition ;
+    rdfs:range xsd:string .
+
+:current_stop_sequence a owl:DatatypeProperty ;
+    rdfs:label "current_stop_sequence" ;
+    rdfs:domain :VehiclePosition ;
+    rdfs:range xsd:integer .
+
+:currently_enrolled a owl:DatatypeProperty ;
+    rdfs:label "currently_enrolled" ;
+    rdfs:domain :Person ;
+    rdfs:range xsd:boolean .
+
+:data_license_type a owl:DatatypeProperty ;
+    rdfs:label "data_license_type" ;
+    rdfs:domain :ProbeDataProvider ;
+    rdfs:range xsd:string .
+
+:data_provider_id a owl:DatatypeProperty ;
+    rdfs:label "data_provider_id" ;
+    rdfs:domain :ProbeVehicle ;
+    rdfs:range xsd:string .
+
+:data_quality_score a owl:DatatypeProperty ;
+    rdfs:label "data_quality_score" ;
+    rdfs:domain [ a owl:Class ; owl:unionOf ( :ActivityEntity :AgentEntity :InfrastructureEntity :SpatialEntity :TemporalEntity ) ] ;
+    rdfs:range xsd:float .
+
+:data_source a owl:DatatypeProperty ;
+    rdfs:label "data_source" ;
+    rdfs:domain [ a owl:Class ; owl:unionOf ( :ActivityEntity :AgentEntity :InfrastructureEntity :SpatialEntity :TemporalEntity ) ] ;
+    rdfs:range xsd:string .
+
+:data_volume_mb a owl:DatatypeProperty ;
+    rdfs:label "data_volume_mb" ;
+    rdfs:domain :CDREvent ;
+    rdfs:range xsd:float .
+
+:date a owl:DatatypeProperty ;
+    rdfs:label "date" ;
+    rdfs:domain [ a owl:Class ; owl:unionOf ( :MobilityPattern :ODMatrix_Mobile :CalendarDate ) ] ;
+    rdfs:range xsd:dateTime .
+
+:day_of_week a owl:DatatypeProperty ;
+    rdfs:label "day_of_week" ;
+    rdfs:domain [ a owl:Class ; owl:unionOf ( :SurveyHousehold :InferredTrip ) ] ;
+    rdfs:range xsd:string .
+
+:day_type a owl:DatatypeProperty ;
+    rdfs:label "day_type" ;
+    rdfs:domain [ a owl:Class ; owl:unionOf ( :ODMatrix_Mobile :SpeedObservation :TravelTimeSegment ) ] ;
+    rdfs:range xsd:string .
+
+:day_types a owl:DatatypeProperty ;
+    rdfs:label "day_types" ;
+    rdfs:domain :TimePeriod ;
+    rdfs:range rdf:List .
+
+:delay_seconds a owl:DatatypeProperty ;
+    rdfs:label "delay_seconds" ;
+    rdfs:domain [ a owl:Class ; owl:unionOf ( :TravelTimeSegment :TripUpdate ) ] ;
+    rdfs:range xsd:float .
+
+:density_veh_per_km a owl:DatatypeProperty ;
+    rdfs:label "density_veh_per_km" ;
+    rdfs:domain :TrafficFlow ;
+    rdfs:range xsd:float .
+
+:departure_delay_seconds a owl:DatatypeProperty ;
+    rdfs:label "departure_delay_seconds" ;
+    rdfs:domain :StopTimeUpdate ;
+    rdfs:range xsd:integer .
+
+:departure_time a owl:DatatypeProperty ;
+    rdfs:label "departure_time" ;
+    rdfs:domain [ a owl:Class ; owl:unionOf ( :InferredTrip :StayPoint :StopTime :StopTimeUpdate ) ] ;
+    rdfs:range xsd:dateTime .
+
+:departure_uncertainty a owl:DatatypeProperty ;
+    rdfs:label "departure_uncertainty" ;
+    rdfs:domain :StopTimeUpdate ;
+    rdfs:range xsd:integer .
+
+:deployment_date a owl:DatatypeProperty ;
+    rdfs:label "deployment_date" ;
+    rdfs:domain :CellTower ;
+    rdfs:range xsd:dateTime .
+
+:description_text a owl:DatatypeProperty ;
+    rdfs:label "description_text" ;
+    rdfs:domain :ServiceAlert ;
+    rdfs:range xsd:string .
+
+:destination_id a owl:DatatypeProperty ;
+    rdfs:label "destination_id" ;
+    rdfs:domain [ a owl:Class ; owl:unionOf ( :ActivityEntity :InferredTrip ) ] ;
+    rdfs:range xsd:string .
+
+:destination_stay_point_id a owl:DatatypeProperty ;
+    rdfs:label "destination_stay_point_id" ;
+    rdfs:domain :InferredTrip ;
+    rdfs:range xsd:string .
+
+:destination_tower_id a owl:DatatypeProperty ;
+    rdfs:label "destination_tower_id" ;
+    rdfs:domain :InferredTrip ;
+    rdfs:range xsd:string .
+
+:destination_zone_id a owl:DatatypeProperty ;
+    rdfs:label "destination_zone_id" ;
+    rdfs:domain [ a owl:Class ; owl:unionOf ( :ODPair :InferredTrip :ODMatrix_Mobile :ODTrajectory ) ] ;
+    rdfs:range xsd:string .
+
+:device_type a owl:DatatypeProperty ;
+    rdfs:label "device_type" ;
+    rdfs:domain :AnonymizedUser ;
+    rdfs:range xsd:string .
+
+:direction_id a owl:DatatypeProperty ;
+    rdfs:label "direction_id" ;
+    rdfs:domain :Trip ;
+    rdfs:range xsd:integer .
+
+:distance_km a owl:DatatypeProperty ;
+    rdfs:label "distance_km" ;
+    rdfs:domain :ODPair ;
+    rdfs:range xsd:float .
+
+:drop_off_type a owl:DatatypeProperty ;
+    rdfs:label "drop_off_type" ;
+    rdfs:domain :StopTime ;
+    rdfs:range xsd:string .
+
+:duration_minutes a owl:DatatypeProperty ;
+    rdfs:label "duration_minutes" ;
+    rdfs:domain [ a owl:Class ; owl:unionOf ( :ActivityEntity :Activity :Tour :InferredTrip :StayPoint ) ] ;
+    rdfs:range xsd:float .
+
+:duration_seconds a owl:DatatypeProperty ;
+    rdfs:label "duration_seconds" ;
+    rdfs:domain :CDREvent ;
+    rdfs:range xsd:float .
+
+:dwelling_type a owl:DatatypeProperty ;
+    rdfs:label "dwelling_type" ;
+    rdfs:domain :Household ;
+    rdfs:range xsd:string .
+
+:earnings a owl:DatatypeProperty ;
+    rdfs:label "earnings" ;
+    rdfs:domain :Person ;
+    rdfs:range xsd:float .
+
+:education_level a owl:DatatypeProperty ;
+    rdfs:label "education_level" ;
+    rdfs:domain [ a owl:Class ; owl:unionOf ( :Person :SurveyPerson ) ] ;
+    rdfs:range xsd:string .
+
+:effect a owl:DatatypeProperty ;
+    rdfs:label "effect" ;
+    rdfs:domain :ServiceAlert ;
+    rdfs:range xsd:string .
+
+:elevation_m a owl:DatatypeProperty ;
+    rdfs:label "elevation_m" ;
+    rdfs:domain :CellTower ;
+    rdfs:range xsd:float .
+
+:employment a owl:DatatypeProperty ;
+    rdfs:label "employment" ;
+    rdfs:domain :Zone ;
+    rdfs:range xsd:integer .
+
+:employment_status a owl:DatatypeProperty ;
+    rdfs:label "employment_status" ;
+    rdfs:domain [ a owl:Class ; owl:unionOf ( :Person :SurveyPerson ) ] ;
+    rdfs:range xsd:string .
+
+:end_date a owl:DatatypeProperty ;
+    rdfs:label "end_date" ;
+    rdfs:domain :Calendar ;
+    rdfs:range xsd:dateTime .
+
+:end_time a owl:DatatypeProperty ;
+    rdfs:label "end_time" ;
+    rdfs:domain [ a owl:Class ; owl:unionOf ( :ActivityEntity :TimePeriod :Activity :Tour :InferredTrip ) ] ;
+    rdfs:range xsd:dateTime .
+
+:entity_id a owl:DatatypeProperty ;
+    rdfs:label "entity_id" ;
+    rdfs:domain [ a owl:Class ; owl:unionOf ( :ActivityEntity :AgentEntity :InfrastructureEntity :SpatialEntity :TemporalEntity ) ] ;
+    rdfs:range xsd:string .
+
+:entity_type a owl:DatatypeProperty ;
+    rdfs:label "entity_type" ;
+    rdfs:domain [ a owl:Class ; owl:unionOf ( :ActivityEntity :AgentEntity :InfrastructureEntity :SpatialEntity :TemporalEntity ) ] ;
+    rdfs:range xsd:string .
+
+:estimated_age_group a owl:DatatypeProperty ;
+    rdfs:label "estimated_age_group" ;
+    rdfs:domain :AnonymizedUser ;
+    rdfs:range xsd:string .
+
+:estimated_gender a owl:DatatypeProperty ;
+    rdfs:label "estimated_gender" ;
+    rdfs:domain :AnonymizedUser ;
+    rdfs:range xsd:string .
+
+:ethnicity a owl:DatatypeProperty ;
+    rdfs:label "ethnicity" ;
+    rdfs:domain :Person ;
+    rdfs:range xsd:string .
+
+:euclidean_distance_km a owl:DatatypeProperty ;
+    rdfs:label "euclidean_distance_km" ;
+    rdfs:domain :InferredTrip ;
+    rdfs:range xsd:float .
+
+:event_id a owl:DatatypeProperty ;
+    rdfs:label "event_id" ;
+    rdfs:domain :CDREvent ;
+    rdfs:range xsd:string .
+
+:event_ids a owl:DatatypeProperty ;
+    rdfs:label "event_ids" ;
+    rdfs:domain :StayPoint ;
+    rdfs:range rdf:List .
+
+:event_type a owl:DatatypeProperty ;
+    rdfs:label "event_type" ;
+    rdfs:domain :CDREvent ;
+    rdfs:range xsd:string .
+
+:exception_type a owl:DatatypeProperty ;
+    rdfs:label "exception_type" ;
+    rdfs:domain :CalendarDate ;
+    rdfs:range xsd:integer .
+
+:expansion_factor a owl:DatatypeProperty ;
+    rdfs:label "expansion_factor" ;
+    rdfs:domain [ a owl:Class ; owl:unionOf ( :Household :SurveyHousehold :ODMatrix_Mobile ) ] ;
+    rdfs:range xsd:float .
+
+:facility_name a owl:DatatypeProperty ;
+    rdfs:label "facility_name" ;
+    rdfs:domain :InfrastructureEntity ;
+    rdfs:range xsd:string .
+
+:first_seen a owl:DatatypeProperty ;
+    rdfs:label "first_seen" ;
+    rdfs:domain [ a owl:Class ; owl:unionOf ( :AnonymizedUser :ProbeVehicle ) ] ;
+    rdfs:range xsd:dateTime .
+
+:flow_id a owl:DatatypeProperty ;
+    rdfs:label "flow_id" ;
+    rdfs:domain :TrafficFlow ;
+    rdfs:range xsd:string .
+
+:following_trip_id a owl:DatatypeProperty ;
+    rdfs:label "following_trip_id" ;
+    rdfs:domain :Activity ;
+    rdfs:range xsd:string .
+
+:footprint_area_m2 a owl:DatatypeProperty ;
+    rdfs:label "footprint_area_m2" ;
+    rdfs:domain :Building ;
+    rdfs:range xsd:float .
+
+:forward_cost a owl:DatatypeProperty ;
+    rdfs:label "forward_cost" ;
+    rdfs:domain :RoadSegment ;
+    rdfs:range xsd:float .
+
+:free_flow_speed_kmh a owl:DatatypeProperty ;
+    rdfs:label "free_flow_speed_kmh" ;
+    rdfs:domain [ a owl:Class ; owl:unionOf ( :SpeedObservation :RoadSegment ) ] ;
+    rdfs:range xsd:float .
+
+:free_flow_travel_time_seconds a owl:DatatypeProperty ;
+    rdfs:label "free_flow_travel_time_seconds" ;
+    rdfs:domain :TravelTimeSegment ;
+    rdfs:range xsd:float .
+
+:friday a owl:DatatypeProperty ;
+    rdfs:label "friday" ;
+    rdfs:domain :Calendar ;
+    rdfs:range xsd:boolean .
+
+:from_node_id a owl:DatatypeProperty ;
+    rdfs:label "from_node_id" ;
+    rdfs:domain :RoadSegment ;
+    rdfs:range xsd:integer .
+
+:functional_class a owl:DatatypeProperty ;
+    rdfs:label "functional_class" ;
+    rdfs:domain :RoadSegment ;
+    rdfs:range xsd:integer .
+
+:geographic_extent a owl:DatatypeProperty ;
+    rdfs:label "geographic_extent" ;
+    rdfs:domain :Survey ;
+    rdfs:range xsd:string .
+
+:geography_id a owl:DatatypeProperty ;
+    rdfs:label "geography_id" ;
+    rdfs:domain [ a owl:Class ; owl:unionOf ( :ControlTotal :GeographicUnit :Household :SyntheticPopulation ) ] ;
+    rdfs:range xsd:string .
+
+:geography_name a owl:DatatypeProperty ;
+    rdfs:label "geography_name" ;
+    rdfs:domain :GeographicUnit ;
+    rdfs:range xsd:string .
+
+:geography_type a owl:DatatypeProperty ;
+    rdfs:label "geography_type" ;
+    rdfs:domain [ a owl:Class ; owl:unionOf ( :ControlTotal :GeographicUnit ) ] ;
+    rdfs:range xsd:string .
+
+:geometry a owl:DatatypeProperty ;
+    rdfs:label "geometry" ;
+    rdfs:domain [ a owl:Class ; owl:unionOf ( :InfrastructureEntity :SpatialEntity :Zone :GeographicUnit :CellTower ) ] ;
+    rdfs:range xsd:anyType .
+
+:goodness_of_fit a owl:DatatypeProperty ;
+    rdfs:label "goodness_of_fit" ;
+    rdfs:domain :SyntheticPopulation ;
+    rdfs:range xsd:float .
+
+:gtfs_stop_id a owl:DatatypeProperty ;
+    rdfs:label "gtfs_stop_id" ;
+    rdfs:domain :TransitStop ;
+    rdfs:range xsd:string .
+
+:has_bicycle a owl:DatatypeProperty ;
+    rdfs:label "has_bicycle" ;
+    rdfs:domain :SurveyPerson ;
+    rdfs:range xsd:boolean .
+
+:has_drivers_license a owl:DatatypeProperty ;
+    rdfs:label "has_drivers_license" ;
+    rdfs:domain [ a owl:Class ; owl:unionOf ( :Person :SurveyPerson ) ] ;
+    rdfs:range xsd:boolean .
+
+:has_roundabout a owl:DatatypeProperty ;
+    rdfs:label "has_roundabout" ;
+    rdfs:domain :Intersection ;
+    rdfs:range xsd:boolean .
+
+:has_stop_sign a owl:DatatypeProperty ;
+    rdfs:label "has_stop_sign" ;
+    rdfs:domain :Intersection ;
+    rdfs:range xsd:boolean .
+
+:has_traffic_signal a owl:DatatypeProperty ;
+    rdfs:label "has_traffic_signal" ;
+    rdfs:domain :Intersection ;
+    rdfs:range xsd:boolean .
+
+:has_transit_pass a owl:DatatypeProperty ;
+    rdfs:label "has_transit_pass" ;
+    rdfs:domain :SurveyPerson ;
+    rdfs:range xsd:string .
+
+:hdop a owl:DatatypeProperty ;
+    rdfs:label "hdop" ;
+    rdfs:domain :GPSTracePoint ;
+    rdfs:range xsd:float .
+
+:header_text a owl:DatatypeProperty ;
+    rdfs:label "header_text" ;
+    rdfs:domain :ServiceAlert ;
+    rdfs:range xsd:string .
+
+:heading_degrees a owl:DatatypeProperty ;
+    rdfs:label "heading_degrees" ;
+    rdfs:domain :GPSTracePoint ;
+    rdfs:range xsd:float .
+
+:height_m a owl:DatatypeProperty ;
+    rdfs:label "height_m" ;
+    rdfs:domain :Building ;
+    rdfs:range xsd:float .
+
+:highway a owl:DatatypeProperty ;
+    rdfs:label "highway" ;
+    rdfs:domain :TransitStop ;
+    rdfs:range xsd:string .
+
+:highway_class a owl:DatatypeProperty ;
+    rdfs:label "highway_class" ;
+    rdfs:domain :RoadSegment ;
+    rdfs:range xsd:string .
+
+:historical_travel_time_seconds a owl:DatatypeProperty ;
+    rdfs:label "historical_travel_time_seconds" ;
+    rdfs:domain :TravelTimeSegment ;
+    rdfs:range xsd:float .
+
+:home_tower_id a owl:DatatypeProperty ;
+    rdfs:label "home_tower_id" ;
+    rdfs:domain :AnonymizedUser ;
+    rdfs:range xsd:string .
+
+:home_zone_id a owl:DatatypeProperty ;
+    rdfs:label "home_zone_id" ;
+    rdfs:domain :AnonymizedUser ;
+    rdfs:range xsd:string .
+
+:hours_worked_per_week a owl:DatatypeProperty ;
+    rdfs:label "hours_worked_per_week" ;
+    rdfs:domain :Person ;
+    rdfs:range xsd:integer .
+
+:household_id a owl:DatatypeProperty ;
+    rdfs:label "household_id" ;
+    rdfs:domain [ a owl:Class ; owl:unionOf ( :Household :Person ) ] ;
+    rdfs:range xsd:string .
+
+:household_income a owl:DatatypeProperty ;
+    rdfs:label "household_income" ;
+    rdfs:domain [ a owl:Class ; owl:unionOf ( :Household :SurveyHousehold ) ] ;
+    rdfs:range xsd:float .
+
+:household_size a owl:DatatypeProperty ;
+    rdfs:label "household_size" ;
+    rdfs:domain [ a owl:Class ; owl:unionOf ( :Household :SurveyHousehold ) ] ;
+    rdfs:range xsd:integer .
+
+:household_weight a owl:DatatypeProperty ;
+    rdfs:label "household_weight" ;
+    rdfs:domain :SurveyHousehold ;
+    rdfs:range xsd:float .
+
+:households_total a owl:DatatypeProperty ;
+    rdfs:label "households_total" ;
+    rdfs:domain :GeographicUnit ;
+    rdfs:range xsd:integer .
+
+:importance_weight a owl:DatatypeProperty ;
+    rdfs:label "importance_weight" ;
+    rdfs:domain :ControlTotal ;
+    rdfs:range xsd:float .
+
+:income_bracket a owl:DatatypeProperty ;
+    rdfs:label "income_bracket" ;
+    rdfs:domain :Household ;
+    rdfs:range xsd:string .
+
+:industry_code a owl:DatatypeProperty ;
+    rdfs:label "industry_code" ;
+    rdfs:domain :Person ;
+    rdfs:range xsd:string .
+
+:inferred_trip_id a owl:DatatypeProperty ;
+    rdfs:label "inferred_trip_id" ;
+    rdfs:domain :InferredTrip ;
+    rdfs:range xsd:string .
+
+:intersection_id a owl:DatatypeProperty ;
+    rdfs:label "intersection_id" ;
+    rdfs:domain :Intersection ;
+    rdfs:range xsd:string .
+
+:interview_date a owl:DatatypeProperty ;
+    rdfs:label "interview_date" ;
+    rdfs:domain :SurveyHousehold ;
+    rdfs:range xsd:dateTime .
+
+:is_closed a owl:DatatypeProperty ;
+    rdfs:label "is_closed" ;
+    rdfs:domain :OSMWay ;
+    rdfs:range xsd:boolean .
+
+:is_current a owl:DatatypeProperty ;
+    rdfs:label "is_current" ;
+    rdfs:domain [ a owl:Class ; owl:unionOf ( :TemporalEntity :GPSTracePoint :SpeedObservation :TrafficFlow :TravelTimeSegment ) ] ;
+    rdfs:range xsd:boolean .
+
+:is_holiday a owl:DatatypeProperty ;
+    rdfs:label "is_holiday" ;
+    rdfs:domain :SurveyHousehold ;
+    rdfs:range xsd:boolean .
+
+:is_home a owl:DatatypeProperty ;
+    rdfs:label "is_home" ;
+    rdfs:domain :StayPoint ;
+    rdfs:range xsd:boolean .
+
+:is_motorway_junction a owl:DatatypeProperty ;
+    rdfs:label "is_motorway_junction" ;
+    rdfs:domain :Intersection ;
+    rdfs:range xsd:boolean .
+
+:is_multimodal a owl:DatatypeProperty ;
+    rdfs:label "is_multimodal" ;
+    rdfs:domain :Tour ;
+    rdfs:range xsd:boolean .
+
+:is_weekend a owl:DatatypeProperty ;
+    rdfs:label "is_weekend" ;
+    rdfs:domain :SurveyHousehold ;
+    rdfs:range xsd:boolean .
+
+:is_work a owl:DatatypeProperty ;
+    rdfs:label "is_work" ;
+    rdfs:domain :StayPoint ;
+    rdfs:range xsd:boolean .
+
+:junction_type a owl:DatatypeProperty ;
+    rdfs:label "junction_type" ;
+    rdfs:domain :Intersection ;
+    rdfs:range xsd:string .
+
+:lac_code a owl:DatatypeProperty ;
+    rdfs:label "lac_code" ;
+    rdfs:domain :CellTower ;
+    rdfs:range xsd:string .
+
+:land_use_mix a owl:DatatypeProperty ;
+    rdfs:label "land_use_mix" ;
+    rdfs:domain :Zone ;
+    rdfs:range xsd:string .
+
+:lanes a owl:DatatypeProperty ;
+    rdfs:label "lanes" ;
+    rdfs:domain :RoadSegment ;
+    rdfs:range xsd:integer .
+
+:last_seen a owl:DatatypeProperty ;
+    rdfs:label "last_seen" ;
+    rdfs:domain [ a owl:Class ; owl:unionOf ( :AnonymizedUser :ProbeVehicle ) ] ;
+    rdfs:range xsd:dateTime .
+
+:latitude a owl:DatatypeProperty ;
+    rdfs:label "latitude" ;
+    rdfs:domain :Location ;
+    rdfs:range xsd:float .
+
+:leisure a owl:DatatypeProperty ;
+    rdfs:label "leisure" ;
+    rdfs:domain :PointOfInterest ;
+    rdfs:range xsd:string .
+
+:length_m a owl:DatatypeProperty ;
+    rdfs:label "length_m" ;
+    rdfs:domain :RoadSegment ;
+    rdfs:range xsd:float .
+
+:level_id a owl:DatatypeProperty ;
+    rdfs:label "level_id" ;
+    rdfs:domain :Stop ;
+    rdfs:range xsd:string .
+
+:level_of_service a owl:DatatypeProperty ;
+    rdfs:label "level_of_service" ;
+    rdfs:domain :SpeedObservation ;
+    rdfs:range xsd:string .
+
+:location a owl:DatatypeProperty ;
+    rdfs:label "location" ;
+    rdfs:domain :Activity ;
+    rdfs:range xsd:string .
+
+:location_id a owl:DatatypeProperty ;
+    rdfs:label "location_id" ;
+    rdfs:domain :Location ;
+    rdfs:range xsd:string .
+
+:location_type a owl:DatatypeProperty ;
+    rdfs:label "location_type" ;
+    rdfs:domain :Stop ;
+    rdfs:range xsd:string .
+
+:longitude a owl:DatatypeProperty ;
+    rdfs:label "longitude" ;
+    rdfs:domain :Location ;
+    rdfs:range xsd:float .
+
+:marital_status a owl:DatatypeProperty ;
+    rdfs:label "marital_status" ;
+    rdfs:domain :Person ;
+    rdfs:range xsd:string .
+
+:market_penetration_rate a owl:DatatypeProperty ;
+    rdfs:label "market_penetration_rate" ;
+    rdfs:domain :ODMatrix_Mobile ;
+    rdfs:range xsd:float .
+
+:market_share_percent a owl:DatatypeProperty ;
+    rdfs:label "market_share_percent" ;
+    rdfs:domain :MobileOperator ;
+    rdfs:range xsd:float .
+
+:matched_location a owl:DatatypeProperty ;
+    rdfs:label "matched_location" ;
+    rdfs:domain :MatchedTrace ;
+    rdfs:range xsd:anyType .
+
+:matched_trace_id a owl:DatatypeProperty ;
+    rdfs:label "matched_trace_id" ;
+    rdfs:domain :MatchedTrace ;
+    rdfs:range xsd:string .
+
+:matching_confidence a owl:DatatypeProperty ;
+    rdfs:label "matching_confidence" ;
+    rdfs:domain :MatchedTrace ;
+    rdfs:range xsd:float .
+
+:max_speed_kmh a owl:DatatypeProperty ;
+    rdfs:label "max_speed_kmh" ;
+    rdfs:domain :ODTrajectory ;
+    rdfs:range xsd:float .
+
+:maxspeed_kmh a owl:DatatypeProperty ;
+    rdfs:label "maxspeed_kmh" ;
+    rdfs:domain :RoadSegment ;
+    rdfs:range xsd:integer .
+
+:metadata a owl:DatatypeProperty ;
+    rdfs:label "metadata" ;
+    rdfs:domain [ a owl:Class ; owl:unionOf ( :ActivityEntity :AgentEntity :InfrastructureEntity :SpatialEntity :TemporalEntity ) ] ;
+    rdfs:range xsd:string .
+
+:mode_split a owl:DatatypeProperty ;
+    rdfs:label "mode_split" ;
+    rdfs:domain :ODPair ;
+    rdfs:range xsd:string .
+
+:modes_used a owl:DatatypeProperty ;
+    rdfs:label "modes_used" ;
+    rdfs:domain :TripChain ;
+    rdfs:range rdf:List .
+
+:monday a owl:DatatypeProperty ;
+    rdfs:label "monday" ;
+    rdfs:domain :Calendar ;
+    rdfs:range xsd:boolean .
+
+:name a owl:DatatypeProperty ;
+    rdfs:label "name" ;
+    rdfs:domain [ a owl:Class ; owl:unionOf ( :Barrier :Building :PointOfInterest :RoadSegment ) ] ;
+    rdfs:range xsd:string .
+
+:net_inflow a owl:DatatypeProperty ;
+    rdfs:label "net_inflow" ;
+    rdfs:domain :MobilityPattern ;
+    rdfs:range xsd:integer .
+
+:network a owl:DatatypeProperty ;
+    rdfs:label "network" ;
+    rdfs:domain :TransitStop ;
+    rdfs:range xsd:string .
+
+:network_distance_km a owl:DatatypeProperty ;
+    rdfs:label "network_distance_km" ;
+    rdfs:domain :InferredTrip ;
+    rdfs:range xsd:float .
+
+:network_technology a owl:DatatypeProperty ;
+    rdfs:label "network_technology" ;
+    rdfs:domain :MobileOperator ;
+    rdfs:range xsd:string .
+
+:nodes a owl:DatatypeProperty ;
+    rdfs:label "nodes" ;
+    rdfs:domain :OSMWay ;
+    rdfs:range rdf:List .
+
+:num_adults a owl:DatatypeProperty ;
+    rdfs:label "num_adults" ;
+    rdfs:domain :Household ;
+    rdfs:range xsd:integer .
+
+:num_bedrooms a owl:DatatypeProperty ;
+    rdfs:label "num_bedrooms" ;
+    rdfs:domain :Household ;
+    rdfs:range xsd:integer .
+
+:num_cell_towers a owl:DatatypeProperty ;
+    rdfs:label "num_cell_towers" ;
+    rdfs:domain :MobileOperator ;
+    rdfs:range xsd:integer .
+
+:num_children a owl:DatatypeProperty ;
+    rdfs:label "num_children" ;
+    rdfs:domain :Household ;
+    rdfs:range xsd:integer .
+
+:num_connections a owl:DatatypeProperty ;
+    rdfs:label "num_connections" ;
+    rdfs:domain :Intersection ;
+    rdfs:range xsd:integer .
+
+:num_events a owl:DatatypeProperty ;
+    rdfs:label "num_events" ;
+    rdfs:domain :StayPoint ;
+    rdfs:range xsd:integer .
+
+:num_intermediate_stops a owl:DatatypeProperty ;
+    rdfs:label "num_intermediate_stops" ;
+    rdfs:domain :Tour ;
+    rdfs:range xsd:integer .
+
+:num_rooms a owl:DatatypeProperty ;
+    rdfs:label "num_rooms" ;
+    rdfs:domain :Household ;
+    rdfs:range xsd:integer .
+
+:num_satellites a owl:DatatypeProperty ;
+    rdfs:label "num_satellites" ;
+    rdfs:domain :GPSTracePoint ;
+    rdfs:range xsd:integer .
+
+:num_stops a owl:DatatypeProperty ;
+    rdfs:label "num_stops" ;
+    rdfs:domain :ODTrajectory ;
+    rdfs:range xsd:integer .
+
+:num_students a owl:DatatypeProperty ;
+    rdfs:label "num_students" ;
+    rdfs:domain :Household ;
+    rdfs:range xsd:integer .
+
+:num_supporting_events a owl:DatatypeProperty ;
+    rdfs:label "num_supporting_events" ;
+    rdfs:domain :InferredTrip ;
+    rdfs:range xsd:integer .
+
+:num_trips a owl:DatatypeProperty ;
+    rdfs:label "num_trips" ;
+    rdfs:domain :Tour ;
+    rdfs:range xsd:integer .
+
+:num_workers a owl:DatatypeProperty ;
+    rdfs:label "num_workers" ;
+    rdfs:domain [ a owl:Class ; owl:unionOf ( :Household :SurveyHousehold ) ] ;
+    rdfs:range xsd:integer .
+
+:observation_id a owl:DatatypeProperty ;
+    rdfs:label "observation_id" ;
+    rdfs:domain :SpeedObservation ;
+    rdfs:range xsd:string .
+
+:occupancy_status a owl:DatatypeProperty ;
+    rdfs:label "occupancy_status" ;
+    rdfs:domain :VehiclePosition ;
+    rdfs:range xsd:string .
+
+:occupation_code a owl:DatatypeProperty ;
+    rdfs:label "occupation_code" ;
+    rdfs:domain :Person ;
+    rdfs:range xsd:string .
+
+:od_matrix_id a owl:DatatypeProperty ;
+    rdfs:label "od_matrix_id" ;
+    rdfs:domain :ODMatrix_Mobile ;
+    rdfs:range xsd:string .
+
+:offset_from_segment_start_m a owl:DatatypeProperty ;
+    rdfs:label "offset_from_segment_start_m" ;
+    rdfs:domain :MatchedTrace ;
+    rdfs:range xsd:float .
+
+:oneway a owl:DatatypeProperty ;
+    rdfs:label "oneway" ;
+    rdfs:domain :RoadSegment ;
+    rdfs:range xsd:boolean .
+
+:opening_hours a owl:DatatypeProperty ;
+    rdfs:label "opening_hours" ;
+    rdfs:domain :PointOfInterest ;
+    rdfs:range xsd:string .
+
+:operator a owl:DatatypeProperty ;
+    rdfs:label "operator" ;
+    rdfs:domain [ a owl:Class ; owl:unionOf ( :InfrastructureEntity :PointOfInterest :TransitStop ) ] ;
+    rdfs:range xsd:string .
+
+:operator_id a owl:DatatypeProperty ;
+    rdfs:label "operator_id" ;
+    rdfs:domain [ a owl:Class ; owl:unionOf ( :AnonymizedUser :CellTower :MobileOperator ) ] ;
+    rdfs:range xsd:string .
+
+:operator_name a owl:DatatypeProperty ;
+    rdfs:label "operator_name" ;
+    rdfs:domain :MobileOperator ;
+    rdfs:range xsd:string .
+
+:origin_id a owl:DatatypeProperty ;
+    rdfs:label "origin_id" ;
+    rdfs:domain [ a owl:Class ; owl:unionOf ( :ActivityEntity :InferredTrip ) ] ;
+    rdfs:range xsd:string .
+
+:origin_location a owl:DatatypeProperty ;
+    rdfs:label "origin_location" ;
+    rdfs:domain :Tour ;
+    rdfs:range xsd:string .
+
+:origin_stay_point_id a owl:DatatypeProperty ;
+    rdfs:label "origin_stay_point_id" ;
+    rdfs:domain :InferredTrip ;
+    rdfs:range xsd:string .
+
+:origin_tower_id a owl:DatatypeProperty ;
+    rdfs:label "origin_tower_id" ;
+    rdfs:domain :InferredTrip ;
+    rdfs:range xsd:string .
+
+:origin_zone_id a owl:DatatypeProperty ;
+    rdfs:label "origin_zone_id" ;
+    rdfs:domain [ a owl:Class ; owl:unionOf ( :ODPair :InferredTrip :ODMatrix_Mobile :ODTrajectory ) ] ;
+    rdfs:range xsd:string .
+
+:original_trace_id a owl:DatatypeProperty ;
+    rdfs:label "original_trace_id" ;
+    rdfs:domain :MatchedTrace ;
+    rdfs:range xsd:string .
+
+:osm_node_id a owl:DatatypeProperty ;
+    rdfs:label "osm_node_id" ;
+    rdfs:domain [ a owl:Class ; owl:unionOf ( :Stop :Intersection :OSMNode :PointOfInterest :TransitStop ) ] ;
+    rdfs:range xsd:string .
+
+:osm_way_id a owl:DatatypeProperty ;
+    rdfs:label "osm_way_id" ;
+    rdfs:domain [ a owl:Class ; owl:unionOf ( :Barrier :Building :OSMWay :PointOfInterest :RoadSegment ) ] ;
+    rdfs:range xsd:integer .
+
+:other_party_anon_id a owl:DatatypeProperty ;
+    rdfs:label "other_party_anon_id" ;
+    rdfs:domain :CDREvent ;
+    rdfs:range xsd:string .
+
+:parent_geography_id a owl:DatatypeProperty ;
+    rdfs:label "parent_geography_id" ;
+    rdfs:domain :GeographicUnit ;
+    rdfs:range xsd:string .
+
+:parent_station a owl:DatatypeProperty ;
+    rdfs:label "parent_station" ;
+    rdfs:domain :Stop ;
+    rdfs:range xsd:string .
+
+:pattern_id a owl:DatatypeProperty ;
+    rdfs:label "pattern_id" ;
+    rdfs:domain :MobilityPattern ;
+    rdfs:range xsd:string .
+
+:penetration_rate_percent a owl:DatatypeProperty ;
+    rdfs:label "penetration_rate_percent" ;
+    rdfs:domain :ProbeDataProvider ;
+    rdfs:range xsd:float .
+
+:percentile_15_speed_kmh a owl:DatatypeProperty ;
+    rdfs:label "percentile_15_speed_kmh" ;
+    rdfs:domain :SpeedObservation ;
+    rdfs:range xsd:float .
+
+:percentile_50_speed_kmh a owl:DatatypeProperty ;
+    rdfs:label "percentile_50_speed_kmh" ;
+    rdfs:domain :SpeedObservation ;
+    rdfs:range xsd:float .
+
+:percentile_85_speed_kmh a owl:DatatypeProperty ;
+    rdfs:label "percentile_85_speed_kmh" ;
+    rdfs:domain :SpeedObservation ;
+    rdfs:range xsd:float .
+
+:period_id a owl:DatatypeProperty ;
+    rdfs:label "period_id" ;
+    rdfs:domain :TimePeriod ;
+    rdfs:range xsd:string .
+
+:perpendicular_distance_m a owl:DatatypeProperty ;
+    rdfs:label "perpendicular_distance_m" ;
+    rdfs:domain :MatchedTrace ;
+    rdfs:range xsd:float .
+
+:person_id a owl:DatatypeProperty ;
+    rdfs:label "person_id" ;
+    rdfs:domain :Person ;
+    rdfs:range xsd:string .
+
+:person_num a owl:DatatypeProperty ;
+    rdfs:label "person_num" ;
+    rdfs:domain [ a owl:Class ; owl:unionOf ( :Person :SurveyPerson ) ] ;
+    rdfs:range xsd:integer .
+
+:person_weight a owl:DatatypeProperty ;
+    rdfs:label "person_weight" ;
+    rdfs:domain [ a owl:Class ; owl:unionOf ( :Person :SurveyPerson ) ] ;
+    rdfs:range xsd:float .
+
+:personal_income a owl:DatatypeProperty ;
+    rdfs:label "personal_income" ;
+    rdfs:domain :Person ;
+    rdfs:range xsd:float .
+
+:phone a owl:DatatypeProperty ;
+    rdfs:label "phone" ;
+    rdfs:domain :PointOfInterest ;
+    rdfs:range xsd:string .
+
+:pickup_type a owl:DatatypeProperty ;
+    rdfs:label "pickup_type" ;
+    rdfs:domain :StopTime ;
+    rdfs:range xsd:string .
+
+:place_name a owl:DatatypeProperty ;
+    rdfs:label "place_name" ;
+    rdfs:domain [ a owl:Class ; owl:unionOf ( :Location :Activity ) ] ;
+    rdfs:range xsd:string .
+
+:platform_code a owl:DatatypeProperty ;
+    rdfs:label "platform_code" ;
+    rdfs:domain :Stop ;
+    rdfs:range xsd:string .
+
+:poi_id a owl:DatatypeProperty ;
+    rdfs:label "poi_id" ;
+    rdfs:domain :PointOfInterest ;
+    rdfs:range xsd:string .
+
+:points a owl:DatatypeProperty ;
+    rdfs:label "points" ;
+    rdfs:domain :Shape ;
+    rdfs:range rdf:List .
+
+:population a owl:DatatypeProperty ;
+    rdfs:label "population" ;
+    rdfs:domain :Zone ;
+    rdfs:range xsd:integer .
+
+:population_id a owl:DatatypeProperty ;
+    rdfs:label "population_id" ;
+    rdfs:domain :SyntheticPopulation ;
+    rdfs:range xsd:string .
+
+:population_total a owl:DatatypeProperty ;
+    rdfs:label "population_total" ;
+    rdfs:domain :GeographicUnit ;
+    rdfs:range xsd:integer .
+
+:preceding_trip_id a owl:DatatypeProperty ;
+    rdfs:label "preceding_trip_id" ;
+    rdfs:domain :Activity ;
+    rdfs:range xsd:string .
+
+:primary_mode a owl:DatatypeProperty ;
+    rdfs:label "primary_mode" ;
+    rdfs:domain :Tour ;
+    rdfs:range xsd:string .
+
+:probe_vehicle_id a owl:DatatypeProperty ;
+    rdfs:label "probe_vehicle_id" ;
+    rdfs:domain [ a owl:Class ; owl:unionOf ( :GPSTracePoint :ODTrajectory :ProbeVehicle ) ] ;
+    rdfs:range xsd:string .
+
+:properties a owl:DatatypeProperty ;
+    rdfs:label "properties" ;
+    rdfs:domain :Relationship ;
+    rdfs:range xsd:string .
+
+:provenance a owl:DatatypeProperty ;
+    rdfs:label "provenance" ;
+    rdfs:domain [ a owl:Class ; owl:unionOf ( :ActivityEntity :AgentEntity :InfrastructureEntity :SpatialEntity :TemporalEntity ) ] ;
+    rdfs:range xsd:string .
+
+:provider_id a owl:DatatypeProperty ;
+    rdfs:label "provider_id" ;
+    rdfs:domain :ProbeDataProvider ;
+    rdfs:range xsd:string .
+
+:provider_name a owl:DatatypeProperty ;
+    rdfs:label "provider_name" ;
+    rdfs:domain :ProbeDataProvider ;
+    rdfs:range xsd:string .
+
+:public_transport a owl:DatatypeProperty ;
+    rdfs:label "public_transport" ;
+    rdfs:domain :TransitStop ;
+    rdfs:range xsd:string .
+
+:race a owl:DatatypeProperty ;
+    rdfs:label "race" ;
+    rdfs:domain :Person ;
+    rdfs:range xsd:string .
+
+:railway a owl:DatatypeProperty ;
+    rdfs:label "railway" ;
+    rdfs:domain :TransitStop ;
+    rdfs:range xsd:string .
+
+:real_time_travel_time_seconds a owl:DatatypeProperty ;
+    rdfs:label "real_time_travel_time_seconds" ;
+    rdfs:domain :TravelTimeSegment ;
+    rdfs:range xsd:float .
+
+:ref a owl:DatatypeProperty ;
+    rdfs:label "ref" ;
+    rdfs:domain [ a owl:Class ; owl:unionOf ( :RoadSegment :TransitStop ) ] ;
+    rdfs:range xsd:string .
+
+:relationship_id a owl:DatatypeProperty ;
+    rdfs:label "relationship_id" ;
+    rdfs:domain :Relationship ;
+    rdfs:range xsd:string .
+
+:relationship_to_householder a owl:DatatypeProperty ;
+    rdfs:label "relationship_to_householder" ;
+    rdfs:domain :Person ;
+    rdfs:range xsd:string .
+
+:relationship_type a owl:DatatypeProperty ;
+    rdfs:label "relationship_type" ;
+    rdfs:domain :Relationship ;
+    rdfs:range xsd:string .
+
+:relative_error a owl:DatatypeProperty ;
+    rdfs:label "relative_error" ;
+    rdfs:domain :ControlTotal ;
+    rdfs:range xsd:float .
+
+:response_rate a owl:DatatypeProperty ;
+    rdfs:label "response_rate" ;
+    rdfs:domain :Survey ;
+    rdfs:range xsd:float .
+
+:road_segment_id a owl:DatatypeProperty ;
+    rdfs:label "road_segment_id" ;
+    rdfs:domain [ a owl:Class ; owl:unionOf ( :MatchedTrace :SpeedObservation :TrafficFlow :TravelTimeSegment ) ] ;
+    rdfs:range xsd:string .
+
+:road_segments_used a owl:DatatypeProperty ;
+    rdfs:label "road_segments_used" ;
+    rdfs:domain :ODTrajectory ;
+    rdfs:range rdf:List .
+
+:route_color a owl:DatatypeProperty ;
+    rdfs:label "route_color" ;
+    rdfs:domain :Route ;
+    rdfs:range xsd:string .
+
+:route_desc a owl:DatatypeProperty ;
+    rdfs:label "route_desc" ;
+    rdfs:domain :Route ;
+    rdfs:range xsd:string .
+
+:route_geometry a owl:DatatypeProperty ;
+    rdfs:label "route_geometry" ;
+    rdfs:domain :ODTrajectory ;
+    rdfs:range xsd:anyType .
+
+:route_id a owl:DatatypeProperty ;
+    rdfs:label "route_id" ;
+    rdfs:domain [ a owl:Class ; owl:unionOf ( :Trip :Route :TripUpdate :VehiclePosition ) ] ;
+    rdfs:range xsd:string .
+
+:route_long_name a owl:DatatypeProperty ;
+    rdfs:label "route_long_name" ;
+    rdfs:domain :Route ;
+    rdfs:range xsd:string .
+
+:route_short_name a owl:DatatypeProperty ;
+    rdfs:label "route_short_name" ;
+    rdfs:domain :Route ;
+    rdfs:range xsd:string .
+
+:route_sort_order a owl:DatatypeProperty ;
+    rdfs:label "route_sort_order" ;
+    rdfs:domain :Route ;
+    rdfs:range xsd:integer .
+
+:route_text_color a owl:DatatypeProperty ;
+    rdfs:label "route_text_color" ;
+    rdfs:domain :Route ;
+    rdfs:range xsd:string .
+
+:route_type a owl:DatatypeProperty ;
+    rdfs:label "route_type" ;
+    rdfs:domain :Route ;
+    rdfs:range xsd:string .
+
+:route_url a owl:DatatypeProperty ;
+    rdfs:label "route_url" ;
+    rdfs:domain :Route ;
+    rdfs:range xsd:string .
+
+:sample_size a owl:DatatypeProperty ;
+    rdfs:label "sample_size" ;
+    rdfs:domain [ a owl:Class ; owl:unionOf ( :ODMatrix_Mobile :SpeedObservation :TrafficFlow :TravelTimeSegment ) ] ;
+    rdfs:range xsd:integer .
+
+:sample_size_households a owl:DatatypeProperty ;
+    rdfs:label "sample_size_households" ;
+    rdfs:domain :Survey ;
+    rdfs:range xsd:integer .
+
+:sample_size_persons a owl:DatatypeProperty ;
+    rdfs:label "sample_size_persons" ;
+    rdfs:domain :Survey ;
+    rdfs:range xsd:integer .
+
+:sampling_methodology a owl:DatatypeProperty ;
+    rdfs:label "sampling_methodology" ;
+    rdfs:domain :Survey ;
+    rdfs:range xsd:string .
+
+:saturday a owl:DatatypeProperty ;
+    rdfs:label "saturday" ;
+    rdfs:domain :Calendar ;
+    rdfs:range xsd:boolean .
+
+:schedule_relationship a owl:DatatypeProperty ;
+    rdfs:label "schedule_relationship" ;
+    rdfs:domain [ a owl:Class ; owl:unionOf ( :StopTimeUpdate :TripUpdate ) ] ;
+    rdfs:range xsd:string .
+
+:school_location_zone_id a owl:DatatypeProperty ;
+    rdfs:label "school_location_zone_id" ;
+    rdfs:domain :Person ;
+    rdfs:range xsd:string .
+
+:seed_source a owl:DatatypeProperty ;
+    rdfs:label "seed_source" ;
+    rdfs:domain :SyntheticPopulation ;
+    rdfs:range xsd:string .
+
+:segment_id a owl:DatatypeProperty ;
+    rdfs:label "segment_id" ;
+    rdfs:domain [ a owl:Class ; owl:unionOf ( :TravelTimeSegment :RoadSegment ) ] ;
+    rdfs:range xsd:string .
+
+:serial_no a owl:DatatypeProperty ;
+    rdfs:label "serial_no" ;
+    rdfs:domain [ a owl:Class ; owl:unionOf ( :Household :Person ) ] ;
+    rdfs:range xsd:string .
+
+:service_id a owl:DatatypeProperty ;
+    rdfs:label "service_id" ;
+    rdfs:domain [ a owl:Class ; owl:unionOf ( :Trip :Calendar :CalendarDate ) ] ;
+    rdfs:range xsd:string .
+
+:severity_level a owl:DatatypeProperty ;
+    rdfs:label "severity_level" ;
+    rdfs:domain :ServiceAlert ;
+    rdfs:range xsd:string .
+
+:sex a owl:DatatypeProperty ;
+    rdfs:label "sex" ;
+    rdfs:domain [ a owl:Class ; owl:unionOf ( :Person :SurveyPerson ) ] ;
+    rdfs:range xsd:string .
+
+:shape_dist_traveled a owl:DatatypeProperty ;
+    rdfs:label "shape_dist_traveled" ;
+    rdfs:domain :StopTime ;
+    rdfs:range xsd:float .
+
+:shape_id a owl:DatatypeProperty ;
+    rdfs:label "shape_id" ;
+    rdfs:domain [ a owl:Class ; owl:unionOf ( :Trip :Shape ) ] ;
+    rdfs:range xsd:string .
+
+:shelter a owl:DatatypeProperty ;
+    rdfs:label "shelter" ;
+    rdfs:domain :TransitStop ;
+    rdfs:range xsd:boolean .
+
+:shop a owl:DatatypeProperty ;
+    rdfs:label "shop" ;
+    rdfs:domain :PointOfInterest ;
+    rdfs:range xsd:string .
+
+:signal_strength a owl:DatatypeProperty ;
+    rdfs:label "signal_strength" ;
+    rdfs:domain :CDREvent ;
+    rdfs:range xsd:integer .
+
+:smartphone_ownership a owl:DatatypeProperty ;
+    rdfs:label "smartphone_ownership" ;
+    rdfs:domain :SurveyPerson ;
+    rdfs:range xsd:boolean .
+
+:source_entity_id a owl:DatatypeProperty ;
+    rdfs:label "source_entity_id" ;
+    rdfs:domain :Relationship ;
+    rdfs:range xsd:string .
+
+:speed_kmh a owl:DatatypeProperty ;
+    rdfs:label "speed_kmh" ;
+    rdfs:domain [ a owl:Class ; owl:unionOf ( :GPSTracePoint :MatchedTrace :TrafficFlow ) ] ;
+    rdfs:range xsd:float .
+
+:speed_limit_kmh a owl:DatatypeProperty ;
+    rdfs:label "speed_limit_kmh" ;
+    rdfs:domain :SpeedObservation ;
+    rdfs:range xsd:float .
+
+:speed_mps a owl:DatatypeProperty ;
+    rdfs:label "speed_mps" ;
+    rdfs:domain :VehiclePosition ;
+    rdfs:range xsd:float .
+
+:srid a owl:DatatypeProperty ;
+    rdfs:label "srid" ;
+    rdfs:domain [ a owl:Class ; owl:unionOf ( :InfrastructureEntity :SpatialEntity :GeographicUnit :CellTower :StayPoint ) ] ;
+    rdfs:range xsd:integer .
+
+:start_date a owl:DatatypeProperty ;
+    rdfs:label "start_date" ;
+    rdfs:domain :Calendar ;
+    rdfs:range xsd:dateTime .
+
+:start_time a owl:DatatypeProperty ;
+    rdfs:label "start_time" ;
+    rdfs:domain [ a owl:Class ; owl:unionOf ( :ActivityEntity :TimePeriod :Activity :Tour :InferredTrip ) ] ;
+    rdfs:range xsd:dateTime .
+
+:status a owl:DatatypeProperty ;
+    rdfs:label "status" ;
+    rdfs:domain [ a owl:Class ; owl:unionOf ( :InfrastructureEntity :CellTower ) ] ;
+    rdfs:range xsd:string .
+
+:stay_point_id a owl:DatatypeProperty ;
+    rdfs:label "stay_point_id" ;
+    rdfs:domain :StayPoint ;
+    rdfs:range xsd:string .
+
+:std_speed_kmh a owl:DatatypeProperty ;
+    rdfs:label "std_speed_kmh" ;
+    rdfs:domain :SpeedObservation ;
+    rdfs:range xsd:float .
+
+:std_travel_time_minutes a owl:DatatypeProperty ;
+    rdfs:label "std_travel_time_minutes" ;
+    rdfs:domain :ODMatrix_Mobile ;
+    rdfs:range xsd:float .
+
+:stop_code a owl:DatatypeProperty ;
+    rdfs:label "stop_code" ;
+    rdfs:domain :Stop ;
+    rdfs:range xsd:string .
+
+:stop_desc a owl:DatatypeProperty ;
+    rdfs:label "stop_desc" ;
+    rdfs:domain :Stop ;
+    rdfs:range xsd:string .
+
+:stop_headsign a owl:DatatypeProperty ;
+    rdfs:label "stop_headsign" ;
+    rdfs:domain :StopTime ;
+    rdfs:range xsd:string .
+
+:stop_id a owl:DatatypeProperty ;
+    rdfs:label "stop_id" ;
+    rdfs:domain [ a owl:Class ; owl:unionOf ( :Stop :StopTime :StopTimeUpdate :VehiclePosition :TransitStop ) ] ;
+    rdfs:range xsd:string .
+
+:stop_name a owl:DatatypeProperty ;
+    rdfs:label "stop_name" ;
+    rdfs:domain [ a owl:Class ; owl:unionOf ( :Stop :TransitStop ) ] ;
+    rdfs:range xsd:string .
+
+:stop_sequence a owl:DatatypeProperty ;
+    rdfs:label "stop_sequence" ;
+    rdfs:domain [ a owl:Class ; owl:unionOf ( :StopTime :StopTimeUpdate ) ] ;
+    rdfs:range xsd:integer .
+
+:stop_time_updates a owl:DatatypeProperty ;
+    rdfs:label "stop_time_updates" ;
+    rdfs:domain :TripUpdate ;
+    rdfs:range rdf:List .
+
+:stop_timezone a owl:DatatypeProperty ;
+    rdfs:label "stop_timezone" ;
+    rdfs:domain :Stop ;
+    rdfs:range xsd:string .
+
+:stop_url a owl:DatatypeProperty ;
+    rdfs:label "stop_url" ;
+    rdfs:domain :Stop ;
+    rdfs:range xsd:string .
+
+:strength a owl:DatatypeProperty ;
+    rdfs:label "strength" ;
+    rdfs:domain :Relationship ;
+    rdfs:range xsd:float .
+
+:subscription_type a owl:DatatypeProperty ;
+    rdfs:label "subscription_type" ;
+    rdfs:domain :AnonymizedUser ;
+    rdfs:range xsd:string .
+
+:sunday a owl:DatatypeProperty ;
+    rdfs:label "sunday" ;
+    rdfs:domain :Calendar ;
+    rdfs:range xsd:boolean .
+
+:surface a owl:DatatypeProperty ;
+    rdfs:label "surface" ;
+    rdfs:domain :RoadSegment ;
+    rdfs:range xsd:string .
+
+:survey_date a owl:DatatypeProperty ;
+    rdfs:label "survey_date" ;
+    rdfs:domain :TripChain ;
+    rdfs:range xsd:dateTime .
+
+:survey_end_date a owl:DatatypeProperty ;
+    rdfs:label "survey_end_date" ;
+    rdfs:domain :Survey ;
+    rdfs:range xsd:dateTime .
+
+:survey_household_id a owl:DatatypeProperty ;
+    rdfs:label "survey_household_id" ;
+    rdfs:domain [ a owl:Class ; owl:unionOf ( :SurveyHousehold :SurveyPerson ) ] ;
+    rdfs:range xsd:string .
+
+:survey_id a owl:DatatypeProperty ;
+    rdfs:label "survey_id" ;
+    rdfs:domain [ a owl:Class ; owl:unionOf ( :Survey :SurveyHousehold ) ] ;
+    rdfs:range xsd:string .
+
+:survey_name a owl:DatatypeProperty ;
+    rdfs:label "survey_name" ;
+    rdfs:domain :Survey ;
+    rdfs:range xsd:string .
+
+:survey_person_id a owl:DatatypeProperty ;
+    rdfs:label "survey_person_id" ;
+    rdfs:domain [ a owl:Class ; owl:unionOf ( :Activity :SurveyPerson :Tour :TripChain ) ] ;
+    rdfs:range xsd:string .
+
+:survey_region a owl:DatatypeProperty ;
+    rdfs:label "survey_region" ;
+    rdfs:domain :Survey ;
+    rdfs:range xsd:string .
+
+:survey_start_date a owl:DatatypeProperty ;
+    rdfs:label "survey_start_date" ;
+    rdfs:domain :Survey ;
+    rdfs:range xsd:dateTime .
+
+:survey_type a owl:DatatypeProperty ;
+    rdfs:label "survey_type" ;
+    rdfs:domain :Survey ;
+    rdfs:range xsd:string .
+
+:survey_weight a owl:DatatypeProperty ;
+    rdfs:label "survey_weight" ;
+    rdfs:domain :Household ;
+    rdfs:range xsd:float .
+
+:survey_year a owl:DatatypeProperty ;
+    rdfs:label "survey_year" ;
+    rdfs:domain :Survey ;
+    rdfs:range xsd:integer .
+
+:tags a owl:DatatypeProperty ;
+    rdfs:label "tags" ;
+    rdfs:domain [ a owl:Class ; owl:unionOf ( :OSMNode :OSMWay ) ] ;
+    rdfs:range xsd:string .
+
+:target_entity_id a owl:DatatypeProperty ;
+    rdfs:label "target_entity_id" ;
+    rdfs:domain :Relationship ;
+    rdfs:range xsd:string .
+
+:target_value a owl:DatatypeProperty ;
+    rdfs:label "target_value" ;
+    rdfs:domain :ControlTotal ;
+    rdfs:range xsd:integer .
+
+:taz_id a owl:DatatypeProperty ;
+    rdfs:label "taz_id" ;
+    rdfs:domain [ a owl:Class ; owl:unionOf ( :Stop :Building :PointOfInterest :TransitStop ) ] ;
+    rdfs:range xsd:string .
+
+:technology a owl:DatatypeProperty ;
+    rdfs:label "technology" ;
+    rdfs:domain :CellTower ;
+    rdfs:range xsd:string .
+
+:temporal_resolution a owl:DatatypeProperty ;
+    rdfs:label "temporal_resolution" ;
+    rdfs:domain [ a owl:Class ; owl:unionOf ( :TemporalEntity :GPSTracePoint :SpeedObservation :TrafficFlow :TravelTimeSegment ) ] ;
+    rdfs:range xsd:string .
+
+:tenure a owl:DatatypeProperty ;
+    rdfs:label "tenure" ;
+    rdfs:domain :Household ;
+    rdfs:range xsd:string .
+
+:thursday a owl:DatatypeProperty ;
+    rdfs:label "thursday" ;
+    rdfs:domain :Calendar ;
+    rdfs:range xsd:boolean .
+
+:time_of_day a owl:DatatypeProperty ;
+    rdfs:label "time_of_day" ;
+    rdfs:domain [ a owl:Class ; owl:unionOf ( :TimePeriod :InferredTrip :MobilityPattern :SpeedObservation ) ] ;
+    rdfs:range xsd:string .
+
+:time_period a owl:DatatypeProperty ;
+    rdfs:label "time_period" ;
+    rdfs:domain [ a owl:Class ; owl:unionOf ( :ODPair :ODMatrix_Mobile :TravelTimeSegment ) ] ;
+    rdfs:range xsd:string .
+
+:time_period_minutes a owl:DatatypeProperty ;
+    rdfs:label "time_period_minutes" ;
+    rdfs:domain :TrafficFlow ;
+    rdfs:range xsd:integer .
+
+:timepoint a owl:DatatypeProperty ;
+    rdfs:label "timepoint" ;
+    rdfs:domain :StopTime ;
+    rdfs:range xsd:integer .
+
+:timestamp a owl:DatatypeProperty ;
+    rdfs:label "timestamp" ;
+    rdfs:domain [ a owl:Class ; owl:unionOf ( :CDREvent :GPSTracePoint :MatchedTrace :SpeedObservation :TrafficFlow ) ] ;
+    rdfs:range xsd:dateTime .
+
+:to_node_id a owl:DatatypeProperty ;
+    rdfs:label "to_node_id" ;
+    rdfs:domain :RoadSegment ;
+    rdfs:range xsd:integer .
+
+:top_destination_zones a owl:DatatypeProperty ;
+    rdfs:label "top_destination_zones" ;
+    rdfs:domain :MobilityPattern ;
+    rdfs:range xsd:string .
+
+:top_origin_zones a owl:DatatypeProperty ;
+    rdfs:label "top_origin_zones" ;
+    rdfs:domain :MobilityPattern ;
+    rdfs:range xsd:string .
+
+:total_distance_km a owl:DatatypeProperty ;
+    rdfs:label "total_distance_km" ;
+    rdfs:domain [ a owl:Class ; owl:unionOf ( :Tour :TripChain :ODTrajectory ) ] ;
+    rdfs:range xsd:float .
+
+:total_events a owl:DatatypeProperty ;
+    rdfs:label "total_events" ;
+    rdfs:domain :AnonymizedUser ;
+    rdfs:range xsd:integer .
+
+:total_floor_area_m2 a owl:DatatypeProperty ;
+    rdfs:label "total_floor_area_m2" ;
+    rdfs:domain :Building ;
+    rdfs:range xsd:float .
+
+:total_households a owl:DatatypeProperty ;
+    rdfs:label "total_households" ;
+    rdfs:domain :SyntheticPopulation ;
+    rdfs:range xsd:integer .
+
+:total_persons a owl:DatatypeProperty ;
+    rdfs:label "total_persons" ;
+    rdfs:domain :SyntheticPopulation ;
+    rdfs:range xsd:integer .
+
+:total_traces a owl:DatatypeProperty ;
+    rdfs:label "total_traces" ;
+    rdfs:domain :ProbeVehicle ;
+    rdfs:range xsd:integer .
+
+:total_travel_time_minutes a owl:DatatypeProperty ;
+    rdfs:label "total_travel_time_minutes" ;
+    rdfs:domain :TripChain ;
+    rdfs:range xsd:float .
+
+:total_trips a owl:DatatypeProperty ;
+    rdfs:label "total_trips" ;
+    rdfs:domain :TripChain ;
+    rdfs:range xsd:integer .
+
+:tour_id a owl:DatatypeProperty ;
+    rdfs:label "tour_id" ;
+    rdfs:domain :Tour ;
+    rdfs:range xsd:string .
+
+:tour_num a owl:DatatypeProperty ;
+    rdfs:label "tour_num" ;
+    rdfs:domain :Tour ;
+    rdfs:range xsd:integer .
+
+:tour_purpose a owl:DatatypeProperty ;
+    rdfs:label "tour_purpose" ;
+    rdfs:domain :Tour ;
+    rdfs:range xsd:string .
+
+:tourism a owl:DatatypeProperty ;
+    rdfs:label "tourism" ;
+    rdfs:domain :PointOfInterest ;
+    rdfs:range xsd:string .
+
+:tours a owl:DatatypeProperty ;
+    rdfs:label "tours" ;
+    rdfs:domain :TripChain ;
+    rdfs:range rdf:List .
+
+:tower_id a owl:DatatypeProperty ;
+    rdfs:label "tower_id" ;
+    rdfs:domain [ a owl:Class ; owl:unionOf ( :CDREvent :CellTower :StayPoint ) ] ;
+    rdfs:range xsd:string .
+
+:trace_id a owl:DatatypeProperty ;
+    rdfs:label "trace_id" ;
+    rdfs:domain :GPSTracePoint ;
+    rdfs:range xsd:string .
+
+:trace_points a owl:DatatypeProperty ;
+    rdfs:label "trace_points" ;
+    rdfs:domain :ODTrajectory ;
+    rdfs:range rdf:List .
+
+:trajectory_id a owl:DatatypeProperty ;
+    rdfs:label "trajectory_id" ;
+    rdfs:domain :ODTrajectory ;
+    rdfs:range xsd:string .
+
+:travel_time_minutes a owl:DatatypeProperty ;
+    rdfs:label "travel_time_minutes" ;
+    rdfs:domain :InferredTrip ;
+    rdfs:range xsd:float .
+
+:trip_count a owl:DatatypeProperty ;
+    rdfs:label "trip_count" ;
+    rdfs:domain [ a owl:Class ; owl:unionOf ( :ODPair :ODMatrix_Mobile ) ] ;
+    rdfs:range xsd:integer .
+
+:trip_headsign a owl:DatatypeProperty ;
+    rdfs:label "trip_headsign" ;
+    rdfs:domain :Trip ;
+    rdfs:range xsd:string .
+
+:trip_id a owl:DatatypeProperty ;
+    rdfs:label "trip_id" ;
+    rdfs:domain [ a owl:Class ; owl:unionOf ( :Trip :StopTime :TripUpdate :VehiclePosition ) ] ;
+    rdfs:range xsd:string .
+
+:trip_ids a owl:DatatypeProperty ;
+    rdfs:label "trip_ids" ;
+    rdfs:domain :Tour ;
+    rdfs:range rdf:List .
+
+:trip_short_name a owl:DatatypeProperty ;
+    rdfs:label "trip_short_name" ;
+    rdfs:domain :Trip ;
+    rdfs:range xsd:string .
+
+:trips a owl:DatatypeProperty ;
+    rdfs:label "trips" ;
+    rdfs:domain :TripChain ;
+    rdfs:range rdf:List .
+
+:tuesday a owl:DatatypeProperty ;
+    rdfs:label "tuesday" ;
+    rdfs:domain :Calendar ;
+    rdfs:range xsd:boolean .
+
+:tunnel a owl:DatatypeProperty ;
+    rdfs:label "tunnel" ;
+    rdfs:domain :RoadSegment ;
+    rdfs:range xsd:boolean .
+
+:typical_sample_size a owl:DatatypeProperty ;
+    rdfs:label "typical_sample_size" ;
+    rdfs:domain :ProbeDataProvider ;
+    rdfs:range xsd:integer .
+
+:unique_users_present a owl:DatatypeProperty ;
+    rdfs:label "unique_users_present" ;
+    rdfs:domain :MobilityPattern ;
+    rdfs:range xsd:integer .
+
+:update_frequency_seconds a owl:DatatypeProperty ;
+    rdfs:label "update_frequency_seconds" ;
+    rdfs:domain :ProbeDataProvider ;
+    rdfs:range xsd:integer .
+
+:updated_at a owl:DatatypeProperty ;
+    rdfs:label "updated_at" ;
+    rdfs:domain [ a owl:Class ; owl:unionOf ( :ActivityEntity :AgentEntity :InfrastructureEntity :SpatialEntity :TemporalEntity ) ] ;
+    rdfs:range xsd:dateTime .
+
+:url a owl:DatatypeProperty ;
+    rdfs:label "url" ;
+    rdfs:domain :ServiceAlert ;
+    rdfs:range xsd:string .
+
+:user_id a owl:DatatypeProperty ;
+    rdfs:label "user_id" ;
+    rdfs:domain [ a owl:Class ; owl:unionOf ( :OSMNode :OSMWay ) ] ;
+    rdfs:range xsd:string .
+
+:users_arriving a owl:DatatypeProperty ;
+    rdfs:label "users_arriving" ;
+    rdfs:domain :MobilityPattern ;
+    rdfs:range xsd:integer .
+
+:users_departing a owl:DatatypeProperty ;
+    rdfs:label "users_departing" ;
+    rdfs:domain :MobilityPattern ;
+    rdfs:range xsd:integer .
+
+:usual_departure_time a owl:DatatypeProperty ;
+    rdfs:label "usual_departure_time" ;
+    rdfs:domain :SurveyPerson ;
+    rdfs:range xsd:dateTime .
+
+:usual_mode_to_work a owl:DatatypeProperty ;
+    rdfs:label "usual_mode_to_work" ;
+    rdfs:domain :SurveyPerson ;
+    rdfs:range xsd:string .
+
+:valid_from a owl:DatatypeProperty ;
+    rdfs:label "valid_from" ;
+    rdfs:domain [ a owl:Class ; owl:unionOf ( :TemporalEntity :GPSTracePoint :SpeedObservation :TrafficFlow :TravelTimeSegment ) ] ;
+    rdfs:range xsd:dateTime .
+
+:valid_to a owl:DatatypeProperty ;
+    rdfs:label "valid_to" ;
+    rdfs:domain [ a owl:Class ; owl:unionOf ( :TemporalEntity :GPSTracePoint :SpeedObservation :TrafficFlow :TravelTimeSegment ) ] ;
+    rdfs:range xsd:dateTime .
+
+:vehicle_id a owl:DatatypeProperty ;
+    rdfs:label "vehicle_id" ;
+    rdfs:domain [ a owl:Class ; owl:unionOf ( :TripUpdate :VehiclePosition ) ] ;
+    rdfs:range xsd:string .
+
+:vehicle_type a owl:DatatypeProperty ;
+    rdfs:label "vehicle_type" ;
+    rdfs:domain :ProbeVehicle ;
+    rdfs:range xsd:string .
+
+:vehicles_available a owl:DatatypeProperty ;
+    rdfs:label "vehicles_available" ;
+    rdfs:domain [ a owl:Class ; owl:unionOf ( :Household :SurveyHousehold ) ] ;
+    rdfs:range xsd:integer .
+
+:version a owl:DatatypeProperty ;
+    rdfs:label "version" ;
+    rdfs:domain [ a owl:Class ; owl:unionOf ( :OSMNode :OSMWay ) ] ;
+    rdfs:range xsd:integer .
+
+:volume_veh_per_hour a owl:DatatypeProperty ;
+    rdfs:label "volume_veh_per_hour" ;
+    rdfs:domain :TrafficFlow ;
+    rdfs:range xsd:integer .
+
+:weather_condition a owl:DatatypeProperty ;
+    rdfs:label "weather_condition" ;
+    rdfs:domain :SurveyHousehold ;
+    rdfs:range xsd:string .
+
+:website a owl:DatatypeProperty ;
+    rdfs:label "website" ;
+    rdfs:domain :PointOfInterest ;
+    rdfs:range xsd:string .
+
+:wednesday a owl:DatatypeProperty ;
+    rdfs:label "wednesday" ;
+    rdfs:domain :Calendar ;
+    rdfs:range xsd:boolean .
+
+:weeks_worked_per_year a owl:DatatypeProperty ;
+    rdfs:label "weeks_worked_per_year" ;
+    rdfs:domain :Person ;
+    rdfs:range xsd:integer .
+
+:wheelchair_accessible a owl:DatatypeProperty ;
+    rdfs:label "wheelchair_accessible" ;
+    rdfs:domain [ a owl:Class ; owl:unionOf ( :Trip :Stop ) ] ;
+    rdfs:range xsd:string .
+
+:width_m a owl:DatatypeProperty ;
+    rdfs:label "width_m" ;
+    rdfs:domain [ a owl:Class ; owl:unionOf ( :Barrier :RoadSegment ) ] ;
+    rdfs:range xsd:float .
+
+:with_household_members a owl:DatatypeProperty ;
+    rdfs:label "with_household_members" ;
+    rdfs:domain :Activity ;
+    rdfs:range rdf:List .
+
+:with_non_household a owl:DatatypeProperty ;
+    rdfs:label "with_non_household" ;
+    rdfs:domain :Activity ;
+    rdfs:range xsd:integer .
+
+:work_from_home_days_per_week a owl:DatatypeProperty ;
+    rdfs:label "work_from_home_days_per_week" ;
+    rdfs:domain :SurveyPerson ;
+    rdfs:range xsd:integer .
+
+:work_location_zone_id a owl:DatatypeProperty ;
+    rdfs:label "work_location_zone_id" ;
+    rdfs:domain :Person ;
+    rdfs:range xsd:string .
+
+:work_tower_id a owl:DatatypeProperty ;
+    rdfs:label "work_tower_id" ;
+    rdfs:domain :AnonymizedUser ;
+    rdfs:range xsd:string .
+
+:work_zone_id a owl:DatatypeProperty ;
+    rdfs:label "work_zone_id" ;
+    rdfs:domain :AnonymizedUser ;
+    rdfs:range xsd:string .
+
+:year a owl:DatatypeProperty ;
+    rdfs:label "year" ;
+    rdfs:domain :SyntheticPopulation ;
+    rdfs:range xsd:integer .
+
+:year_built a owl:DatatypeProperty ;
+    rdfs:label "year_built" ;
+    rdfs:domain :Household ;
+    rdfs:range xsd:integer .
+
+:zone_id a owl:DatatypeProperty ;
+    rdfs:label "zone_id" ;
+    rdfs:domain [ a owl:Class ; owl:unionOf ( :Location :Zone :Household :Activity :SurveyHousehold ) ] ;
+    rdfs:range xsd:string .
+
+:zone_name a owl:DatatypeProperty ;
+    rdfs:label "zone_name" ;
+    rdfs:domain :Zone ;
+    rdfs:range xsd:string .
+
+
+# ==================================================
+# RELATIONSHIPS (Object Properties)
+# ==================================================
+
+# ActivityEntity -> origin
+:origin a owl:ObjectProperty ;
+    rdfs:label "origin_id" ;
+    rdfs:domain :ActivityEntity ;
+    rdfs:range :Origin ;
+    rdfs:comment "Reference from ActivityEntity to origin" .
+
+# ActivityEntity -> destination
+:destination a owl:ObjectProperty ;
+    rdfs:label "destination_id" ;
+    rdfs:domain :ActivityEntity ;
+    rdfs:range :Destination ;
+    rdfs:comment "Reference from ActivityEntity to destination" .
+
+# Location -> location
+:location a owl:ObjectProperty ;
+    rdfs:label "location_id" ;
+    rdfs:domain :Location ;
+    rdfs:range :Location ;
+    rdfs:comment "Reference from Location to location" .
+
+# Location -> zone
+:zone a owl:ObjectProperty ;
+    rdfs:label "zone_id" ;
+    rdfs:domain :Location ;
+    rdfs:range :Zone ;
+    rdfs:comment "Reference from Location to zone" .
+
+# ODPair -> originzone
+:origin_zone a owl:ObjectProperty ;
+    rdfs:label "origin_zone_id" ;
+    rdfs:domain :ODPair ;
+    rdfs:range :Originzone ;
+    rdfs:comment "Reference from ODPair to originzone" .
+
+# ODPair -> destinationzone
+:destination_zone a owl:ObjectProperty ;
+    rdfs:label "destination_zone_id" ;
+    rdfs:domain :ODPair ;
+    rdfs:range :Destinationzone ;
+    rdfs:comment "Reference from ODPair to destinationzone" .
+
+# Relationship -> relationship
+:relationship a owl:ObjectProperty ;
+    rdfs:label "relationship_id" ;
+    rdfs:domain :Relationship ;
+    rdfs:range :Relationship ;
+    rdfs:comment "Reference from Relationship to relationship" .
+
+# Relationship -> sourceentity
+:source_entity a owl:ObjectProperty ;
+    rdfs:label "source_entity_id" ;
+    rdfs:domain :Relationship ;
+    rdfs:range :Sourceentity ;
+    rdfs:comment "Reference from Relationship to sourceentity" .
+
+# Relationship -> targetentity
+:target_entity a owl:ObjectProperty ;
+    rdfs:label "target_entity_id" ;
+    rdfs:domain :Relationship ;
+    rdfs:range :Targetentity ;
+    rdfs:comment "Reference from Relationship to targetentity" .
+
+# TimePeriod -> period
+:period a owl:ObjectProperty ;
+    rdfs:label "period_id" ;
+    rdfs:domain :TimePeriod ;
+    rdfs:range :Period ;
+    rdfs:comment "Reference from TimePeriod to period" .
+
+# Zone -> zone
+:zone a owl:ObjectProperty ;
+    rdfs:label "zone_id" ;
+    rdfs:domain :Zone ;
+    rdfs:range :Zone ;
+    rdfs:comment "Reference from Zone to zone" .
+
+# ControlTotal -> control
+:control a owl:ObjectProperty ;
+    rdfs:label "control_id" ;
+    rdfs:domain :ControlTotal ;
+    rdfs:range :Control ;
+    rdfs:comment "Reference from ControlTotal to control" .
+
+# ControlTotal -> geography
+:geography a owl:ObjectProperty ;
+    rdfs:label "geography_id" ;
+    rdfs:domain :ControlTotal ;
+    rdfs:range :Geography ;
+    rdfs:comment "Reference from ControlTotal to geography" .
+
+# GeographicUnit -> geography
+:geography a owl:ObjectProperty ;
+    rdfs:label "geography_id" ;
+    rdfs:domain :GeographicUnit ;
+    rdfs:range :Geography ;
+    rdfs:comment "Reference from GeographicUnit to geography" .
+
+# GeographicUnit -> parentgeography
+:parent_geography a owl:ObjectProperty ;
+    rdfs:label "parent_geography_id" ;
+    rdfs:domain :GeographicUnit ;
+    rdfs:range :Parentgeography ;
+    rdfs:comment "Reference from GeographicUnit to parentgeography" .
+
+# Household -> household
+:household a owl:ObjectProperty ;
+    rdfs:label "household_id" ;
+    rdfs:domain :Household ;
+    rdfs:range :Household ;
+    rdfs:comment "Reference from Household to household" .
+
+# Household -> geography
+:geography a owl:ObjectProperty ;
+    rdfs:label "geography_id" ;
+    rdfs:domain :Household ;
+    rdfs:range :Geography ;
+    rdfs:comment "Reference from Household to geography" .
+
+# Household -> zone
+:zone a owl:ObjectProperty ;
+    rdfs:label "zone_id" ;
+    rdfs:domain :Household ;
+    rdfs:range :Zone ;
+    rdfs:comment "Reference from Household to zone" .
+
+# Person -> person
+:person a owl:ObjectProperty ;
+    rdfs:label "person_id" ;
+    rdfs:domain :Person ;
+    rdfs:range :Person ;
+    rdfs:comment "Reference from Person to person" .
+
+# Person -> household
+:household a owl:ObjectProperty ;
+    rdfs:label "household_id" ;
+    rdfs:domain :Person ;
+    rdfs:range :Household ;
+    rdfs:comment "Reference from Person to household" .
+
+# Person -> schoollocationzone
+:school_location_zone a owl:ObjectProperty ;
+    rdfs:label "school_location_zone_id" ;
+    rdfs:domain :Person ;
+    rdfs:range :Schoollocationzone ;
+    rdfs:comment "Reference from Person to schoollocationzone" .
+
+# Person -> worklocationzone
+:work_location_zone a owl:ObjectProperty ;
+    rdfs:label "work_location_zone_id" ;
+    rdfs:domain :Person ;
+    rdfs:range :Worklocationzone ;
+    rdfs:comment "Reference from Person to worklocationzone" .
+
+# SyntheticPopulation -> population
+:population a owl:ObjectProperty ;
+    rdfs:label "population_id" ;
+    rdfs:domain :SyntheticPopulation ;
+    rdfs:range :Population ;
+    rdfs:comment "Reference from SyntheticPopulation to population" .
+
+# SyntheticPopulation -> geography
+:geography a owl:ObjectProperty ;
+    rdfs:label "geography_id" ;
+    rdfs:domain :SyntheticPopulation ;
+    rdfs:range :Geography ;
+    rdfs:comment "Reference from SyntheticPopulation to geography" .
+
+# Activity -> activity
+:activity a owl:ObjectProperty ;
+    rdfs:label "activity_id" ;
+    rdfs:domain :Activity ;
+    rdfs:range :Activity ;
+    rdfs:comment "Reference from Activity to activity" .
+
+# Activity -> surveyperson
+:survey_person a owl:ObjectProperty ;
+    rdfs:label "survey_person_id" ;
+    rdfs:domain :Activity ;
+    rdfs:range :Surveyperson ;
+    rdfs:comment "Reference from Activity to surveyperson" .
+
+# Activity -> zone
+:zone a owl:ObjectProperty ;
+    rdfs:label "zone_id" ;
+    rdfs:domain :Activity ;
+    rdfs:range :Zone ;
+    rdfs:comment "Reference from Activity to zone" .
+
+# Activity -> precedingtrip
+:preceding_trip a owl:ObjectProperty ;
+    rdfs:label "preceding_trip_id" ;
+    rdfs:domain :Activity ;
+    rdfs:range :Precedingtrip ;
+    rdfs:comment "Reference from Activity to precedingtrip" .
+
+# Activity -> followingtrip
+:following_trip a owl:ObjectProperty ;
+    rdfs:label "following_trip_id" ;
+    rdfs:domain :Activity ;
+    rdfs:range :Followingtrip ;
+    rdfs:comment "Reference from Activity to followingtrip" .
+
+# Survey -> survey
+:survey a owl:ObjectProperty ;
+    rdfs:label "survey_id" ;
+    rdfs:domain :Survey ;
+    rdfs:range :Survey ;
+    rdfs:comment "Reference from Survey to survey" .
+
+# SurveyHousehold -> surveyhousehold
+:survey_household a owl:ObjectProperty ;
+    rdfs:label "survey_household_id" ;
+    rdfs:domain :SurveyHousehold ;
+    rdfs:range :Surveyhousehold ;
+    rdfs:comment "Reference from SurveyHousehold to surveyhousehold" .
+
+# SurveyHousehold -> survey
+:survey a owl:ObjectProperty ;
+    rdfs:label "survey_id" ;
+    rdfs:domain :SurveyHousehold ;
+    rdfs:range :Survey ;
+    rdfs:comment "Reference from SurveyHousehold to survey" .
+
+# SurveyHousehold -> zone
+:zone a owl:ObjectProperty ;
+    rdfs:label "zone_id" ;
+    rdfs:domain :SurveyHousehold ;
+    rdfs:range :Zone ;
+    rdfs:comment "Reference from SurveyHousehold to zone" .
+
+# SurveyPerson -> surveyperson
+:survey_person a owl:ObjectProperty ;
+    rdfs:label "survey_person_id" ;
+    rdfs:domain :SurveyPerson ;
+    rdfs:range :Surveyperson ;
+    rdfs:comment "Reference from SurveyPerson to surveyperson" .
+
+# SurveyPerson -> surveyhousehold
+:survey_household a owl:ObjectProperty ;
+    rdfs:label "survey_household_id" ;
+    rdfs:domain :SurveyPerson ;
+    rdfs:range :Surveyhousehold ;
+    rdfs:comment "Reference from SurveyPerson to surveyhousehold" .
+
+# Tour -> tour
+:tour a owl:ObjectProperty ;
+    rdfs:label "tour_id" ;
+    rdfs:domain :Tour ;
+    rdfs:range :Tour ;
+    rdfs:comment "Reference from Tour to tour" .
+
+# Tour -> surveyperson
+:survey_person a owl:ObjectProperty ;
+    rdfs:label "survey_person_id" ;
+    rdfs:domain :Tour ;
+    rdfs:range :Surveyperson ;
+    rdfs:comment "Reference from Tour to surveyperson" .
+
+# Tour -> trips
+:trips a owl:ObjectProperty ;
+    rdfs:label "trip_ids" ;
+    rdfs:domain :Tour ;
+    rdfs:range :Trips ;
+    rdfs:comment "Reference from Tour to trips" .
+
+# Trip -> origin
+:origin a owl:ObjectProperty ;
+    rdfs:label "origin_id" ;
+    rdfs:domain :Trip ;
+    rdfs:range :Origin ;
+    rdfs:comment "Reference from Trip to origin" .
+
+# Trip -> destination
+:destination a owl:ObjectProperty ;
+    rdfs:label "destination_id" ;
+    rdfs:domain :Trip ;
+    rdfs:range :Destination ;
+    rdfs:comment "Reference from Trip to destination" .
+
+# Trip -> trip
+:trip a owl:ObjectProperty ;
+    rdfs:label "trip_id" ;
+    rdfs:domain :Trip ;
+    rdfs:range :Trip ;
+    rdfs:comment "Reference from Trip to trip" .
+
+# Trip -> surveyperson
+:survey_person a owl:ObjectProperty ;
+    rdfs:label "survey_person_id" ;
+    rdfs:domain :Trip ;
+    rdfs:range :Surveyperson ;
+    rdfs:comment "Reference from Trip to surveyperson" .
+
+# Trip -> originzone
+:origin_zone a owl:ObjectProperty ;
+    rdfs:label "origin_zone_id" ;
+    rdfs:domain :Trip ;
+    rdfs:range :Originzone ;
+    rdfs:comment "Reference from Trip to originzone" .
+
+# Trip -> destinationzone
+:destination_zone a owl:ObjectProperty ;
+    rdfs:label "destination_zone_id" ;
+    rdfs:domain :Trip ;
+    rdfs:range :Destinationzone ;
+    rdfs:comment "Reference from Trip to destinationzone" .
+
+# TripChain -> chain
+:chain a owl:ObjectProperty ;
+    rdfs:label "chain_id" ;
+    rdfs:domain :TripChain ;
+    rdfs:range :Chain ;
+    rdfs:comment "Reference from TripChain to chain" .
+
+# TripChain -> surveyperson
+:survey_person a owl:ObjectProperty ;
+    rdfs:label "survey_person_id" ;
+    rdfs:domain :TripChain ;
+    rdfs:range :Surveyperson ;
+    rdfs:comment "Reference from TripChain to surveyperson" .
+
+# AnonymizedUser -> anonuser
+:anon_user a owl:ObjectProperty ;
+    rdfs:label "anon_user_id" ;
+    rdfs:domain :AnonymizedUser ;
+    rdfs:range :Anonuser ;
+    rdfs:comment "Reference from AnonymizedUser to anonuser" .
+
+# AnonymizedUser -> operator
+:operator a owl:ObjectProperty ;
+    rdfs:label "operator_id" ;
+    rdfs:domain :AnonymizedUser ;
+    rdfs:range :Operator ;
+    rdfs:comment "Reference from AnonymizedUser to operator" .
+
+# AnonymizedUser -> hometower
+:home_tower a owl:ObjectProperty ;
+    rdfs:label "home_tower_id" ;
+    rdfs:domain :AnonymizedUser ;
+    rdfs:range :Hometower ;
+    rdfs:comment "Reference from AnonymizedUser to hometower" .
+
+# AnonymizedUser -> homezone
+:home_zone a owl:ObjectProperty ;
+    rdfs:label "home_zone_id" ;
+    rdfs:domain :AnonymizedUser ;
+    rdfs:range :Homezone ;
+    rdfs:comment "Reference from AnonymizedUser to homezone" .
+
+# AnonymizedUser -> worktower
+:work_tower a owl:ObjectProperty ;
+    rdfs:label "work_tower_id" ;
+    rdfs:domain :AnonymizedUser ;
+    rdfs:range :Worktower ;
+    rdfs:comment "Reference from AnonymizedUser to worktower" .
+
+# AnonymizedUser -> workzone
+:work_zone a owl:ObjectProperty ;
+    rdfs:label "work_zone_id" ;
+    rdfs:domain :AnonymizedUser ;
+    rdfs:range :Workzone ;
+    rdfs:comment "Reference from AnonymizedUser to workzone" .
+
+# CDREvent -> event
+:event a owl:ObjectProperty ;
+    rdfs:label "event_id" ;
+    rdfs:domain :CDREvent ;
+    rdfs:range :Event ;
+    rdfs:comment "Reference from CDREvent to event" .
+
+# CDREvent -> anonuser
+:anon_user a owl:ObjectProperty ;
+    rdfs:label "anon_user_id" ;
+    rdfs:domain :CDREvent ;
+    rdfs:range :Anonuser ;
+    rdfs:comment "Reference from CDREvent to anonuser" .
+
+# CDREvent -> tower
+:tower a owl:ObjectProperty ;
+    rdfs:label "tower_id" ;
+    rdfs:domain :CDREvent ;
+    rdfs:range :Tower ;
+    rdfs:comment "Reference from CDREvent to tower" .
+
+# CDREvent -> otherpartyanon
+:other_party_anon a owl:ObjectProperty ;
+    rdfs:label "other_party_anon_id" ;
+    rdfs:domain :CDREvent ;
+    rdfs:range :Otherpartyanon ;
+    rdfs:comment "Reference from CDREvent to otherpartyanon" .
+
+# CellTower -> tower
+:tower a owl:ObjectProperty ;
+    rdfs:label "tower_id" ;
+    rdfs:domain :CellTower ;
+    rdfs:range :Tower ;
+    rdfs:comment "Reference from CellTower to tower" .
+
+# CellTower -> operator
+:operator a owl:ObjectProperty ;
+    rdfs:label "operator_id" ;
+    rdfs:domain :CellTower ;
+    rdfs:range :Operator ;
+    rdfs:comment "Reference from CellTower to operator" .
+
+# CellTower -> cell
+:cell a owl:ObjectProperty ;
+    rdfs:label "cell_id" ;
+    rdfs:domain :CellTower ;
+    rdfs:range :Cell ;
+    rdfs:comment "Reference from CellTower to cell" .
+
+# CellTower -> zone
+:zone a owl:ObjectProperty ;
+    rdfs:label "zone_id" ;
+    rdfs:domain :CellTower ;
+    rdfs:range :Zone ;
+    rdfs:comment "Reference from CellTower to zone" .
+
+# InferredTrip -> origin
+:origin a owl:ObjectProperty ;
+    rdfs:label "origin_id" ;
+    rdfs:domain :InferredTrip ;
+    rdfs:range :Origin ;
+    rdfs:comment "Reference from InferredTrip to origin" .
+
+# InferredTrip -> destination
+:destination a owl:ObjectProperty ;
+    rdfs:label "destination_id" ;
+    rdfs:domain :InferredTrip ;
+    rdfs:range :Destination ;
+    rdfs:comment "Reference from InferredTrip to destination" .
+
+# InferredTrip -> inferredtrip
+:inferred_trip a owl:ObjectProperty ;
+    rdfs:label "inferred_trip_id" ;
+    rdfs:domain :InferredTrip ;
+    rdfs:range :Inferredtrip ;
+    rdfs:comment "Reference from InferredTrip to inferredtrip" .
+
+# InferredTrip -> anonuser
+:anon_user a owl:ObjectProperty ;
+    rdfs:label "anon_user_id" ;
+    rdfs:domain :InferredTrip ;
+    rdfs:range :Anonuser ;
+    rdfs:comment "Reference from InferredTrip to anonuser" .
+
+# InferredTrip -> origintower
+:origin_tower a owl:ObjectProperty ;
+    rdfs:label "origin_tower_id" ;
+    rdfs:domain :InferredTrip ;
+    rdfs:range :Origintower ;
+    rdfs:comment "Reference from InferredTrip to origintower" .
+
+# InferredTrip -> originzone
+:origin_zone a owl:ObjectProperty ;
+    rdfs:label "origin_zone_id" ;
+    rdfs:domain :InferredTrip ;
+    rdfs:range :Originzone ;
+    rdfs:comment "Reference from InferredTrip to originzone" .
+
+# InferredTrip -> originstaypoint
+:origin_stay_point a owl:ObjectProperty ;
+    rdfs:label "origin_stay_point_id" ;
+    rdfs:domain :InferredTrip ;
+    rdfs:range :Originstaypoint ;
+    rdfs:comment "Reference from InferredTrip to originstaypoint" .
+
+# InferredTrip -> destinationtower
+:destination_tower a owl:ObjectProperty ;
+    rdfs:label "destination_tower_id" ;
+    rdfs:domain :InferredTrip ;
+    rdfs:range :Destinationtower ;
+    rdfs:comment "Reference from InferredTrip to destinationtower" .
+
+# InferredTrip -> destinationzone
+:destination_zone a owl:ObjectProperty ;
+    rdfs:label "destination_zone_id" ;
+    rdfs:domain :InferredTrip ;
+    rdfs:range :Destinationzone ;
+    rdfs:comment "Reference from InferredTrip to destinationzone" .
+
+# InferredTrip -> destinationstaypoint
+:destination_stay_point a owl:ObjectProperty ;
+    rdfs:label "destination_stay_point_id" ;
+    rdfs:domain :InferredTrip ;
+    rdfs:range :Destinationstaypoint ;
+    rdfs:comment "Reference from InferredTrip to destinationstaypoint" .
+
+# MobileOperator -> operator
+:operator a owl:ObjectProperty ;
+    rdfs:label "operator_id" ;
+    rdfs:domain :MobileOperator ;
+    rdfs:range :Operator ;
+    rdfs:comment "Reference from MobileOperator to operator" .
+
+# MobilityPattern -> pattern
+:pattern a owl:ObjectProperty ;
+    rdfs:label "pattern_id" ;
+    rdfs:domain :MobilityPattern ;
+    rdfs:range :Pattern ;
+    rdfs:comment "Reference from MobilityPattern to pattern" .
+
+# MobilityPattern -> zone
+:zone a owl:ObjectProperty ;
+    rdfs:label "zone_id" ;
+    rdfs:domain :MobilityPattern ;
+    rdfs:range :Zone ;
+    rdfs:comment "Reference from MobilityPattern to zone" .
+
+# ODMatrix_Mobile -> odmatrix
+:od_matrix a owl:ObjectProperty ;
+    rdfs:label "od_matrix_id" ;
+    rdfs:domain :ODMatrix_Mobile ;
+    rdfs:range :Odmatrix ;
+    rdfs:comment "Reference from ODMatrix_Mobile to odmatrix" .
+
+# ODMatrix_Mobile -> originzone
+:origin_zone a owl:ObjectProperty ;
+    rdfs:label "origin_zone_id" ;
+    rdfs:domain :ODMatrix_Mobile ;
+    rdfs:range :Originzone ;
+    rdfs:comment "Reference from ODMatrix_Mobile to originzone" .
+
+# ODMatrix_Mobile -> destinationzone
+:destination_zone a owl:ObjectProperty ;
+    rdfs:label "destination_zone_id" ;
+    rdfs:domain :ODMatrix_Mobile ;
+    rdfs:range :Destinationzone ;
+    rdfs:comment "Reference from ODMatrix_Mobile to destinationzone" .
+
+# StayPoint -> staypoint
+:stay_point a owl:ObjectProperty ;
+    rdfs:label "stay_point_id" ;
+    rdfs:domain :StayPoint ;
+    rdfs:range :Staypoint ;
+    rdfs:comment "Reference from StayPoint to staypoint" .
+
+# StayPoint -> anonuser
+:anon_user a owl:ObjectProperty ;
+    rdfs:label "anon_user_id" ;
+    rdfs:domain :StayPoint ;
+    rdfs:range :Anonuser ;
+    rdfs:comment "Reference from StayPoint to anonuser" .
+
+# StayPoint -> tower
+:tower a owl:ObjectProperty ;
+    rdfs:label "tower_id" ;
+    rdfs:domain :StayPoint ;
+    rdfs:range :Tower ;
+    rdfs:comment "Reference from StayPoint to tower" .
+
+# StayPoint -> zone
+:zone a owl:ObjectProperty ;
+    rdfs:label "zone_id" ;
+    rdfs:domain :StayPoint ;
+    rdfs:range :Zone ;
+    rdfs:comment "Reference from StayPoint to zone" .
+
+# StayPoint -> events
+:events a owl:ObjectProperty ;
+    rdfs:label "event_ids" ;
+    rdfs:domain :StayPoint ;
+    rdfs:range :Events ;
+    rdfs:comment "Reference from StayPoint to events" .
+
+# GPSTracePoint -> trace
+:trace a owl:ObjectProperty ;
+    rdfs:label "trace_id" ;
+    rdfs:domain :GPSTracePoint ;
+    rdfs:range :Trace ;
+    rdfs:comment "Reference from GPSTracePoint to trace" .
+
+# GPSTracePoint -> probevehicle
+:probe_vehicle a owl:ObjectProperty ;
+    rdfs:label "probe_vehicle_id" ;
+    rdfs:domain :GPSTracePoint ;
+    rdfs:range :Probevehicle ;
+    rdfs:comment "Reference from GPSTracePoint to probevehicle" .
+
+# MatchedTrace -> matchedtrace
+:matched_trace a owl:ObjectProperty ;
+    rdfs:label "matched_trace_id" ;
+    rdfs:domain :MatchedTrace ;
+    rdfs:range :Matchedtrace ;
+    rdfs:comment "Reference from MatchedTrace to matchedtrace" .
+
+# MatchedTrace -> originaltrace
+:original_trace a owl:ObjectProperty ;
+    rdfs:label "original_trace_id" ;
+    rdfs:domain :MatchedTrace ;
+    rdfs:range :Originaltrace ;
+    rdfs:comment "Reference from MatchedTrace to originaltrace" .
+
+# MatchedTrace -> roadsegment
+:road_segment a owl:ObjectProperty ;
+    rdfs:label "road_segment_id" ;
+    rdfs:domain :MatchedTrace ;
+    rdfs:range :Roadsegment ;
+    rdfs:comment "Reference from MatchedTrace to roadsegment" .
+
+# ODTrajectory -> trajectory
+:trajectory a owl:ObjectProperty ;
+    rdfs:label "trajectory_id" ;
+    rdfs:domain :ODTrajectory ;
+    rdfs:range :Trajectory ;
+    rdfs:comment "Reference from ODTrajectory to trajectory" .
+
+# ODTrajectory -> probevehicle
+:probe_vehicle a owl:ObjectProperty ;
+    rdfs:label "probe_vehicle_id" ;
+    rdfs:domain :ODTrajectory ;
+    rdfs:range :Probevehicle ;
+    rdfs:comment "Reference from ODTrajectory to probevehicle" .
+
+# ODTrajectory -> originzone
+:origin_zone a owl:ObjectProperty ;
+    rdfs:label "origin_zone_id" ;
+    rdfs:domain :ODTrajectory ;
+    rdfs:range :Originzone ;
+    rdfs:comment "Reference from ODTrajectory to originzone" .
+
+# ODTrajectory -> destinationzone
+:destination_zone a owl:ObjectProperty ;
+    rdfs:label "destination_zone_id" ;
+    rdfs:domain :ODTrajectory ;
+    rdfs:range :Destinationzone ;
+    rdfs:comment "Reference from ODTrajectory to destinationzone" .
+
+# ProbeDataProvider -> provider
+:provider a owl:ObjectProperty ;
+    rdfs:label "provider_id" ;
+    rdfs:domain :ProbeDataProvider ;
+    rdfs:range :Provider ;
+    rdfs:comment "Reference from ProbeDataProvider to provider" .
+
+# ProbeVehicle -> probevehicle
+:probe_vehicle a owl:ObjectProperty ;
+    rdfs:label "probe_vehicle_id" ;
+    rdfs:domain :ProbeVehicle ;
+    rdfs:range :Probevehicle ;
+    rdfs:comment "Reference from ProbeVehicle to probevehicle" .
+
+# ProbeVehicle -> dataprovider
+:data_provider a owl:ObjectProperty ;
+    rdfs:label "data_provider_id" ;
+    rdfs:domain :ProbeVehicle ;
+    rdfs:range :Dataprovider ;
+    rdfs:comment "Reference from ProbeVehicle to dataprovider" .
+
+# SpeedObservation -> observation
+:observation a owl:ObjectProperty ;
+    rdfs:label "observation_id" ;
+    rdfs:domain :SpeedObservation ;
+    rdfs:range :Observation ;
+    rdfs:comment "Reference from SpeedObservation to observation" .
+
+# SpeedObservation -> roadsegment
+:road_segment a owl:ObjectProperty ;
+    rdfs:label "road_segment_id" ;
+    rdfs:domain :SpeedObservation ;
+    rdfs:range :Roadsegment ;
+    rdfs:comment "Reference from SpeedObservation to roadsegment" .
+
+# TrafficFlow -> flow
+:flow a owl:ObjectProperty ;
+    rdfs:label "flow_id" ;
+    rdfs:domain :TrafficFlow ;
+    rdfs:range :Flow ;
+    rdfs:comment "Reference from TrafficFlow to flow" .
+
+# TrafficFlow -> roadsegment
+:road_segment a owl:ObjectProperty ;
+    rdfs:label "road_segment_id" ;
+    rdfs:domain :TrafficFlow ;
+    rdfs:range :Roadsegment ;
+    rdfs:comment "Reference from TrafficFlow to roadsegment" .
+
+# TravelTimeSegment -> segment
+:segment a owl:ObjectProperty ;
+    rdfs:label "segment_id" ;
+    rdfs:domain :TravelTimeSegment ;
+    rdfs:range :Segment ;
+    rdfs:comment "Reference from TravelTimeSegment to segment" .
+
+# TravelTimeSegment -> roadsegment
+:road_segment a owl:ObjectProperty ;
+    rdfs:label "road_segment_id" ;
+    rdfs:domain :TravelTimeSegment ;
+    rdfs:range :Roadsegment ;
+    rdfs:comment "Reference from TravelTimeSegment to roadsegment" .
+
+# Agency -> agency
+:agency a owl:ObjectProperty ;
+    rdfs:label "agency_id" ;
+    rdfs:domain :Agency ;
+    rdfs:range :Agency ;
+    rdfs:comment "Reference from Agency to agency" .
+
+# Calendar -> service
+:service a owl:ObjectProperty ;
+    rdfs:label "service_id" ;
+    rdfs:domain :Calendar ;
+    rdfs:range :Service ;
+    rdfs:comment "Reference from Calendar to service" .
+
+# CalendarDate -> service
+:service a owl:ObjectProperty ;
+    rdfs:label "service_id" ;
+    rdfs:domain :CalendarDate ;
+    rdfs:range :Service ;
+    rdfs:comment "Reference from CalendarDate to service" .
+
+# Route -> route
+:route a owl:ObjectProperty ;
+    rdfs:label "route_id" ;
+    rdfs:domain :Route ;
+    rdfs:range :Route ;
+    rdfs:comment "Reference from Route to route" .
+
+# Route -> agency
+:agency a owl:ObjectProperty ;
+    rdfs:label "agency_id" ;
+    rdfs:domain :Route ;
+    rdfs:range :Agency ;
+    rdfs:comment "Reference from Route to agency" .
+
+# ServiceAlert -> alert
+:alert a owl:ObjectProperty ;
+    rdfs:label "alert_id" ;
+    rdfs:domain :ServiceAlert ;
+    rdfs:range :Alert ;
+    rdfs:comment "Reference from ServiceAlert to alert" .
+
+# Shape -> shape
+:shape a owl:ObjectProperty ;
+    rdfs:label "shape_id" ;
+    rdfs:domain :Shape ;
+    rdfs:range :Shape ;
+    rdfs:comment "Reference from Shape to shape" .
+
+# Stop -> stop
+:stop a owl:ObjectProperty ;
+    rdfs:label "stop_id" ;
+    rdfs:domain :Stop ;
+    rdfs:range :Stop ;
+    rdfs:comment "Reference from Stop to stop" .
+
+# Stop -> zone
+:zone a owl:ObjectProperty ;
+    rdfs:label "zone_id" ;
+    rdfs:domain :Stop ;
+    rdfs:range :Zone ;
+    rdfs:comment "Reference from Stop to zone" .
+
+# Stop -> level
+:level a owl:ObjectProperty ;
+    rdfs:label "level_id" ;
+    rdfs:domain :Stop ;
+    rdfs:range :Level ;
+    rdfs:comment "Reference from Stop to level" .
+
+# Stop -> taz
+:taz a owl:ObjectProperty ;
+    rdfs:label "taz_id" ;
+    rdfs:domain :Stop ;
+    rdfs:range :Taz ;
+    rdfs:comment "Reference from Stop to taz" .
+
+# Stop -> osmnode
+:osm_node a owl:ObjectProperty ;
+    rdfs:label "osm_node_id" ;
+    rdfs:domain :Stop ;
+    rdfs:range :Osmnode ;
+    rdfs:comment "Reference from Stop to osmnode" .
+
+# StopTime -> trip
+:trip a owl:ObjectProperty ;
+    rdfs:label "trip_id" ;
+    rdfs:domain :StopTime ;
+    rdfs:range :Trip ;
+    rdfs:comment "Reference from StopTime to trip" .
+
+# StopTime -> stop
+:stop a owl:ObjectProperty ;
+    rdfs:label "stop_id" ;
+    rdfs:domain :StopTime ;
+    rdfs:range :Stop ;
+    rdfs:comment "Reference from StopTime to stop" .
+
+# StopTimeUpdate -> stop
+:stop a owl:ObjectProperty ;
+    rdfs:label "stop_id" ;
+    rdfs:domain :StopTimeUpdate ;
+    rdfs:range :Stop ;
+    rdfs:comment "Reference from StopTimeUpdate to stop" .
+
+# Trip -> route
+:route a owl:ObjectProperty ;
+    rdfs:label "route_id" ;
+    rdfs:domain :Trip ;
+    rdfs:range :Route ;
+    rdfs:comment "Reference from Trip to route" .
+
+# Trip -> service
+:service a owl:ObjectProperty ;
+    rdfs:label "service_id" ;
+    rdfs:domain :Trip ;
+    rdfs:range :Service ;
+    rdfs:comment "Reference from Trip to service" .
+
+# Trip -> direction
+:direction a owl:ObjectProperty ;
+    rdfs:label "direction_id" ;
+    rdfs:domain :Trip ;
+    rdfs:range :Direction ;
+    rdfs:comment "Reference from Trip to direction" .
+
+# Trip -> block
+:block a owl:ObjectProperty ;
+    rdfs:label "block_id" ;
+    rdfs:domain :Trip ;
+    rdfs:range :Block ;
+    rdfs:comment "Reference from Trip to block" .
+
+# Trip -> shape
+:shape a owl:ObjectProperty ;
+    rdfs:label "shape_id" ;
+    rdfs:domain :Trip ;
+    rdfs:range :Shape ;
+    rdfs:comment "Reference from Trip to shape" .
+
+# TripUpdate -> trip
+:trip a owl:ObjectProperty ;
+    rdfs:label "trip_id" ;
+    rdfs:domain :TripUpdate ;
+    rdfs:range :Trip ;
+    rdfs:comment "Reference from TripUpdate to trip" .
+
+# TripUpdate -> vehicle
+:vehicle a owl:ObjectProperty ;
+    rdfs:label "vehicle_id" ;
+    rdfs:domain :TripUpdate ;
+    rdfs:range :Vehicle ;
+    rdfs:comment "Reference from TripUpdate to vehicle" .
+
+# TripUpdate -> route
+:route a owl:ObjectProperty ;
+    rdfs:label "route_id" ;
+    rdfs:domain :TripUpdate ;
+    rdfs:range :Route ;
+    rdfs:comment "Reference from TripUpdate to route" .
+
+# VehiclePosition -> vehicle
+:vehicle a owl:ObjectProperty ;
+    rdfs:label "vehicle_id" ;
+    rdfs:domain :VehiclePosition ;
+    rdfs:range :Vehicle ;
+    rdfs:comment "Reference from VehiclePosition to vehicle" .
+
+# VehiclePosition -> trip
+:trip a owl:ObjectProperty ;
+    rdfs:label "trip_id" ;
+    rdfs:domain :VehiclePosition ;
+    rdfs:range :Trip ;
+    rdfs:comment "Reference from VehiclePosition to trip" .
+
+# VehiclePosition -> route
+:route a owl:ObjectProperty ;
+    rdfs:label "route_id" ;
+    rdfs:domain :VehiclePosition ;
+    rdfs:range :Route ;
+    rdfs:comment "Reference from VehiclePosition to route" .
+
+# VehiclePosition -> stop
+:stop a owl:ObjectProperty ;
+    rdfs:label "stop_id" ;
+    rdfs:domain :VehiclePosition ;
+    rdfs:range :Stop ;
+    rdfs:comment "Reference from VehiclePosition to stop" .
+
+# Barrier -> barrier
+:barrier a owl:ObjectProperty ;
+    rdfs:label "barrier_id" ;
+    rdfs:domain :Barrier ;
+    rdfs:range :Barrier ;
+    rdfs:comment "Reference from Barrier to barrier" .
+
+# Barrier -> osmway
+:osm_way a owl:ObjectProperty ;
+    rdfs:label "osm_way_id" ;
+    rdfs:domain :Barrier ;
+    rdfs:range :Osmway ;
+    rdfs:comment "Reference from Barrier to osmway" .
+
+# Building -> building
+:building a owl:ObjectProperty ;
+    rdfs:label "building_id" ;
+    rdfs:domain :Building ;
+    rdfs:range :Building ;
+    rdfs:comment "Reference from Building to building" .
+
+# Building -> osmway
+:osm_way a owl:ObjectProperty ;
+    rdfs:label "osm_way_id" ;
+    rdfs:domain :Building ;
+    rdfs:range :Osmway ;
+    rdfs:comment "Reference from Building to osmway" .
+
+# Building -> taz
+:taz a owl:ObjectProperty ;
+    rdfs:label "taz_id" ;
+    rdfs:domain :Building ;
+    rdfs:range :Taz ;
+    rdfs:comment "Reference from Building to taz" .
+
+# Building -> zone
+:zone a owl:ObjectProperty ;
+    rdfs:label "zone_id" ;
+    rdfs:domain :Building ;
+    rdfs:range :Zone ;
+    rdfs:comment "Reference from Building to zone" .
+
+# Intersection -> intersection
+:intersection a owl:ObjectProperty ;
+    rdfs:label "intersection_id" ;
+    rdfs:domain :Intersection ;
+    rdfs:range :Intersection ;
+    rdfs:comment "Reference from Intersection to intersection" .
+
+# Intersection -> osmnode
+:osm_node a owl:ObjectProperty ;
+    rdfs:label "osm_node_id" ;
+    rdfs:domain :Intersection ;
+    rdfs:range :Osmnode ;
+    rdfs:comment "Reference from Intersection to osmnode" .
+
+# OSMNode -> osmnode
+:osm_node a owl:ObjectProperty ;
+    rdfs:label "osm_node_id" ;
+    rdfs:domain :OSMNode ;
+    rdfs:range :Osmnode ;
+    rdfs:comment "Reference from OSMNode to osmnode" .
+
+# OSMNode -> changeset
+:changeset a owl:ObjectProperty ;
+    rdfs:label "changeset_id" ;
+    rdfs:domain :OSMNode ;
+    rdfs:range :Changeset ;
+    rdfs:comment "Reference from OSMNode to changeset" .
+
+# OSMNode -> user
+:user a owl:ObjectProperty ;
+    rdfs:label "user_id" ;
+    rdfs:domain :OSMNode ;
+    rdfs:range :User ;
+    rdfs:comment "Reference from OSMNode to user" .
+
+# OSMWay -> osmway
+:osm_way a owl:ObjectProperty ;
+    rdfs:label "osm_way_id" ;
+    rdfs:domain :OSMWay ;
+    rdfs:range :Osmway ;
+    rdfs:comment "Reference from OSMWay to osmway" .
+
+# OSMWay -> changeset
+:changeset a owl:ObjectProperty ;
+    rdfs:label "changeset_id" ;
+    rdfs:domain :OSMWay ;
+    rdfs:range :Changeset ;
+    rdfs:comment "Reference from OSMWay to changeset" .
+
+# OSMWay -> user
+:user a owl:ObjectProperty ;
+    rdfs:label "user_id" ;
+    rdfs:domain :OSMWay ;
+    rdfs:range :User ;
+    rdfs:comment "Reference from OSMWay to user" .
+
+# PointOfInterest -> poi
+:poi a owl:ObjectProperty ;
+    rdfs:label "poi_id" ;
+    rdfs:domain :PointOfInterest ;
+    rdfs:range :Poi ;
+    rdfs:comment "Reference from PointOfInterest to poi" .
+
+# PointOfInterest -> osmnode
+:osm_node a owl:ObjectProperty ;
+    rdfs:label "osm_node_id" ;
+    rdfs:domain :PointOfInterest ;
+    rdfs:range :Osmnode ;
+    rdfs:comment "Reference from PointOfInterest to osmnode" .
+
+# PointOfInterest -> osmway
+:osm_way a owl:ObjectProperty ;
+    rdfs:label "osm_way_id" ;
+    rdfs:domain :PointOfInterest ;
+    rdfs:range :Osmway ;
+    rdfs:comment "Reference from PointOfInterest to osmway" .
+
+# PointOfInterest -> taz
+:taz a owl:ObjectProperty ;
+    rdfs:label "taz_id" ;
+    rdfs:domain :PointOfInterest ;
+    rdfs:range :Taz ;
+    rdfs:comment "Reference from PointOfInterest to taz" .
+
+# PointOfInterest -> zone
+:zone a owl:ObjectProperty ;
+    rdfs:label "zone_id" ;
+    rdfs:domain :PointOfInterest ;
+    rdfs:range :Zone ;
+    rdfs:comment "Reference from PointOfInterest to zone" .
+
+# RoadSegment -> segment
+:segment a owl:ObjectProperty ;
+    rdfs:label "segment_id" ;
+    rdfs:domain :RoadSegment ;
+    rdfs:range :Segment ;
+    rdfs:comment "Reference from RoadSegment to segment" .
+
+# RoadSegment -> osmway
+:osm_way a owl:ObjectProperty ;
+    rdfs:label "osm_way_id" ;
+    rdfs:domain :RoadSegment ;
+    rdfs:range :Osmway ;
+    rdfs:comment "Reference from RoadSegment to osmway" .
+
+# RoadSegment -> fromnode
+:from_node a owl:ObjectProperty ;
+    rdfs:label "from_node_id" ;
+    rdfs:domain :RoadSegment ;
+    rdfs:range :Fromnode ;
+    rdfs:comment "Reference from RoadSegment to fromnode" .
+
+# RoadSegment -> tonode
+:to_node a owl:ObjectProperty ;
+    rdfs:label "to_node_id" ;
+    rdfs:domain :RoadSegment ;
+    rdfs:range :Tonode ;
+    rdfs:comment "Reference from RoadSegment to tonode" .
+
+# TransitStop -> stop
+:stop a owl:ObjectProperty ;
+    rdfs:label "stop_id" ;
+    rdfs:domain :TransitStop ;
+    rdfs:range :Stop ;
+    rdfs:comment "Reference from TransitStop to stop" .
+
+# TransitStop -> osmnode
+:osm_node a owl:ObjectProperty ;
+    rdfs:label "osm_node_id" ;
+    rdfs:domain :TransitStop ;
+    rdfs:range :Osmnode ;
+    rdfs:comment "Reference from TransitStop to osmnode" .
+
+# TransitStop -> gtfsstop
+:gtfs_stop a owl:ObjectProperty ;
+    rdfs:label "gtfs_stop_id" ;
+    rdfs:domain :TransitStop ;
+    rdfs:range :Gtfsstop ;
+    rdfs:comment "Reference from TransitStop to gtfsstop" .
+
+# TransitStop -> taz
+:taz a owl:ObjectProperty ;
+    rdfs:label "taz_id" ;
+    rdfs:domain :TransitStop ;
+    rdfs:range :Taz ;
+    rdfs:comment "Reference from TransitStop to taz" .
+
+
+# Standard Relationship Types
+:locatedIn a owl:ObjectProperty ;
+    rdfs:label "located in" ;
+    rdfs:comment "Spatial containment relationship" .
+
+:belongsTo a owl:ObjectProperty ;
+    rdfs:label "belongs to" ;
+    rdfs:comment "Membership relationship" .
+
+:connectedTo a owl:ObjectProperty ;
+    rdfs:label "connected to" ;
+    rdfs:comment "Network connectivity relationship" .
+
