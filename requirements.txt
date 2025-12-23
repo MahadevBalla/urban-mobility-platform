@@ -1,0 +1,38 @@
+# Core Geospatial
+geopandas>=0.14.0
+shapely>=2.0.0
+osmnx>=1.9.0
+h3>=3.7.6
+
+# Data Processing
+pandas>=2.0.0
+numpy>=1.24.0
+
+# Visualization
+plotly>=5.15.0
+matplotlib>=3.7.0
+folium>=0.14.0
+streamlit>=1.28.0
+streamlit-folium>=0.15.0
+
+# Machine Learning
+scikit-learn>=1.3.0
+hdbscan>=0.8.33
+
+# Database (for later phases)
+psycopg2-binary>=2.9.0
+sqlalchemy>=2.0.0
+pymongo>=4.5.0
+redis>=5.0.0
+
+# API (for later phases)
+fastapi>=0.104.0
+uvicorn>=0.24.0
+pydantic>=2.0.0
+
+# Network Analysis
+networkx>=3.1
+
+# Utilities
+pyyaml>=6.0
+python-dotenv>=1.0.0
