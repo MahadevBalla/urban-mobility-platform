@@ -1,0 +1,77 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+env/
+ENV/
+.venv/
+
+# Virtual environment
+venv/
+.venv/
+env/
+.env.local
+
+# Output directories (generated data)
+output_*/
+cache/
+data/raw/*
+data/processed/*
+data/external/*
+
+# Keep directory structure
+!data/raw/.gitkeep
+!data/processed/.gitkeep
+!data/external/.gitkeep
+
+# Jupyter
+.ipynb_checkpoints/
+*.ipynb
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+*.log
+
+# Distribution / packaging
+build/
+dist/
+*.egg-info/
+
+# Docker volumes and artifacts
+*.tar
+postgres_data/
+pgadmin_data/
+
+# Research materials (external references)
+research/
+
+# Documentation files (exclude all except README and SETUP_AND_USAGE)
+*.md
+!README.md
+!SETUP_AND_USAGE.md
+!ONTOLOGY/README.md
+
+# Environment files with secrets
+.env
+
+# Test outputs
+test_outputs/
+*.coverage
+htmlcov/
+.pytest_cache/
+
+# Temporary files
+*.tmp
+*.temp
+*.bak
