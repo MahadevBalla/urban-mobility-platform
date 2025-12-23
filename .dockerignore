@@ -1,0 +1,50 @@
+# Docker ignore file
+
+# Virtual environment
+venv/
+env/
+.venv/
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.so
+
+# Output directories
+output_*/
+data/raw/
+data/processed/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Git
+.git/
+.gitignore
+
+# Documentation (keep README, ignore others)
+PROJECT_*.md
+QUICK_*.md
+SETUP.md
+QUICKSTART.md
+
+# Test outputs
+*.log
+
+# Environment files (use .env.example instead)
+.env
+
+# Database
+postgres_data/
+pgadmin_data/
