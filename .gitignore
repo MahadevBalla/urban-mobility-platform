@@ -53,14 +53,19 @@ dist/
 postgres_data/
 pgadmin_data/
 
-# Research materials (external references)
-research/
+# Research materials (external references) - ignore everything except populationsim
+research/*
+!research/populationsim/
 
 # Documentation files (exclude all except README and SETUP_AND_USAGE)
 *.md
 !README.md
 !SETUP_AND_USAGE.md
 !ONTOLOGY/README.md
+!research/populationsim/README.md
+
+# Personal analysis files
+research/populationsim/ANALYSIS.md
 
 # Environment files with secrets
 .env
