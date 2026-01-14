@@ -1,0 +1,51 @@
+target,geography,seed_table,importance,control_field,expression
+# ============================================================================
+# HOUSEHOLD CONTROLS
+# ============================================================================
+# Total households - MUST HAVE VERY HIGH IMPORTANCE
+num_hh,TAZ,households,100000000,HHBASE,households.hh_id > 0
+
+# Household size controls (at WARD level)
+hh_size_1,WARD,households,1000,HHSIZE1,households.num_persons == 1
+hh_size_2,WARD,households,1000,HHSIZE2,households.num_persons == 2
+hh_size_3,WARD,households,1000,HHSIZE3,households.num_persons == 3
+hh_size_4p,WARD,households,1000,HHSIZE4P,households.num_persons >= 4
+
+# Income controls (at WARD level)
+# Income categories based on Indian context (annual in INR)
+inc_low,WARD,households,500,INC_LOW,households.income_category == 1
+inc_middle,WARD,households,500,INC_MID,households.income_category == 2
+inc_high,WARD,households,500,INC_HIGH,households.income_category == 3
+
+# Vehicle ownership (at WARD level)
+veh_0,WARD,households,500,VEH0,households.num_vehicles == 0
+veh_1,WARD,households,500,VEH1,households.num_vehicles == 1
+veh_2p,WARD,households,500,VEH2P,households.num_vehicles >= 2
+
+# ============================================================================
+# PERSON CONTROLS
+# ============================================================================
+# Age distribution (at DISTRICT level)
+age_0_14,DISTRICT,persons,500,AGE0_14,(persons.age >= 0) & (persons.age <= 14)
+age_15_24,DISTRICT,persons,500,AGE15_24,(persons.age >= 15) & (persons.age <= 24)
+age_25_44,DISTRICT,persons,500,AGE25_44,(persons.age >= 25) & (persons.age <= 44)
+age_45_64,DISTRICT,persons,500,AGE45_64,(persons.age >= 45) & (persons.age <= 64)
+age_65p,DISTRICT,persons,500,AGE65P,persons.age >= 65
+
+# Gender (at DISTRICT level)
+male,DISTRICT,persons,500,MALE,persons.sex == 1
+female,DISTRICT,persons,500,FEMALE,persons.sex == 2
+
+# Employment status (at DISTRICT level)
+employed,DISTRICT,persons,1000,EMPLOYED,persons.employment_status == 1
+unemployed,DISTRICT,persons,500,UNEMPLOYED,persons.employment_status == 2
+not_in_labor_force,DISTRICT,persons,500,NILF,persons.employment_status == 3
+
+# Students (at DISTRICT level)
+student,DISTRICT,persons,500,STUDENT,(persons.age >= 5) & (persons.age <= 24) & (persons.education > 0)
+
+# ============================================================================
+# REGION-LEVEL CONTROLS (totals only)
+# ============================================================================
+total_persons,REGION,persons,10000,TOTPOP,persons.per_num > 0
+total_workers,REGION,persons,5000,TOTWORKERS,persons.employment_status == 1
