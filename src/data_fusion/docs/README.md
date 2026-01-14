@@ -11,7 +11,6 @@
 | [EVALUATION_METRICS.md](EVALUATION_METRICS.md) | Metrics, comparator, and reports |
 | [VISUALIZATION.md](VISUALIZATION.md) | Maps, charts, and dashboard |
 | [RUN_EVALUATION.md](RUN_EVALUATION.md) | Running the complete pipeline |
-| [FUTURE_WORK.md](FUTURE_WORK.md) | Known limitations and planned improvements |
 
 ## Quick Reference
 

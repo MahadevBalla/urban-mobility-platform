@@ -67,6 +67,7 @@ research/*
 
 # Personal analysis files
 research/populationsim/ANALYSIS.md
+src/data_fusion/docs/FUTURE_WORK.md
 
 # Environment files with secrets
 .env
