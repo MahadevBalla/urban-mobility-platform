@@ -57,12 +57,13 @@ pgadmin_data/
 research/*
 !research/populationsim/
 
-# Documentation files (exclude all except README and SETUP_AND_USAGE)
+# Documentation files (exclude all except specific allowed files)
 *.md
 !README.md
 !SETUP_AND_USAGE.md
 !ONTOLOGY/README.md
 !research/populationsim/README.md
+!src/data_fusion/docs/*.md
 
 # Personal analysis files
 research/populationsim/ANALYSIS.md
