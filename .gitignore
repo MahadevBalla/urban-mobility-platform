@@ -21,6 +21,7 @@ cache/
 data/raw/*
 data/processed/*
 data/external/*
+src/data_fusion/output/*
 
 # Keep directory structure
 !data/raw/.gitkeep
@@ -64,6 +65,9 @@ research/*
 !ONTOLOGY/README.md
 !research/populationsim/README.md
 !src/data_fusion/docs/*.md
+
+# Track all documentation under docs/
+!docs/**
 
 # Personal analysis files
 research/populationsim/ANALYSIS.md
