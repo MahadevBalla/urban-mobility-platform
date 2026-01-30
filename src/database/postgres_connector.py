@@ -5,10 +5,9 @@ Handles connection management and basic operations
 
 import os
 import logging
-from typing import Optional, Dict, Any
+from typing import Optional
 from contextlib import contextmanager
 
-import psycopg2
 from psycopg2.extras import RealDictCursor
 from psycopg2.pool import SimpleConnectionPool
 from sqlalchemy import create_engine
@@ -31,7 +30,7 @@ class DatabaseConnector:
         user: str = None,
         password: str = None,
         min_connections: int = 1,
-        max_connections: int = 10
+        max_connections: int = 10,
     ):
         """
         Initialize database connector
@@ -45,12 +44,20 @@ class DatabaseConnector:
             min_connections: Minimum connections in pool
             max_connections: Maximum connections in pool
         """
+        # Check if database is enabled
+        self.enabled = os.getenv("DB_ENABLED", "false").lower() == "true"
+        if not self.enabled:
+            logger.info("Database disabled via DB_ENABLED flag")
+            self.pool = None
+            self.engine = None
+            return
+
         # Get configuration from environment or parameters
-        self.host = host or os.getenv('DB_HOST', 'localhost')
-        self.port = port or int(os.getenv('DB_PORT', '5432'))
-        self.database = database or os.getenv('DB_NAME', 'urban_transit_db')
-        self.user = user or os.getenv('DB_USER', 'urban_admin')
-        self.password = password or os.getenv('DB_PASSWORD', 'urban_transit_2024')
+        self.host = host or os.getenv("DB_HOST", "localhost")
+        self.port = port or int(os.getenv("DB_PORT", "5432"))
+        self.database = database or os.getenv("DB_NAME", "urban_transit_db")
+        self.user = user or os.getenv("DB_USER", "urban_admin")
+        self.password = password or os.getenv("DB_PASSWORD", "urban_transit_2024")
 
         # Connection string
         self.conn_string = f"postgresql://{self.user}:{self.password}@{self.host}:{self.port}/{self.database}"
@@ -63,12 +70,16 @@ class DatabaseConnector:
         # SQLAlchemy engine for GeoPandas
         self.engine = None
 
-        logger.info(f"Initialized DatabaseConnector for {self.host}:{self.port}/{self.database}")
+        logger.info(
+            f"Initialized DatabaseConnector for {self.host}:{self.port}/{self.database}"
+        )
 
     def connect(self) -> None:
         """
         Establish connection pool
         """
+        if not self.enabled:
+            return
         try:
             self.pool = SimpleConnectionPool(
                 self.min_connections,
@@ -77,14 +88,14 @@ class DatabaseConnector:
                 port=self.port,
                 database=self.database,
                 user=self.user,
-                password=self.password
+                password=self.password,
             )
 
             # Create SQLAlchemy engine for GeoPandas
             self.engine = create_engine(
                 self.conn_string,
                 poolclass=NullPool,  # Use psycopg2 pool instead
-                echo=False
+                echo=False,
             )
 
             logger.info("Database connection pool established")
@@ -94,7 +105,10 @@ class DatabaseConnector:
 
         except Exception as e:
             logger.error(f"Failed to establish database connection: {e}")
-            raise
+            self.enabled = False
+            self.pool = None
+            self.engine = None
+            return
 
     def test_connection(self) -> bool:
         """
@@ -133,6 +147,8 @@ class DatabaseConnector:
         Yields:
             psycopg2 connection
         """
+        if not self.enabled or self.pool is None:
+            raise RuntimeError("Database disabled")
         conn = None
         try:
             conn = self.pool.getconn()
@@ -148,10 +164,7 @@ class DatabaseConnector:
                 self.pool.putconn(conn)
 
     def execute_query(
-        self,
-        query: str,
-        params: tuple = None,
-        fetch: bool = True
+        self, query: str, params: tuple = None, fetch: bool = True
     ) -> Optional[list]:
         """
         Execute a SQL query
@@ -176,11 +189,7 @@ class DatabaseConnector:
             cursor.close()
             return None
 
-    def execute_many(
-        self,
-        query: str,
-        params_list: list
-    ) -> None:
+    def execute_many(self, query: str, params_list: list) -> None:
         """
         Execute a query with multiple parameter sets (batch insert)
 
@@ -194,9 +203,7 @@ class DatabaseConnector:
             cursor.close()
 
     def read_spatial_data(
-        self,
-        query: str,
-        geom_col: str = 'geometry'
+        self, query: str, geom_col: str = "geometry"
     ) -> gpd.GeoDataFrame:
         """
         Read spatial data into a GeoDataFrame
@@ -209,11 +216,7 @@ class DatabaseConnector:
             GeoDataFrame with spatial data
         """
         try:
-            gdf = gpd.read_postgis(
-                query,
-                con=self.engine,
-                geom_col=geom_col
-            )
+            gdf = gpd.read_postgis(query, con=self.engine, geom_col=geom_col)
             return gdf
         except Exception as e:
             logger.error(f"Failed to read spatial data: {e}")
@@ -223,8 +226,8 @@ class DatabaseConnector:
         self,
         gdf: gpd.GeoDataFrame,
         table_name: str,
-        if_exists: str = 'append',
-        index: bool = False
+        if_exists: str = "append",
+        index: bool = False,
     ) -> None:
         """
         Write GeoDataFrame to database
@@ -237,10 +240,7 @@ class DatabaseConnector:
         """
         try:
             gdf.to_postgis(
-                table_name,
-                con=self.engine,
-                if_exists=if_exists,
-                index=index
+                table_name, con=self.engine, if_exists=if_exists, index=index
             )
             logger.info(f"Wrote {len(gdf)} rows to {table_name}")
         except Exception as e:
@@ -265,7 +265,7 @@ class DatabaseConnector:
         );
         """
         result = self.execute_query(query, (table_name,))
-        return result[0]['exists'] if result else False
+        return result[0]["exists"] if result else False
 
     def get_table_count(self, table_name: str) -> int:
         """
@@ -279,7 +279,7 @@ class DatabaseConnector:
         """
         query = f"SELECT COUNT(*) as count FROM {table_name};"
         result = self.execute_query(query)
-        return result[0]['count'] if result else 0
+        return result[0]["count"] if result else 0
 
     def close(self) -> None:
         """
@@ -306,7 +306,7 @@ class DatabaseConnector:
         """Cleanup on deletion"""
         try:
             self.close()
-        except:
+        except Exception:
             pass
 
 
@@ -325,7 +325,8 @@ def get_db_connector() -> DatabaseConnector:
 
     if _db_connector is None:
         _db_connector = DatabaseConnector()
-        _db_connector.connect()
+        if _db_connector.enabled:
+            _db_connector.connect()
 
     return _db_connector
 

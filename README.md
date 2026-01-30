@@ -13,8 +13,6 @@ Generate production-ready traffic zones for any city worldwide using OpenStreetM
 
 ![Dashboard Preview](docs/images/dashboard_preview.png)
 
----
-
 ## Table of Contents
 
 - [Features](#features)
@@ -24,6 +22,7 @@ Generate production-ready traffic zones for any city worldwide using OpenStreetM
 - [Services & Ports](#services--ports)
 - [Output Files](#output-files)
 - [Project Structure](#project-structure)
+- [Testing](#testing)
 - [Transport Data Ontology](#transport-data-ontology)
 - [Tech Stack](#tech-stack)
 - [Documentation](#documentation)
@@ -31,12 +30,10 @@ Generate production-ready traffic zones for any city worldwide using OpenStreetM
 - [License](#license)
 - [Acknowledgments](#acknowledgments)
 
----
-
 ## Features
 
 | Feature | Description |
-|---------|-------------|
+| --- | --- |
 | **Automated Zone Generation** | 8-step pipeline creates TAZ-like zones from OSM data |
 | **Global Coverage** | Works for any city with OpenStreetMap data |
 | **Smart Barrier Detection** | Zones respect highways, railways, and rivers |
@@ -45,8 +42,6 @@ Generate production-ready traffic zones for any city worldwide using OpenStreetM
 | **Interactive Dashboard** | Streamlit web UI with maps, statistics, exports |
 | **Transport Ontology** | Standardized schemas for 14 data sources |
 | **Docker Ready** | One-command deployment |
-
----
 
 ## Quick Start
 
@@ -79,7 +74,7 @@ python -m venv venv
 source venv/bin/activate  # Windows: venv\Scripts\activate
 
 # Install dependencies
-pip install -r requirements.txt
+pip install -r requirements.txt # Note: Requirements are pinned to exact versions for reproducibility
 
 # Run the dashboard
 streamlit run app.py
@@ -89,11 +84,9 @@ streamlit run app.py
 
 > **Note:** For database features, you'll need PostgreSQL running. See [SETUP_AND_USAGE.md](SETUP_AND_USAGE.md) for details.
 
----
-
 ## Architecture
 
-```
+```md
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                         URBAN MOBILITY PLATFORM                          │
 ├─────────────────────────────────────────────────────────────────────────┤
@@ -122,14 +115,12 @@ streamlit run app.py
 └─────────────────────────────────────────────────────────────────────────┘
 ```
 
----
-
 ## Zone Generation Pipeline
 
 The platform uses an **8-step automated pipeline**:
 
 | Step | Module | Description |
-|:----:|--------|-------------|
+| --- | --- | --- |
 | 1 | `osm_network.py` | Extract roads, rail, water, buildings, POIs from OpenStreetMap |
 | 2 | `hex_grid.py` | Generate H3 hexagonal grid (auto-resolution 6-9 based on area) |
 | 3 | `barrier_detector.py` | Identify major corridors and split grid along barriers |
@@ -139,33 +130,32 @@ The platform uses an **8-step automated pipeline**:
 | 7 | `skim_computer.py` | Compute distance, time, and cost matrices |
 | 8 | `zone_generator.py` | Orchestrate pipeline, save to files and database |
 
----
+> **Configuration & Validation:** The pipeline uses centralized configuration (`config.py`) and enforces input validation at every stage (`validation_utils.py`). Post-generation quality checks are performed by `zone_validator.py`.
 
 ## Services & Ports
 
 | Service | Port | URL | Description |
-|---------|------|-----|-------------|
-| **Streamlit Dashboard** | 8501 | http://localhost:8501 | Main web interface |
+| --- | --- | --- | --- |
+| **Streamlit Dashboard** | 8501 | <http://localhost:8501> | Main web interface |
 | **PostgreSQL + PostGIS** | 5432 | `localhost:5432` | Spatial database |
-| **pgAdmin** | 5051 | http://localhost:5051 | Database management UI |
+| **pgAdmin** | 5051 | <http://localhost:5051> | Database management UI |
 
 ### Default Credentials
 
 | Service | Username/Email | Password |
-|---------|---------------|----------|
+| --- | --- | --- |
 | PostgreSQL | `urban_admin` | `urban_transit_2024` |
 | pgAdmin | `admin@example.com` | `admin` |
-
----
 
 ## Output Files
 
 After zone generation, the following files are created:
 
 | File | Format | Description |
-|------|--------|-------------|
+| --- | --- | --- |
 | `zones.geojson` | GeoJSON | Zone polygons with all attributes |
 | `centroids.geojson` | GeoJSON | Zone centroid points |
+| `connectors.geojson` | GeoJSON | Connector lines between zones |
 | `zones_summary.csv` | CSV | Zone attributes in tabular format |
 | `skim_distance_km.csv` | CSV | Zone-to-zone distance matrix (km) |
 | `skim_time_drive_min.csv` | CSV | Driving time matrix (minutes) |
@@ -173,11 +163,9 @@ After zone generation, the following files are created:
 | `skim_time_walk_min.csv` | CSV | Walking time matrix (minutes) |
 | `skim_cost_drive.csv` | CSV | Driving cost matrix |
 
----
-
 ## Project Structure
 
-```
+```md
 urban-mobility-platform/
 │
 ├── app.py                          # Streamlit web dashboard
@@ -190,6 +178,9 @@ urban-mobility-platform/
 ├── src/
 │   ├── zone_generation/            # Core zone generation engine
 │   │   ├── zone_generator.py       # Main pipeline orchestrator
+│   │   ├── config.py               # Configuration dataclass
+│   │   ├── validation_utils.py     # Input validation helpers
+│   │   ├── zone_validator.py       # Zone validation logic
 │   │   ├── osm_network.py          # OpenStreetMap data extraction
 │   │   ├── hex_grid.py             # H3 hexagonal grid generation
 │   │   ├── barrier_detector.py     # Barrier detection & grid splitting
@@ -221,6 +212,21 @@ urban-mobility-platform/
 │   ├── matsim/                     # MATSim simulation examples
 │   └── populationsim/              # Population synthesis examples
 │
+├── tests/                          # Test suite (see tests/README.md)
+│   ├── test_pipeline_smoke.py      # End-to-end pipeline smoke test
+│   ├── test_crs_regressions.py     # CRS and unit correctness tests
+│   ├── test_hex_grid.py            # Hexagonal grid generation tests
+│   ├── test_barrier_detector.py    # Barrier detection tests
+│   ├── test_feature_engineer.py    # Feature computation tests
+│   ├── test_osm_network_extractor.py # OSM extraction tests
+│   ├── test_centroid_connector.py  # Centroid generation tests
+│   ├── test_region_merger.py       # Zone merging tests
+│   ├── test_skim_computer.py       # Skim matrix tests
+│   ├── test_zone_validator.py      # Zone validation tests
+│   └── README.md                   # Test suite documentation
+│
+├── pytest.ini                      # pytest configuration
+│
 ├── docs/                           # Additional documentation
 │
 ├── SETUP_AND_USAGE.md              # Detailed setup & usage guide
@@ -228,7 +234,27 @@ urban-mobility-platform/
 └── LICENSE                         # MIT License
 ```
 
----
+## Testing
+
+The platform includes a comprehensive test suite for the zone generation module. Tests are offline, deterministic, and designed to detect CRS bugs, algorithmic errors, and regressions.
+
+### Running Tests
+
+```bash
+# Run all tests
+pytest
+
+# Run with coverage report
+pytest --cov=src/zone_generation
+
+# Run specific test file
+pytest tests/test_hex_grid.py
+
+# Run tests matching pattern
+pytest -k "crs"
+```
+
+See [tests/README.md](tests/README.md) for detailed documentation on test organization, design principles, and individual test descriptions.
 
 ## Transport Data Ontology
 
@@ -237,7 +263,7 @@ The platform includes a comprehensive **Transport Data Ontology** supporting 14 
 ### Implemented Modules (7/14)
 
 | Module | Data Source | Key Entities |
-|--------|-------------|--------------|
+| --- | --- | --- |
 | `ontology_base` | Core Framework | 30+ enumerations, abstract classes |
 | `ontology_census` | Census Data | Person, Household, SyntheticPopulation |
 | `ontology_hts` | Travel Surveys | Trip, Tour, Activity, TripChain |
@@ -258,12 +284,10 @@ The platform includes a comprehensive **Transport Data Ontology** supporting 14 
 
 See [ONTOLOGY/README.md](ONTOLOGY/README.md) for complete documentation.
 
----
-
 ## Tech Stack
 
 | Category | Technologies |
-|----------|-------------|
+| --- | --- |
 | **Language** | Python 3.12+ |
 | **Web Framework** | Streamlit |
 | **Database** | PostgreSQL 15, PostGIS 3.3 |
@@ -274,17 +298,13 @@ See [ONTOLOGY/README.md](ONTOLOGY/README.md) for complete documentation.
 | **Visualization** | Plotly, Matplotlib |
 | **Graph Analysis** | NetworkX |
 
----
-
 ## Documentation
 
 | Document | Description |
-|----------|-------------|
+| --- | --- |
 | **[SETUP_AND_USAGE.md](SETUP_AND_USAGE.md)** | Complete setup, configuration, and usage guide |
 | **[ONTOLOGY/README.md](ONTOLOGY/README.md)** | Transport data ontology documentation |
 | **[IMPLEMENTATION_PLAN_V2.md](IMPLEMENTATION_PLAN_V2.md)** | Future development roadmap (4-step model, GenAI) |
-
----
 
 ## Use Cases
 
@@ -293,8 +313,6 @@ See [ONTOLOGY/README.md](ONTOLOGY/README.md) for complete documentation.
 - **Accessibility Analysis** - Zone-based accessibility metrics
 - **Transit Planning** - Service coverage and connectivity analysis
 - **Academic Research** - Transport modeling studies and publications
-
----
 
 ## Contributing
 
@@ -324,16 +342,12 @@ pip install -r requirements.txt
 docker-compose up -d postgres
 
 # Run tests
-python test_zone_generation.py
+pytest
 ```
-
----
 
 ## License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
----
 
 ## Acknowledgments
 
@@ -342,14 +356,10 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 - **Uber H3** - Hexagonal grid system
 - **MATSim Community** - Multi-agent transport simulation reference
 
----
-
 ## Contact & Support
 
 - **Issues:** [GitHub Issues](https://github.com/yourusername/urban-mobility-platform/issues)
 - **Discussions:** [GitHub Discussions](https://github.com/yourusername/urban-mobility-platform/discussions)
-
----
 
 <p align="center">
   <b>Built with passion for open-source urban mobility research</b>

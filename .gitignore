@@ -22,6 +22,7 @@ data/raw/*
 data/processed/*
 data/external/*
 src/data_fusion/output/*
+_tmp_test_output/*
 
 # Keep directory structure
 !data/raw/.gitkeep

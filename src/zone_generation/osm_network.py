@@ -3,47 +3,126 @@ OSM Network Extractor
 Extracts transport networks, barriers, and land-use data from OpenStreetMap
 """
 
-import osmnx as ox
-import geopandas as gpd
-import pandas as pd
-from shapely.geometry import box, Point, LineString, Polygon
-from typing import Dict, Tuple, Optional
 import logging
+from pathlib import Path
+from typing import Dict
+
+import geopandas as gpd
+import osmnx as ox
+import pandas as pd
+from shapely.geometry import Polygon, box
+
+from .config import ZoneGenConfig
+from .validation_utils import validate_non_empty_gdf
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+cache_dir = Path.home() / ".osmnx_cache"
+cache_dir.mkdir(parents=True, exist_ok=True)
+
+ox.settings.use_cache = True
+ox.settings.cache_folder = str(cache_dir)
 
 
 class OSMNetworkExtractor:
     """Extract transport infrastructure and barriers from OpenStreetMap"""
 
-    def __init__(self, place_name: str = None, boundary_polygon: Polygon = None):
+    def __init__(
+        self,
+        place_name: str | None = None,
+        boundary_polygon: Polygon | None = None,
+        bbox: tuple | None = None,  # (north, south, east, west),
+        config: ZoneGenConfig | None = None,
+    ):
         """
         Initialize OSM extractor
 
         Args:
             place_name: City/place name (e.g., "Mumbai, India")
             boundary_polygon: Custom boundary polygon (alternative to place_name)
+            bbox: Bounding box as (north, south, east, west)
+            config: Zone generation configuration (optional)
         """
         self.place_name = place_name
         self.boundary_polygon = boundary_polygon
         self.boundary_gdf = None
+        self.config = config or ZoneGenConfig()
 
-        if place_name:
-            logger.info(f"Initializing OSM extractor for: {place_name}")
-            self.boundary_gdf = ox.geocode_to_gdf(place_name)
-            self.boundary_polygon = self.boundary_gdf.geometry.iloc[0]
-        elif boundary_polygon:
-            logger.info("Initializing OSM extractor with custom boundary")
-            self.boundary_gdf = gpd.GeoDataFrame(
-                geometry=[boundary_polygon],
-                crs="EPSG:4326"
+        if boundary_polygon is not None:
+            if not isinstance(boundary_polygon, Polygon):
+                raise TypeError("boundary_polygon must be a Shapely Polygon")
+            logger.info(
+                f"Initializing OSM extractor using the provided boundary polygon: {boundary_polygon.wkt}"
             )
+            self.boundary_polygon = boundary_polygon
+            self.boundary_gdf = gpd.GeoDataFrame(
+                geometry=[boundary_polygon], crs="EPSG:4326"
+            )
+
+        elif bbox is not None:
+            logger.info(
+                f"Initializing OSM extractor using the provided bounding box coordinates: {bbox}"
+            )
+            self.boundary_gdf = self._bbox_to_gdf(bbox)
+            validate_non_empty_gdf(self.boundary_gdf, "boundary_gdf")
+            self.boundary_polygon = self.boundary_gdf.geometry.iloc[0]
+
+        elif place_name is not None:
+            try:
+                logger.info(
+                    f"Initializing OSM extractor by geocoding place name to polygon: {place_name}"
+                )
+                gdf = ox.geocode_to_gdf(place_name)
+                geom = gdf.geometry.iloc[0]
+
+                if geom.geom_type == "MultiPolygon":
+                    geom = max(geom.geoms, key=lambda g: g.area)
+
+                if geom.geom_type != "Polygon":
+                    raise TypeError(f"Expected polygon, got {geom.geom_type}")
+
+                self.boundary_polygon = geom
+                self.boundary_gdf = gpd.GeoDataFrame(geometry=[geom], crs="EPSG:4326")
+                logger.info("Boundary resolved as polygon ")
+
+            except Exception as e:
+                logger.warning(f"Polygon geocoding failed for '{place_name}': {e}")
+                logger.warning("Falling back to point-based boundary")
+
+                lat, lon = ox.geocode(place_name)
+                point_gdf = gpd.GeoDataFrame(
+                    geometry=[gpd.points_from_xy([lon], [lat])[0]],
+                    crs="EPSG:4326",
+                )
+
+                try:
+                    metric_crs = point_gdf.estimate_utm_crs()
+                except Exception:
+                    metric_crs = self.config.metric_fallback_crs
+
+                point_proj = point_gdf.to_crs(metric_crs)
+                buffer_m = self.config.point_boundary_buffer_m
+                buffered = point_proj.geometry.iloc[0].buffer(buffer_m)
+
+                self.boundary_polygon = (
+                    gpd.GeoSeries([buffered], crs=metric_crs)
+                    .to_crs("EPSG:4326")
+                    .iloc[0]
+                )
+
+                self.boundary_gdf = gpd.GeoDataFrame(
+                    geometry=[self.boundary_polygon], crs="EPSG:4326"
+                )
+                logger.info(f"Boundary resolved via buffered point ({buffer_m:.0f} m)")
         else:
-            raise ValueError("Either place_name or boundary_polygon must be provided")
+            raise ValueError(
+                "Must provide one of: boundary_polygon, bbox, or place_name"
+            )
 
     def get_boundary(self) -> gpd.GeoDataFrame:
         """Get the study area boundary"""
+        validate_non_empty_gdf(self.boundary_gdf, "boundary_gdf")
         return self.boundary_gdf
 
     def extract_road_network(self, network_type: str = "drive") -> gpd.GeoDataFrame:
@@ -61,23 +140,24 @@ class OSMNetworkExtractor:
         try:
             # Get the network graph
             G = ox.graph_from_polygon(
-                self.boundary_polygon,
-                network_type=network_type,
-                simplify=True
+                self.boundary_polygon, network_type=network_type, simplify=True
             )
 
             # Convert to GeoDataFrame
             edges_gdf = ox.graph_to_gdfs(G, nodes=False, edges=True)
 
             # Add road classification
-            edges_gdf['road_class'] = edges_gdf['highway'].apply(self._classify_road)
+            edges_gdf["road_class"] = edges_gdf["highway"].apply(self._classify_road)
 
-            logger.info(f"Extracted {len(edges_gdf)} road segments")
+            logger.debug(f"Extracted {len(edges_gdf)} road segments")
             return edges_gdf
 
         except Exception as e:
-            logger.error(f"Error extracting road network: {e}")
-            return gpd.GeoDataFrame()
+            logger.error(f"Error extracting road network: {e}", exc_info=True)
+            # raise RuntimeError("OSM road network extraction failed") from e
+            return gpd.GeoDataFrame(
+                geometry=[], crs=f"{self.config.metric_fallback_crs}"
+            )
 
     def extract_rail_network(self) -> gpd.GeoDataFrame:
         """
@@ -90,27 +170,25 @@ class OSMNetworkExtractor:
 
         try:
             # Query for rail infrastructure
-            tags = {
-                'railway': ['rail', 'subway', 'light_rail', 'tram', 'monorail']
-            }
+            tags = {"railway": ["rail", "subway", "light_rail", "tram", "monorail"]}
 
-            rail_gdf = ox.features_from_polygon(
-                self.boundary_polygon,
-                tags=tags
-            )
+            rail_gdf = ox.features_from_polygon(self.boundary_polygon, tags=tags)
 
             # Filter to LineString geometries only
             if not rail_gdf.empty:
-                rail_gdf = rail_gdf[rail_gdf.geometry.type == 'LineString']
-                logger.info(f"Extracted {len(rail_gdf)} rail segments")
+                rail_gdf = rail_gdf[rail_gdf.geometry.type == "LineString"]
+                logger.debug(f"Extracted {len(rail_gdf)} rail segments")
             else:
                 logger.warning("No rail infrastructure found")
 
             return rail_gdf
 
         except Exception as e:
-            logger.error(f"Error extracting rail network: {e}")
-            return gpd.GeoDataFrame()
+            logger.error(f"Error extracting rail network: {e}", exc_info=True)
+            # raise RuntimeError("OSM rail network extraction failed") from e
+            return gpd.GeoDataFrame(
+                geometry=[], crs=f"{self.config.metric_fallback_crs}"
+            )
 
     def extract_stations(self) -> gpd.GeoDataFrame:
         """
@@ -124,27 +202,38 @@ class OSMNetworkExtractor:
         try:
             # Query for stations
             tags = {
-                'railway': ['station', 'halt', 'stop'],
-                'public_transport': ['station', 'stop_position']
+                "railway": ["station", "halt", "stop"],
+                "public_transport": ["station", "stop_position"],
             }
 
-            stations_gdf = ox.features_from_polygon(
-                self.boundary_polygon,
-                tags=tags
-            )
+            stations_gdf = ox.features_from_polygon(self.boundary_polygon, tags=tags)
 
             # Convert to point geometries
             if not stations_gdf.empty:
-                stations_gdf['geometry'] = stations_gdf.geometry.centroid
-                logger.info(f"Extracted {len(stations_gdf)} stations")
+                # proj = stations_gdf.to_crs(stations_gdf.estimate_utm_crs())
+                try:
+                    utm_crs = stations_gdf.estimate_utm_crs()
+                    proj = stations_gdf.to_crs(utm_crs)
+                except Exception:
+                    logger.warning(
+                        "Could not estimate UTM CRS, using EPSG:3857 for station geometry"
+                    )
+                    proj = stations_gdf.to_crs("EPSG:3857")
+                stations_gdf["geometry"] = proj.geometry.centroid.to_crs(
+                    stations_gdf.crs
+                )
+                logger.debug(f"Extracted {len(stations_gdf)} stations")
             else:
                 logger.warning("No stations found")
 
             return stations_gdf
 
         except Exception as e:
-            logger.error(f"Error extracting stations: {e}")
-            return gpd.GeoDataFrame()
+            logger.error(f"Error extracting stations: {e}", exc_info=True)
+            # raise RuntimeError("OSM station extraction failed") from e
+            return gpd.GeoDataFrame(
+                geometry=[], crs=f"{self.config.metric_fallback_crs}"
+            )
 
     def extract_water_barriers(self) -> gpd.GeoDataFrame:
         """
@@ -157,25 +246,25 @@ class OSMNetworkExtractor:
 
         try:
             tags = {
-                'natural': ['water', 'coastline'],
-                'waterway': ['river', 'stream', 'canal']
+                "natural": ["water", "coastline"],
+                "waterway": ["river", "stream", "canal"],
             }
 
-            water_gdf = ox.features_from_polygon(
-                self.boundary_polygon,
-                tags=tags
-            )
+            water_gdf = ox.features_from_polygon(self.boundary_polygon, tags=tags)
 
             if not water_gdf.empty:
-                logger.info(f"Extracted {len(water_gdf)} water features")
+                logger.debug(f"Extracted {len(water_gdf)} water features")
             else:
                 logger.warning("No water barriers found")
 
             return water_gdf
 
         except Exception as e:
-            logger.error(f"Error extracting water barriers: {e}")
-            return gpd.GeoDataFrame()
+            logger.error(f"Error extracting water barriers: {e}", exc_info=True)
+            # raise RuntimeError("OSM water barrier extraction failed") from e
+            return gpd.GeoDataFrame(
+                geometry=[], crs=f"{self.config.metric_fallback_crs}"
+            )
 
     def extract_buildings(self) -> gpd.GeoDataFrame:
         """
@@ -187,12 +276,9 @@ class OSMNetworkExtractor:
         logger.info("Extracting buildings...")
 
         try:
-            tags = {'building': True}
+            tags = {"building": True}
 
-            buildings_gdf = ox.features_from_polygon(
-                self.boundary_polygon,
-                tags=tags
-            )
+            buildings_gdf = ox.features_from_polygon(self.boundary_polygon, tags=tags)
 
             if not buildings_gdf.empty:
                 # Extract building levels (estimate height)
@@ -206,27 +292,39 @@ class OSMNetworkExtractor:
                     except (ValueError, TypeError):
                         # If it's a string like "3,5,6", take the first value
                         try:
-                            return int(str(val).split(',')[0].strip())
-                        except:
+                            return int(str(val).split(",")[0].strip())
+                        except Exception:
                             return 2  # Default to 2 levels if parsing fails
 
-                buildings_gdf['levels'] = buildings_gdf.get('building:levels', 2).apply(parse_levels)
+                buildings_gdf["levels"] = buildings_gdf.get("building:levels", 2).apply(
+                    parse_levels
+                )
 
-                # Calculate building area
-                buildings_gdf['area_m2'] = buildings_gdf.geometry.area
+                # Calculate building area in metric CRS
+                # Audit correction: Calculate area in projected CRS, not WGS84
+                try:
+                    utm_crs = buildings_gdf.estimate_utm_crs()
+                    buildings_projected = buildings_gdf.to_crs(utm_crs)
+                except Exception:
+                    logger.warning(
+                        "Could not estimate UTM CRS, falling back to EPSG:3857 for area calculation"
+                    )
+                    buildings_projected = buildings_gdf.to_crs("EPSG:3857")
 
-                # Estimate population proxy (area * levels)
-                buildings_gdf['proxy_capacity'] = buildings_gdf['area_m2'] * buildings_gdf['levels']
+                buildings_gdf["area_m2"] = buildings_projected.geometry.area
 
-                logger.info(f"Extracted {len(buildings_gdf)} buildings")
+                logger.debug(f"Extracted {len(buildings_gdf)} buildings")
             else:
                 logger.warning("No buildings found")
 
             return buildings_gdf
 
         except Exception as e:
-            logger.error(f"Error extracting buildings: {e}")
-            return gpd.GeoDataFrame()
+            logger.error(f"Error extracting buildings: {e}", exc_info=True)
+            # raise RuntimeError("OSM building extraction failed") from e
+            return gpd.GeoDataFrame(
+                geometry=[], crs=f"{self.config.metric_fallback_crs}"
+            )
 
     def extract_pois(self) -> gpd.GeoDataFrame:
         """
@@ -239,33 +337,41 @@ class OSMNetworkExtractor:
 
         try:
             tags = {
-                'amenity': ['school', 'college', 'university', 'hospital', 'clinic'],
-                'office': True,
-                'shop': True,
-                'landuse': ['commercial', 'industrial', 'retail']
+                "amenity": ["school", "college", "university", "hospital", "clinic"],
+                "office": True,
+                "shop": True,
+                "landuse": ["commercial", "industrial", "retail"],
             }
 
-            pois_gdf = ox.features_from_polygon(
-                self.boundary_polygon,
-                tags=tags
-            )
+            pois_gdf = ox.features_from_polygon(self.boundary_polygon, tags=tags)
 
             if not pois_gdf.empty:
                 # Convert to centroids for point representation
-                pois_gdf['geometry'] = pois_gdf.geometry.centroid
+                try:
+                    utm_crs = pois_gdf.estimate_utm_crs()
+                    proj = pois_gdf.to_crs(utm_crs)
+                except Exception:
+                    logger.warning(
+                        "Could not estimate UTM CRS, using EPSG:3857 for POI geometry"
+                    )
+                    proj = pois_gdf.to_crs("EPSG:3857")
+                pois_gdf["geometry"] = proj.geometry.centroid.to_crs(pois_gdf.crs)
 
                 # Classify POI type
-                pois_gdf['poi_type'] = pois_gdf.apply(self._classify_poi, axis=1)
+                pois_gdf["poi_type"] = pois_gdf.apply(self._classify_poi, axis=1)
 
-                logger.info(f"Extracted {len(pois_gdf)} POIs")
+                logger.debug(f"Extracted {len(pois_gdf)} POIs")
             else:
                 logger.warning("No POIs found")
 
             return pois_gdf
 
         except Exception as e:
-            logger.error(f"Error extracting POIs: {e}")
-            return gpd.GeoDataFrame()
+            logger.error(f"Error extracting POIs: {e}", exc_info=True)
+            # raise RuntimeError("OSM POI extraction failed") from e
+            return gpd.GeoDataFrame(
+                geometry=[], crs=f"{self.config.metric_fallback_crs}"
+            )
 
     def extract_all(self) -> Dict[str, gpd.GeoDataFrame]:
         """
@@ -277,55 +383,96 @@ class OSMNetworkExtractor:
         logger.info("Extracting all OSM data...")
 
         return {
-            'boundary': self.get_boundary(),
-            'roads': self.extract_road_network(),
-            'rail': self.extract_rail_network(),
-            'stations': self.extract_stations(),
-            'water': self.extract_water_barriers(),
-            'buildings': self.extract_buildings(),
-            'pois': self.extract_pois()
+            "boundary": self.get_boundary(),
+            "roads": self.extract_road_network(),
+            "rail": self.extract_rail_network(),
+            "stations": self.extract_stations(),
+            "water": self.extract_water_barriers(),
+            "buildings": self.extract_buildings(),
+            "pois": self.extract_pois(),
         }
 
     @staticmethod
     def _classify_road(highway_tag) -> str:
         """Classify road into categories"""
+        if not highway_tag:
+            return "local"
+
         if isinstance(highway_tag, list):
             highway_tag = highway_tag[0]
 
-        if highway_tag in ['motorway', 'motorway_link']:
-            return 'motorway'
-        elif highway_tag in ['trunk', 'trunk_link']:
-            return 'trunk'
-        elif highway_tag in ['primary', 'primary_link']:
-            return 'primary'
-        elif highway_tag in ['secondary', 'secondary_link']:
-            return 'secondary'
-        elif highway_tag in ['tertiary', 'tertiary_link']:
-            return 'tertiary'
+        if highway_tag in ["motorway", "motorway_link"]:
+            return "motorway"
+        elif highway_tag in ["trunk", "trunk_link"]:
+            return "trunk"
+        elif highway_tag in ["primary", "primary_link"]:
+            return "primary"
+        elif highway_tag in ["secondary", "secondary_link"]:
+            return "secondary"
+        elif highway_tag in ["tertiary", "tertiary_link"]:
+            return "tertiary"
         else:
-            return 'local'
+            return "local"
 
     @staticmethod
     def _classify_poi(row) -> str:
         """Classify POI into employment categories"""
-        if 'office' in row and pd.notna(row['office']):
-            return 'office'
-        elif 'shop' in row and pd.notna(row['shop']):
-            return 'commercial'
-        elif 'landuse' in row and row['landuse'] == 'industrial':
-            return 'industrial'
-        elif 'amenity' in row and row['amenity'] in ['school', 'college', 'university']:
-            return 'education'
-        elif 'amenity' in row and row['amenity'] in ['hospital', 'clinic']:
-            return 'healthcare'
-        else:
-            return 'other'
+        # Audit correction: Priority-ordered checks
+        # Check specific amenities first
+        if "amenity" in row and pd.notna(row["amenity"]):
+            amenity = row["amenity"]
+            if amenity in ["school", "college", "university"]:
+                return "education"
+            elif amenity in ["hospital", "clinic"]:
+                return "healthcare"
+
+        # Check primary categories
+        if "office" in row and pd.notna(row["office"]):
+            return "office"
+
+        if "landuse" in row and row["landuse"] == "industrial":
+            return "industrial"
+
+        if "shop" in row and pd.notna(row["shop"]):
+            return "commercial"
+
+        return "other"
+
+    def _bbox_to_gdf(self, bbox):
+        north, south, east, west = bbox
+        if not (south < north and west < east):
+            raise ValueError(f"Invalid bbox: {bbox}")
+        poly = box(west, south, east, north)
+        return gpd.GeoDataFrame(geometry=[poly], crs="EPSG:4326")
 
 
 # Example usage
 if __name__ == "__main__":
+    from .config import ZoneGenConfig
+
     # Test with a small area
-    extractor = OSMNetworkExtractor(place_name="Bandra, Mumbai, India")
+    config = ZoneGenConfig(
+        target_population=15000,
+        cbd_population_multiplier=0.7,
+        peripheral_population_multiplier=1.3,
+        max_feature_distance_cbd=0.65,
+        max_feature_distance_residential=0.22,
+        max_feature_distance_other=0.30,
+        min_growth_compactness=0.12,
+        compactness_check_min_cells=4,
+        max_region_growth_multiplier=1.7,
+        max_merge_iterations_multiplier=2.0,
+        min_area_km2=0.03,
+        max_area_km2=2.5,
+        min_zone_compactness=0.22,
+        max_population_cv=0.9,
+        default_barrier_buffer_m=40.0,
+        water_buffer_multiplier=1.5,
+        near_barrier_buffer_m=20.0,
+        sliver_area_fraction=0.05,
+    )
+
+    extractor = OSMNetworkExtractor(place_name="Bandra, Mumbai, India", config=config)
 
     # Extract all data
     osm_data = extractor.extract_all()
