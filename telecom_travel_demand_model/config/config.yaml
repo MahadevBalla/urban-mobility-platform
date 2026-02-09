@@ -1,0 +1,239 @@
+# Telecom Travel Demand Model Configuration
+# ==========================================
+
+# General Settings
+general:
+  project_name: "telecom_travel_demand"
+  random_seed: 42
+  n_workers: 4  # Parallel processing workers
+  log_level: "INFO"
+
+# Data Source Configuration
+data_sources:
+  cdr:
+    enabled: true
+    file_pattern: "cdr_*.csv"
+    timestamp_format: "%Y-%m-%d %H:%M:%S"
+    required_columns:
+      - "IMSI"
+      - "START_TIME"
+      - "CELL_ID"
+    optional_columns:
+      - "TAC"
+      - "LAC"
+      - "CALL_TYPE"
+      - "DURATION_SEC"
+
+  xdr:
+    enabled: true
+    file_pattern: "xdr_*.csv"
+    timestamp_format: "%Y-%m-%d %H:%M:%S"
+    required_columns:
+      - "IMSI"
+      - "TIMESTAMP"
+    location_columns:
+      - "LOCATION_LAT"
+      - "LOCATION_LON"
+
+  network_4g:
+    enabled: true
+    file_pattern: "4g_*.csv"
+    required_columns:
+      - "CELL_ID"
+      - "ENODEB_ID"
+
+  network_5g:
+    enabled: true
+    file_pattern: "5g_*.csv"
+    required_columns:
+      - "NCI"
+      - "GNODEB_ID"
+
+# Preprocessing Configuration
+preprocessing:
+  # User filtering
+  min_records_per_user: 10  # Minimum records to include user
+  min_active_days: 3  # Minimum days with activity
+  min_daily_trips: 2.5  # Minimum average daily trips
+  max_records_per_user: 100000  # Cap to avoid outliers
+
+  # Temporal filtering
+  observation_start: null  # null = auto-detect from data
+  observation_end: null
+  exclude_weekends: false
+
+  # Spatial filtering
+  study_area_bounds:  # Mumbai Metropolitan Region (example)
+    min_lat: 18.85
+    max_lat: 19.35
+    min_lon: 72.75
+    max_lon: 73.05
+
+  # Data quality
+  remove_duplicates: true
+  handle_missing_locations: "interpolate"  # drop, interpolate, or nearest_cell
+
+# Cell Tower / Location Configuration
+cell_towers:
+  # Default cell tower radius (meters) when exact location unknown
+  default_radius: 500
+
+  # Location inference method
+  location_method: "centroid"  # centroid, weighted_centroid, triangulation
+
+  # Cell ID to location mapping source
+  cell_location_source: "xdr_derived"  # xdr_derived, network_data, external_file
+
+  # Indian PLMN codes for major operators
+  plmn_codes:
+    "40445": "Airtel"
+    "40492": "Airtel"
+    "40493": "Airtel"
+    "40586": "Vodafone Idea"
+    "40588": "Vodafone Idea"
+    "40553": "Jio"
+    "40520": "Jio"
+
+# Stay Point Detection Configuration
+stay_detection:
+  # Algorithm: "zheng_xie" (from paper), "dbscan", "incremental", "hybrid"
+  algorithm: "zheng_xie"
+
+  # Distance threshold (meters) - points within this distance are same location
+  distance_threshold: 500
+
+  # Time threshold (seconds) - minimum stay duration
+  time_threshold: 1800  # 30 minutes
+
+  # Grid cell size for clustering consolidation (meters)
+  grid_cell_size: 300
+
+  # Minimum visits to consider a location significant
+  min_visits: 2
+
+  # Signal quality weighting (use network metrics for confidence)
+  use_signal_quality: true
+  signal_quality_weight: 0.3
+
+# Home/Work Inference Configuration
+home_work_inference:
+  # Home detection
+  home:
+    start_hour: 20  # 8 PM
+    end_hour: 7     # 7 AM
+    days: ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"]
+    min_frequency: 0.5  # Present at least 50% of nights
+
+  # Work detection
+  work:
+    start_hour: 7   # 7 AM
+    end_hour: 20    # 8 PM
+    days: ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"]
+    min_frequency: 0.3  # Present at least 30% of work days
+    min_distance_from_home: 500  # meters
+    min_weekly_visits: 3
+
+  # Handle users without work (students, retirees, etc.)
+  require_work_location: false
+
+# Trip Generation Configuration
+trip_generation:
+  # Effective day definition (to handle late night activities)
+  day_start_hour: 3  # 3 AM marks start of new day
+
+  # Trip purpose classification
+  purposes:
+    HBW: "Home-Based Work"
+    HBO: "Home-Based Other"
+    NHB: "Non-Home-Based"
+
+  # Departure time assignment
+  departure_time_method: "conditional_probability"  # midpoint, conditional_probability, random
+
+  # Trip filtering
+  min_trip_distance: 200  # meters
+  max_trip_distance: 100000  # meters (100 km)
+  max_trip_duration: 14400  # seconds (4 hours)
+
+  # Interpolation for missed observations
+  max_time_gap: 7200  # Max gap (seconds) to interpolate intermediate locations
+
+# OD Matrix Configuration
+od_matrix:
+  # Zone definition
+  zone_type: "tac"  # tac, lac, cell_cluster, custom_polygon
+
+  # Time periods
+  time_periods:
+    AM_PEAK:
+      start: 7
+      end: 10
+    MIDDAY:
+      start: 10
+      end: 16
+    PM_PEAK:
+      start: 16
+      end: 19
+    NIGHT:
+      start: 19
+      end: 7
+
+  # Aggregation
+  aggregate_by: ["purpose", "time_period"]  # day_type can also be added
+
+  # Trip expansion
+  expansion:
+    enabled: true
+    method: "population_weighted"  # uniform, population_weighted, usage_weighted
+
+    # Market share correction
+    market_share: 0.35  # Carrier's market share (example)
+
+    # Vehicle usage rate (for converting person trips to vehicle trips)
+    apply_vehicle_rate: false
+    default_vehicle_rate: 0.3  # 30% use private vehicles
+
+# Data Fusion Configuration
+data_fusion:
+  # Fusion strategy
+  strategy: "hierarchical"  # hierarchical, weighted_average, kalman_filter
+
+  # Source priority (higher = more trusted for location)
+  source_priority:
+    xdr_coordinates: 1.0
+    xdr_cell: 0.8
+    cdr_cell: 0.6
+    network_4g: 0.7
+    network_5g: 0.75
+
+  # Temporal alignment window (seconds)
+  temporal_window: 60
+
+  # Conflict resolution
+  conflict_resolution: "highest_priority"  # highest_priority, weighted_average, most_recent
+
+# Output Configuration
+output:
+  # Output formats
+  formats: ["csv", "parquet", "geojson"]
+
+  # Compression
+  compress: true
+
+  # OD Matrix outputs
+  od_matrix:
+    include_zero_flows: false
+    precision: 2
+
+  # Visualization outputs
+  visualizations:
+    enabled: true
+    dpi: 300
+    figure_format: "png"
+
+# Logging Configuration
+logging:
+  file: "logs/telecom_tdm.log"
+  format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+  max_size_mb: 100
+  backup_count: 5
