@@ -6,7 +6,7 @@
 
 This directory contains four different approaches to reconstruct vehicle trajectories from sensor data. Each algorithm combines different data sources with OpenStreetMap road network data.
 
-```
+```md
 fusion_algorithms/
 ├── base_fusion.py           # Abstract base class
 ├── gps_osm_fusion.py        # GPS + OSM
@@ -15,8 +15,6 @@ fusion_algorithms/
 └── cdr_osm_fusion.py        # CDR + OSM
 ```
 
----
-
 ## Base Fusion Class
 
 **File**: `base_fusion.py`
@@ -24,6 +22,7 @@ fusion_algorithms/
 ### Purpose
 
 Provides common functionality inherited by all fusion algorithms:
+
 - Map matching (snapping points to road network)
 - Trajectory interpolation
 - Speed calculation
@@ -61,7 +60,7 @@ class ReconstructedTrajectory:
 
 Snaps a GPS point to the nearest road segment.
 
-```
+```md
 Before Map Matching          After Map Matching
 ─────────────────────        ─────────────────────
                                     Road
@@ -74,7 +73,7 @@ Before Map Matching          After Map Matching
 
 Fills gaps between two points with interpolated positions.
 
-```
+```md
 Original (gap)               After Interpolation
 ─────────────────────        ─────────────────────
 ●─────────────────●          ●──○──○──○──○──○──●
@@ -85,7 +84,7 @@ t=0              t=60        t=0  10  20  30... 60
 
 Applies moving average to reduce noise.
 
-```
+```md
 Before Smoothing             After Smoothing
 ─────────────────────        ─────────────────────
     ○
@@ -94,15 +93,13 @@ Before Smoothing             After Smoothing
        ○    ○
 ```
 
----
-
 ## GPS + OSM Fusion
 
 **File**: `gps_osm_fusion.py`
 
 ### How It Works
 
-```
+```md
 Input: Raw GPS points (noisy, with gaps)
 Output: Smooth trajectory aligned to roads
 
@@ -128,7 +125,7 @@ Moving average filter reduces remaining noise
 ### Algorithm Parameters
 
 | Parameter | Default | Description |
-|-----------|---------|-------------|
+| --- | --- | --- |
 | `search_radius_m` | 50 m | Max distance for map matching |
 | `interpolation_interval_s` | 1.0 sec | Interval for filling gaps |
 | `max_gap_seconds` | 60 sec | Maximum gap to interpolate |
@@ -150,12 +147,10 @@ trajectories = fusion.fuse(gps_data=gps_dataframe)
 ### Strengths & Weaknesses
 
 | Strengths | Weaknesses |
-|-----------|------------|
+| --- | --- |
 | Real-time position data | Cannot handle large gaps |
 | High accuracy when GPS works | No schedule context |
 | Simple and fast | Fails during dropout |
-
----
 
 ## GTFS + OSM Fusion
 
@@ -163,7 +158,7 @@ trajectories = fusion.fuse(gps_data=gps_dataframe)
 
 ### How It Works
 
-```
+```md
 Input: GTFS schedule (stops + times)
 Output: Trajectory based on scheduled positions
 
@@ -189,7 +184,7 @@ Each ○ is interpolated based on:
 ### Algorithm Parameters
 
 | Parameter | Default | Description |
-|-----------|---------|-------------|
+| --- | --- | --- |
 | `interpolation_interval_s` | 1.0 sec | Points per second |
 | `schedule_deviation_factor` | 0.0 | Add randomness to schedule |
 | `dwell_time_s` | 30 sec | Default stop dwell time |
@@ -211,12 +206,10 @@ trajectories = fusion.fuse(
 ### Strengths & Weaknesses
 
 | Strengths | Weaknesses |
-|-----------|------------|
+| --- | --- |
 | Works without real-time data | Assumes schedule adherence |
 | 100% temporal coverage | Only accurate at stops |
 | No sensor hardware needed | Cannot capture deviations |
-
----
 
 ## GPS + GTFS + OSM Fusion (Tri-Source) ⭐
 
@@ -226,7 +219,7 @@ trajectories = fusion.fuse(
 
 This is the **recommended algorithm** - it combines the best of GPS and GTFS.
 
-```
+```md
 Fusion Strategy
 ────────────────────────────────────────
 
@@ -261,7 +254,7 @@ Result: ●──●──●──●──◇──◇──◇──◇──
 ### Confidence Scoring
 
 | Source | Confidence | Description |
-|--------|------------|-------------|
+| --- | --- | --- |
 | GPS + GTFS match | 0.95 | Both sources agree |
 | GPS only | 0.7-0.9 | Depends on match distance |
 | GTFS stop | 0.8-0.9 | At scheduled stop |
@@ -271,7 +264,7 @@ Result: ●──●──●──●──◇──◇──◇──◇──
 ### Algorithm Parameters
 
 | Parameter | Default | Description |
-|-----------|---------|-------------|
+| --- | --- | --- |
 | `gps_search_radius_m` | 50 m | GPS map matching radius |
 | `gtfs_search_radius_m` | 100 m | GTFS stop matching radius |
 | `max_gps_gap_seconds` | 120 sec | When to use GTFS fallback |
@@ -300,13 +293,11 @@ trajectories = fusion.fuse(
 ### Strengths & Weaknesses
 
 | Strengths | Weaknesses |
-|-----------|------------|
+| --- | --- |
 | Best accuracy overall | More complex |
 | Handles GPS dropouts | Requires both data sources |
 | Confidence scoring | Slightly slower |
 | Robust to gaps | |
-
----
 
 ## CDR + OSM Fusion
 
@@ -314,7 +305,7 @@ trajectories = fusion.fuse(
 
 ### How It Works
 
-```
+```md
 Input: Cell tower connection events (very sparse)
 Output: Coarse trajectory estimate
 
@@ -341,7 +332,7 @@ Solution:
 ### Algorithm Parameters
 
 | Parameter | Default | Description |
-|-----------|---------|-------------|
+| --- | --- | --- |
 | `tower_accuracy_m` | 200 m | Assumed tower accuracy |
 | `use_tower_triangulation` | True | Use multiple towers |
 | `interpolation_interval_s` | 1.0 sec | Fill between events |
@@ -362,17 +353,15 @@ trajectories = fusion.fuse(
 ### Strengths & Weaknesses
 
 | Strengths | Weaknesses |
-|-----------|------------|
+| --- | --- |
 | Works with basic mobile data | Very low accuracy (~200m) |
 | Low cost | Sparse data points |
 | Good coverage | Cannot capture detail |
 
----
-
 ## Algorithm Comparison Summary
 
 | Algorithm | Accuracy | Coverage | Complexity | Best Use Case |
-|-----------|----------|----------|------------|---------------|
+| --- | --- | --- | --- | --- |
 | GPS+OSM | High | Variable | Low | High-quality GPS data |
 | GTFS+OSM | Low | High | Low | No real-time data |
 | **GPS+GTFS+OSM** | **Highest** | **High** | Medium | **Transit vehicles** |
@@ -381,6 +370,7 @@ trajectories = fusion.fuse(
 ## Recommendation
 
 For transit vehicles with GPS but potential gaps, use **GPS+GTFS+OSM (Tri-source fusion)**. It provides:
+
 - Best accuracy when GPS works
 - Graceful degradation during gaps
 - Confidence scoring for quality assessment

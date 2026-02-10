@@ -9,11 +9,13 @@ The Sensor Simulator takes perfect ground truth trajectories and **degrades them
 ## Why Simulate Sensors?
 
 Real sensor data has many issues:
+
 - **GPS**: Position noise, signal dropout, multipath errors
 - **GTFS**: Schedule deviations, missing data
 - **CDR**: Very sparse, coarse positioning
 
 By simulating these characteristics, we can:
+
 1. **Control the noise level** - Test algorithms under different conditions
 2. **Know the exact error** - Compare reconstructed vs. true position
 3. **Reproduce results** - Same seed = same "random" noise
@@ -26,7 +28,7 @@ Simulates vehicle GPS trackers with realistic errors.
 
 #### Error Sources
 
-```
+```md
 Real GPS Position Issues
 ────────────────────────────────────────
 ┌─────────────────────────────────────┐
@@ -48,7 +50,7 @@ Real GPS Position Issues
 #### Parameters
 
 | Parameter | Default | Description |
-|-----------|---------|-------------|
+| --- | --- | --- |
 | `sample_interval` | 5.0 sec | Time between GPS samples |
 | `noise_std_meters` | 8.0 m | Standard deviation of position noise |
 | `dropout_rate` | 0.1 (10%) | Probability of missing a sample |
@@ -87,7 +89,7 @@ def simulate_gps(self, trips, sample_interval=5.0, noise_std_meters=8.0,
 #### Output Columns
 
 | Column | Description |
-|--------|-------------|
+| --- | --- |
 | `vehicle_id` | Vehicle identifier |
 | `trip_id` | Trip identifier |
 | `timestamp` | Sample time (with jitter) |
@@ -98,8 +100,6 @@ def simulate_gps(self, trips, sample_interval=5.0, noise_std_meters=8.0,
 | `hdop` | Simulated dilution of precision |
 | `num_satellites` | Simulated satellite count |
 
----
-
 ### 2. GTFS Schedule Data
 
 Generates standard GTFS transit feed from ground truth.
@@ -107,7 +107,7 @@ Generates standard GTFS transit feed from ground truth.
 #### GTFS Files Generated
 
 | File | Contents |
-|------|----------|
+| --- | --- |
 | `agency.txt` | Transit agency info |
 | `stops.txt` | Stop locations |
 | `routes.txt` | Route definitions |
@@ -118,6 +118,7 @@ Generates standard GTFS transit feed from ground truth.
 #### Schedule Noise
 
 The simulator adds **schedule deviation** to make it realistic:
+
 - Actual arrival times deviate from scheduled by ±60 seconds
 - This mimics real-world traffic delays
 
@@ -144,15 +145,13 @@ gtfs_data = {
 }
 ```
 
----
-
 ### 3. CDR (Call Detail Records)
 
 Simulates cell tower connection data from mobile devices.
 
 #### How CDR Works
 
-```
+```md
 Cell Tower Coverage
 ────────────────────────────────────────
      Tower A            Tower B
@@ -175,7 +174,7 @@ CDR Events recorded when:
 #### Parameters
 
 | Parameter | Default | Description |
-|-----------|---------|-------------|
+| --- | --- | --- |
 | `events_per_hour` | 8.0 | Average CDR events per hour |
 | `include_handovers` | True | Include tower handover events |
 | `num_towers` | 15 | Cell towers along route |
@@ -207,7 +206,7 @@ def simulate_cdr(self, trips, events_per_hour=8.0, include_handovers=True):
 #### Output Columns
 
 | Column | Description |
-|--------|-------------|
+| --- | --- |
 | `user_id` | User/device identifier |
 | `trip_id` | Associated trip |
 | `timestamp` | Event time |
@@ -215,8 +214,6 @@ def simulate_cdr(self, trips, events_per_hour=8.0, include_handovers=True):
 | `cell_tower_lat` | Tower latitude |
 | `cell_tower_lon` | Tower longitude |
 | `event_type` | 'call', 'sms', 'data', 'handover' |
-
----
 
 ### 4. Cell Tower Generation
 
@@ -243,8 +240,6 @@ def generate_cell_towers(self, generator, num_towers=15, coverage_radius_m=300):
             radius_m=coverage_radius_m
         )
 ```
-
----
 
 ## Usage Examples
 

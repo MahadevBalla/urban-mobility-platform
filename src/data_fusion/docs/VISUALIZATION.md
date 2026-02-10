@@ -6,14 +6,12 @@
 
 The visualization module provides tools for visual analysis and presentation of fusion results.
 
-```
+```md
 visualization/
 ├── trajectory_map.py      # Interactive Folium maps
 ├── accuracy_charts.py     # Plotly comparison charts
 └── fusion_dashboard.py    # Streamlit interactive dashboard
 ```
-
----
 
 ## Trajectory Map
 
@@ -33,7 +31,7 @@ Creates interactive maps showing ground truth vs reconstructed trajectories usin
 
 ### Visual Example
 
-```
+```md
 Map View
 ────────────────────────────────────────
 ┌─────────────────────────────────────┐
@@ -98,8 +96,6 @@ error_map = traj_map.create_error_heatmap(
 )
 ```
 
----
-
 ## Accuracy Charts
 
 **File**: `accuracy_charts.py`
@@ -122,7 +118,7 @@ fig = charts.create_comparison_bar_chart(
 )
 ```
 
-```
+```md
 Spatial RMSE (m)
 │
 │  ████
@@ -144,7 +140,7 @@ fig = charts.create_multi_metric_radar(
 )
 ```
 
-```
+```md
             RMSE (inv)
                ▲
               /│\
@@ -169,7 +165,7 @@ fig = charts.create_sparsity_line_chart(
 )
 ```
 
-```
+```md
 RMSE (m)
 │
 │                              CDR+OSM ●─────●
@@ -189,7 +185,7 @@ fig = charts.create_quality_score_gauge(
 )
 ```
 
-```
+```md
          GPS+GTFS+OSM
         Quality Score
 
@@ -232,8 +228,6 @@ charts.save_chart(fig, "chart.svg", format='svg')    # Vector
 charts.save_chart(fig, "chart.json", format='json')  # Data
 ```
 
----
-
 ## Fusion Dashboard
 
 **File**: `fusion_dashboard.py`
@@ -245,7 +239,7 @@ Interactive Streamlit web application for running and visualizing the complete e
 ### Features
 
 | Feature | Description |
-|---------|-------------|
+| --- | --- |
 | **Configuration Sidebar** | Adjust parameters with sliders |
 | **Live Evaluation** | Run algorithms with one click |
 | **Comparison Tab** | View metrics table |
@@ -265,7 +259,7 @@ streamlit run src/data_fusion/visualization/fusion_dashboard.py
 
 ### Dashboard Layout
 
-```
+```md
 ┌─────────────────────────────────────────────────────────┐
 │  🚌 Data Fusion Algorithm Evaluation                     │
 ├──────────────┬──────────────────────────────────────────┤
@@ -296,22 +290,26 @@ streamlit run src/data_fusion/visualization/fusion_dashboard.py
 ### Tabs Overview
 
 #### Comparison Tab
+
 - Summary metrics (Best algorithm, quality score, RMSE, coverage)
 - Detailed metrics table with highlighting
 - All algorithms compared side-by-side
 
 #### Map View Tab
+
 - Interactive Folium map
 - Ground truth in green
 - Each algorithm in different color
 - Click points for details
 
 #### Charts Tab
+
 - RMSE bar chart
 - Coverage bar chart
 - Multi-metric radar chart
 
 #### Report Tab
+
 - Text summary preview
 - Download buttons:
   - 📥 Text Report (.txt)
@@ -332,34 +330,31 @@ gps_noise_m = st.slider("GPS noise (m)", 0, 30, 8)
 gps_dropout_rate = st.slider("GPS dropout rate", 0.0, 0.5, 0.1)
 ```
 
----
-
 ## Color Scheme
 
 Consistent colors across all visualizations:
 
 | Algorithm | Color | Hex |
-|-----------|-------|-----|
+| --- | --- | --- |
 | Ground Truth | Green | `#2ECC71` |
 | GPS+OSM | Blue | `#3498DB` |
 | GTFS+OSM | Purple | `#9B59B6` |
 | GPS+GTFS+OSM | Red | `#E74C3C` |
 | CDR+OSM | Orange | `#F39C12` |
 
----
-
 ## Output Files
 
 ### From Dashboard/Runner
 
 | File | Description |
-|------|-------------|
+| --- | --- |
 | `comparison_dashboard.html` | Interactive Plotly multi-chart |
 | `trajectory_map.html` | Folium map (if saved) |
 
 ### Generated Charts
 
 All charts can be exported as:
+
 - `.html` - Interactive (recommended)
 - `.png` - Static image
 - `.svg` - Vector graphic

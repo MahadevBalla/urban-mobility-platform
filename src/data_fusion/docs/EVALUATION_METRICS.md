@@ -6,14 +6,12 @@
 
 The evaluation module measures how well fusion algorithms reconstruct trajectories compared to ground truth.
 
-```
+```md
 evaluation/
 ├── metrics.py           # Calculate accuracy metrics
 ├── comparator.py        # Run & compare all algorithms
 └── report_generator.py  # Generate comparison reports
 ```
-
----
 
 ## Metrics Calculator
 
@@ -21,7 +19,7 @@ evaluation/
 
 ### How Evaluation Works
 
-```
+```md
 Evaluation Process
 ────────────────────────────────────────
 
@@ -43,7 +41,7 @@ Errors:          ε₁ ε₂ ε₃    ε₄ ε₅    ε₆ ε₇
 #### Spatial Metrics
 
 | Metric | Formula | Description |
-|--------|---------|-------------|
+| --- | --- | --- |
 | **RMSE** | √(Σεᵢ²/n) | Root Mean Square Error - penalizes large errors |
 | **MAE** | Σ\|εᵢ\|/n | Mean Absolute Error - average error |
 | **Max Error** | max(εᵢ) | Worst case error |
@@ -63,28 +61,28 @@ mae = mean(|errors|)
 #### Temporal Metrics
 
 | Metric | Description |
-|--------|-------------|
+| --- | --- |
 | **Temporal MAE** | Average time difference between matched points |
 | **Temporal Coverage** | Ratio of reconstructed duration to ground truth duration |
 
 #### Speed Metrics
 
 | Metric | Description |
-|--------|-------------|
+| --- | --- |
 | **Speed RMSE** | Error in speed estimation (m/s) |
 | **Speed MAE** | Average speed error |
 
 #### Coverage Metrics
 
 | Metric | Description |
-|--------|-------------|
+| --- | --- |
 | **Coverage Rate** | % of ground truth points matched to reconstructed |
 | **Matched Points Rate** | % of points successfully map-matched to roads |
 
 #### Confidence Metrics
 
 | Metric | Description |
-|--------|-------------|
+| --- | --- |
 | **Avg Confidence** | Mean confidence score (0-1) |
 | **Confidence-Weighted RMSE** | RMSE weighted by inverse confidence |
 
@@ -166,8 +164,6 @@ class MetricsResult:
     quality_score: float
 ```
 
----
-
 ## Algorithm Comparator
 
 **File**: `comparator.py`
@@ -178,7 +174,7 @@ Runs all fusion algorithms on the same data and compares results.
 
 ### How It Works
 
-```
+```md
 Comparison Pipeline
 ────────────────────────────────────────
 
@@ -255,8 +251,6 @@ sparsity_results = comparator.run_sparsity_analysis(
 )
 ```
 
----
-
 ## Report Generator
 
 **File**: `report_generator.py`
@@ -268,7 +262,7 @@ Generates human-readable reports from comparison results.
 ### Output Formats
 
 | Format | Use Case |
-|--------|----------|
+| --- | --- |
 | `.txt` | Copy/paste into emails |
 | `.md` | Documentation, GitHub |
 | `.json` | Programmatic analysis |
@@ -301,7 +295,7 @@ json_report = report_gen.generate_json_report(comparison_df)
 
 ### Sample Text Report
 
-```
+```md
 ============================================================
 DATA FUSION ALGORITHM COMPARISON REPORT
 Generated: 2025-01-30 12:00:00
@@ -335,14 +329,12 @@ Justification:
 ============================================================
 ```
 
----
-
 ## Interpreting Results
 
 ### Good vs Bad Results
 
 | Metric | Good | Acceptable | Poor |
-|--------|------|------------|------|
+| --- | --- | --- | --- |
 | RMSE | < 20m | 20-50m | > 50m |
 | Coverage | > 95% | 80-95% | < 80% |
 | Quality Score | > 0.7 | 0.5-0.7 | < 0.5 |
@@ -351,7 +343,7 @@ Justification:
 ### What Affects Results?
 
 | Factor | Impact on RMSE |
-|--------|----------------|
+| --- | --- |
 | GPS noise ↑ | RMSE ↑ |
 | GPS dropout ↑ | Coverage ↓, RMSE ↑ |
 | Road network quality | Affects map matching |

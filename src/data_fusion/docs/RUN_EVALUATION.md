@@ -29,7 +29,7 @@ python src/data_fusion/run_evaluation.py --output ./my_results
 ## Command Line Options
 
 | Option | Default | Description |
-|--------|---------|-------------|
+| --- | --- | --- |
 | `--trips` | 3 | Number of trips to generate |
 | `--output` | `./output` | Directory for results |
 | `--dashboard` | False | Launch Streamlit dashboard |
@@ -39,33 +39,33 @@ python src/data_fusion/run_evaluation.py --output ./my_results
 
 The script executes these steps in order:
 
-```
+```md
 ┌─────────────────────────────────────────────────────────┐
-│                    EVALUATION PIPELINE                   │
+│                    EVALUATION PIPELINE                  │
 ├─────────────────────────────────────────────────────────┤
-│                                                          │
-│  [1/5] Generate Ground Truth                             │
-│        └─▶ Create perfect trajectories                   │
-│                                                          │
-│  [2/5] Simulate Sensor Data                              │
-│        ├─▶ GPS with noise/dropout                        │
-│        ├─▶ GTFS schedule                                 │
-│        ├─▶ Cell towers                                   │
-│        └─▶ CDR events                                    │
-│                                                          │
-│  [3/5] Run Fusion Algorithms                             │
-│        ├─▶ GPS+OSM                                       │
-│        ├─▶ GTFS+OSM                                      │
-│        ├─▶ GPS+GTFS+OSM                                  │
-│        └─▶ CDR+OSM                                       │
-│                                                          │
-│  [4/5] Calculate Metrics                                 │
-│        └─▶ Compare all algorithms to ground truth        │
-│                                                          │
-│  [5/5] Generate Reports                                  │
-│        ├─▶ Text, Markdown, JSON, CSV                     │
-│        └─▶ Interactive charts                            │
-│                                                          │
+│                                                         │
+│  [1/5] Generate Ground Truth                            │
+│        └─▶ Create perfect trajectories                  │
+│                                                         │
+│  [2/5] Simulate Sensor Data                             │
+│        ├─▶ GPS with noise/dropout                       │
+│        ├─▶ GTFS schedule                                │
+│        ├─▶ Cell towers                                  │
+│        └─▶ CDR events                                   │
+│                                                         │
+│  [3/5] Run Fusion Algorithms                            │
+│        ├─▶ GPS+OSM                                      │
+│        ├─▶ GTFS+OSM                                     │
+│        ├─▶ GPS+GTFS+OSM                                 │
+│        └─▶ CDR+OSM                                      │
+│                                                         │
+│  [4/5] Calculate Metrics                                │
+│        └─▶ Compare all algorithms to ground truth       │
+│                                                         │
+│  [5/5] Generate Reports                                 │
+│        ├─▶ Text, Markdown, JSON, CSV                    │
+│        └─▶ Interactive charts                           │
+│                                                         │
 └─────────────────────────────────────────────────────────┘
 ```
 
@@ -124,6 +124,7 @@ cdr_data, cell_tower_df = simulator.simulate_cdr(
 ```
 
 **Outputs**:
+
 - `gps_data`: DataFrame with noisy GPS points
 - `gtfs_data`: Dict with stops, stop_times, etc.
 - `cdr_data`: DataFrame with CDR events
@@ -158,6 +159,7 @@ comparison_df = metrics_calc.compare_algorithms(
 ```
 
 **Output**: DataFrame with columns:
+
 - `algorithm`
 - `spatial_rmse_m`, `spatial_mae_m`, `max_spatial_error_m`, `p95_spatial_error_m`
 - `temporal_mae_s`, `temporal_coverage`
@@ -188,7 +190,7 @@ fig.write_html(output_dir / 'comparison_dashboard.html')
 
 After running, the `output/` directory contains:
 
-```
+```md
 output/
 ├── fusion_evaluation_YYYYMMDD_HHMMSS.txt   # Text report
 ├── fusion_evaluation_YYYYMMDD_HHMMSS.md    # Markdown report
@@ -204,7 +206,7 @@ output/
 
 ## Sample Output
 
-```
+```md
 ============================================================
 DATA FUSION ALGORITHM EVALUATION
 ============================================================
@@ -274,10 +276,13 @@ gps_data = simulator.simulate_gps(
 
 1. Create `fusion_algorithms/my_fusion.py`
 2. Import in `run_evaluation.py`:
+
    ```python
    from src.data_fusion.fusion_algorithms import MyFusion
    ```
+
 3. Add to algorithms dict:
+
    ```python
    algorithms['MyFusion'] = MyFusion()
    ```
@@ -300,7 +305,7 @@ generator = GroundTruthGenerator(route_line=custom_route, stops=custom_stops)
 ### Common Errors
 
 | Error | Solution |
-|-------|----------|
+| --- | --- |
 | `ModuleNotFoundError: geopandas` | Activate venv: `venv\Scripts\activate` |
 | `TypeError: unexpected argument` | Check function signatures match |
 | `0% coverage for GTFS` | Pass correct `base_date` parameter |

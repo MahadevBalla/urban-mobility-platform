@@ -2,14 +2,14 @@
 
 ## Pipeline at a Glance
 
-```
+```md
 CDR/XDR Data → Preprocess → Stay Detection → Home/Work → Trips → Expand → OD Matrix
 ```
 
 ## Module Summary
 
 | Module | File | Purpose |
-|--------|------|---------|
+| --- | --- | --- |
 | **Data Loading** | `telecom_loader.py` | Load CDR, XDR, 4G, 5G data |
 | **Cell Towers** | `cell_tower_loader.py` | Load/infer cell locations |
 | **Zones** | `zone_loader.py` | Define spatial zones (TAC/grid) |
@@ -24,6 +24,7 @@ CDR/XDR Data → Preprocess → Stay Detection → Home/Work → Trips → Expan
 ## Key Parameters
 
 ### Stay Detection
+
 ```python
 StayPointDetector(
     distance_threshold=500,   # meters - max dist for same location
@@ -34,6 +35,7 @@ StayPointDetector(
 ```
 
 ### Trip Expansion
+
 ```python
 TripExpander(
     market_share=0.35,        # carrier market share (35%)
@@ -42,7 +44,8 @@ TripExpander(
 ```
 
 ### Home/Work Hours
-```
+
+```md
 Home hours: 8 PM - 7 AM (weekday nights)
 Work hours: 7 AM - 8 PM (weekdays)
 ```
@@ -50,7 +53,7 @@ Work hours: 7 AM - 8 PM (weekdays)
 ## Trip Purpose Codes
 
 | Code | Meaning | Definition |
-|------|---------|------------|
+| --- | --- | --- |
 | HBW | Home-Based Work | home ↔ work |
 | HBO | Home-Based Other | home ↔ other |
 | NHB | Non-Home Based | other ↔ other |
@@ -58,7 +61,7 @@ Work hours: 7 AM - 8 PM (weekdays)
 ## Time Periods
 
 | Period | Hours |
-|--------|-------|
+| --- | --- |
 | AM_PEAK | 6:00 - 9:00 |
 | MIDDAY | 9:00 - 16:00 |
 | PM_PEAK | 16:00 - 19:00 |
@@ -67,7 +70,7 @@ Work hours: 7 AM - 8 PM (weekdays)
 
 ## Expansion Formula
 
-```
+```md
 User Factor = expected_daily_trips / observed_daily_rate
 Zone Factor = population / (observed_users / market_share)
 Expansion Factor = User Factor × Zone Factor
@@ -76,7 +79,7 @@ Expansion Factor = User Factor × Zone Factor
 ## Expected Metrics
 
 | Metric | Expected |
-|--------|----------|
+| --- | --- |
 | Trip rate | 2.5-3.5 trips/person/day |
 | Intra-zone | 20-40% of trips |
 | Home detection | >90% of users |
@@ -124,7 +127,7 @@ od.to_csv(matrix, "od_matrix.csv")
 
 ## File Structure
 
-```
+```md
 telecom_travel_demand_model/
 ├── src/
 │   ├── data_ingestion/      # Data loading

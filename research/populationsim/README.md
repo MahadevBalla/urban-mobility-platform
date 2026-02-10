@@ -1,15 +1,14 @@
 # PopulationSim Exploration
 
 **Purpose:** Population synthesis for agent-based travel demand modeling
-**Repository:** https://github.com/ActivitySim/populationsim
-**Documentation:** https://activitysim.github.io/populationsim/
-**PyPI:** https://pypi.org/project/populationsim/
-
----
+**Repository:** <https://github.com/ActivitySim/populationsim>
+**Documentation:** <https://activitysim.github.io/populationsim/>
+**PyPI:** <https://pypi.org/project/populationsim/>
 
 ## What is PopulationSim?
 
 PopulationSim is an open-source population synthesis tool that:
+
 - Takes a **sample** of households/persons (e.g., 2% from surveys)
 - Expands to **100% synthetic population** using control totals (Census)
 - Uses **entropy maximization** and **iterative proportional fitting (IPF)**
@@ -18,16 +17,16 @@ PopulationSim is an open-source population synthesis tool that:
 ### Why We Need It
 
 In our travel demand model:
+
 - Each **agent** (person) needs to be represented
 - We have **sample data** (Household Travel Surveys)
 - We have **control totals** (Census demographics)
 - PopulationSim bridges the gap → synthetic population for MATSim
 
----
-
 ## Installation
 
 ### Prerequisites
+
 - Python 3.8+ (64-bit)
 - Conda (Anaconda or Miniforge)
 
@@ -51,25 +50,29 @@ pip install populationsim
 python -c "import populationsim; print(populationsim.__version__)"
 ```
 
----
-
 ## Core Concepts
 
 ### 1. Seed Sample
+
 The input population sample (from HTS or PUMS):
+
 - `seed_households.csv` - Household records with attributes
 - `seed_persons.csv` - Person records linked to households
 
 ### 2. Control Totals
+
 Census marginal distributions that the synthetic population must match:
+
 - Total households by zone
 - Age distribution
 - Income distribution
 - Household size distribution
 
 ### 3. Geographic Hierarchy
+
 PopulationSim works with nested geographies:
-```
+
+```md
 REGION (1 zone - entire study area)
    └── PUMA (Public Use Microdata Areas - seed level)
           └── TRACT (Census tracts)
@@ -77,19 +80,19 @@ REGION (1 zone - entire study area)
 ```
 
 ### 4. Entropy Maximization
+
 The algorithm finds weights that:
+
 - Match control totals as closely as possible
 - Keep weights close to original sample weights
 - Minimize information loss
-
----
 
 ## Input Files
 
 ### Required Files
 
 | File | Description | Key Columns |
-|------|-------------|-------------|
+| --- | --- | --- |
 | `seed_households.csv` | Household sample | `hh_id`, `WGTP` (weight), `PUMA`, `NP` (persons), `HINCP` (income), `VEH` (vehicles) |
 | `seed_persons.csv` | Person sample | `per_id`, `hh_id`, `AGEP` (age), `SEX`, `ESR` (employment) |
 | `geo_crosswalk.csv` | Geographic mapping | `TAZ`, `TRACT`, `PUMA`, `REGION` |
@@ -137,13 +140,11 @@ TAZ,HHBASE,PERSONS,HH_SIZE_1,HH_SIZE_2,HH_SIZE_3P
 103,200,500,60,80,60
 ```
 
----
-
 ## Configuration
 
 ### Directory Structure
 
-```
+```md
 project/
 ├── run_populationsim.py
 ├── configs/
@@ -254,8 +255,6 @@ age_65p,REGION,persons,500,AGE65P,persons.AGEP >= 65
 workers,TRACT,persons,1000,WORKERS,persons.ESR == 1
 ```
 
----
-
 ## Running PopulationSim
 
 ### Basic Run
@@ -299,8 +298,6 @@ slice_geography: TRACT
 python run_populationsim.py -c configs_mp -c configs
 ```
 
----
-
 ## Output Files
 
 ### synthetic_households.csv
@@ -339,13 +336,11 @@ hh_id,TAZ,num_hh
 ...
 ```
 
----
-
 ## Integration with Our Platform
 
 ### Data Flow
 
-```
+```md
 Census Data (controls)  ─┐
                          ├──▶ PopulationSim ──▶ Synthetic Population ──▶ MATSim
 HTS Data (seed sample)  ─┘
@@ -375,8 +370,6 @@ popsim_task = PythonOperator(
     dag=dag
 )
 ```
-
----
 
 ## Validation
 
@@ -413,28 +406,28 @@ for taz in controls['TAZ'].unique():
     print(f"TAZ {taz}: Target={target}, Actual={actual}, Error={error:.1f}%")
 ```
 
----
-
 ## Common Issues
 
 ### 1. Zero-Person Households
+
 - Filter out before running
 - Check seed data quality
 
 ### 2. Control Mismatch
+
 - Ensure control totals sum correctly across geographies
 - Check geographic crosswalk is complete
 
 ### 3. Convergence Issues
+
 - Increase `MAX_BALANCE_ITERATIONS_SIMULTANEOUS`
 - Adjust importance weights
 - Check for conflicting controls
 
 ### 4. Memory Issues
+
 - Use multi-processing for large regions
 - Reduce number of control variables
-
----
 
 ## Next Steps for Our Project
 
@@ -445,8 +438,6 @@ for taz in controls['TAZ'].unique():
 5. [ ] Configure and test PopulationSim
 6. [ ] Validate synthetic population
 7. [ ] Convert output to MATSim format
-
----
 
 ## Resources
 

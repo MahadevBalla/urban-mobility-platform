@@ -9,7 +9,7 @@ This module provides a complete framework for evaluating different **multi-sourc
 Transit agencies have access to multiple data sources, each with different characteristics:
 
 | Data Source | Accuracy | Frequency | Coverage | Cost |
-|-------------|----------|-----------|----------|------|
+| --- | --- | --- | --- | --- |
 | GPS Probes | ~8-15m | 1-5 sec | Variable (dropout) | Medium |
 | GTFS Schedule | Stop-level only | Per-stop | 100% at stops | Free |
 | Cell Tower (CDR) | ~200-500m | Sparse events | Good | Low |
@@ -19,33 +19,33 @@ Transit agencies have access to multiple data sources, each with different chara
 
 ## Solution Architecture
 
-```
+```md
 ┌─────────────────────────────────────────────────────────────────┐
-│                    DATA FUSION EVALUATION                        │
+│                    DATA FUSION EVALUATION                       │
 ├─────────────────────────────────────────────────────────────────┤
-│                                                                  │
+│                                                                 │
 │  ┌──────────────┐    ┌──────────────┐    ┌──────────────┐       │
 │  │Ground Truth  │───▶│   Sensor     │───▶│   Fusion     │       │
 │  │ Generator    │    │  Simulator   │    │  Algorithms  │       │
 │  └──────────────┘    └──────────────┘    └──────────────┘       │
-│         │                   │                   │                │
-│         │ Perfect           │ Degraded          │ Reconstructed  │
-│         │ Trajectory        │ Data              │ Trajectory     │
-│         │                   │                   │                │
-│         └───────────────────┼───────────────────┘                │
-│                             │                                    │
-│                             ▼                                    │
-│                    ┌──────────────┐                              │
-│                    │  Evaluation  │                              │
-│                    │   Metrics    │                              │
-│                    └──────────────┘                              │
-│                             │                                    │
-│                             ▼                                    │
-│                    ┌──────────────┐                              │
-│                    │    Report    │                              │
-│                    │  Generation  │                              │
-│                    └──────────────┘                              │
-│                                                                  │
+│         │                   │                   │               │
+│         │ Perfect           │ Degraded          │ Reconstructed │
+│         │ Trajectory        │ Data              │ Trajectory    │
+│         │                   │                   │               │
+│         └───────────────────┼───────────────────┘               │
+│                             │                                   │
+│                             ▼                                   │
+│                    ┌──────────────┐                             │
+│                    │  Evaluation  │                             │
+│                    │   Metrics    │                             │
+│                    └──────────────┘                             │
+│                             │                                   │
+│                             ▼                                   │
+│                    ┌──────────────┐                             │
+│                    │    Report    │                             │
+│                    │  Generation  │                             │
+│                    └──────────────┘                             │
+│                                                                 │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
@@ -59,6 +59,7 @@ Transit agencies have access to multiple data sources, each with different chara
 4. **Compare to Truth**: Calculate error metrics against the ground truth
 
 This approach ensures a fair comparison because:
+
 - All algorithms process the **same underlying trip**
 - Sensor noise is **controlled and reproducible**
 - We know the **exact correct answer**
@@ -66,24 +67,28 @@ This approach ensures a fair comparison because:
 ## Fusion Algorithms Compared
 
 ### 1. GPS + OSM (Baseline)
+
 - Map-matches GPS points to road network
 - Interpolates between GPS samples
 - **Strength**: Real-time accuracy when GPS available
 - **Weakness**: Fails during GPS dropout
 
 ### 2. GTFS + OSM (Schedule-Based)
+
 - Uses transit schedule for stop arrival times
 - Interpolates positions between stops
 - **Strength**: Works without real-time data
 - **Weakness**: Assumes schedule adherence
 
 ### 3. GPS + GTFS + OSM (Tri-Source) ⭐ Recommended
+
 - Combines GPS with schedule information
 - Uses GTFS to fill GPS gaps
 - **Strength**: Best of both worlds
 - **Weakness**: More complex
 
 ### 4. CDR + OSM (Low-Precision)
+
 - Uses cell tower connections
 - Very coarse positioning (~200-500m)
 - **Strength**: Works with basic mobile data
@@ -91,7 +96,7 @@ This approach ensures a fair comparison because:
 
 ## Directory Structure
 
-```
+```md
 data_fusion/
 ├── docs/                      # Documentation (you are here)
 │   ├── OVERVIEW.md
@@ -127,8 +132,9 @@ data_fusion/
 ## Quick Start
 
 ### Command Line
+
 ```bash
-# Activate virtual environment
+# Activate virtual environments
 venv\Scripts\activate  # Windows
 
 # Run evaluation
@@ -139,6 +145,7 @@ python src/data_fusion/run_evaluation.py --dashboard
 ```
 
 ### Output Files
+
 - `ground_truth.csv` - Perfect trajectory (the answer key)
 - `reconstructed_*.csv` - Each algorithm's output
 - `fusion_evaluation_*.md` - Comparison report
@@ -147,7 +154,7 @@ python src/data_fusion/run_evaluation.py --dashboard
 ## Key Metrics
 
 | Metric | What it Measures | Good Value |
-|--------|------------------|------------|
+| --- | --- | --- |
 | Spatial RMSE | Position error (meters) | < 50m |
 | Coverage Rate | % of ground truth matched | > 90% |
 | Quality Score | Composite score (0-1) | > 0.6 |
@@ -158,7 +165,7 @@ python src/data_fusion/run_evaluation.py --dashboard
 With default settings (8m GPS noise, 10% dropout):
 
 | Algorithm | RMSE | Coverage | Quality |
-|-----------|------|----------|---------|
+| --- | --- | --- | --- |
 | GPS+GTFS+OSM | ~32m | 100% | 0.65 |
 | GPS+OSM | ~33m | 100% | 0.65 |
 | GTFS+OSM | ~205m | 75% | 0.40 |

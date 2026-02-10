@@ -19,7 +19,7 @@ This model implements and extends the methodology from Toole et al. (2015) "The 
 
 ## Project Structure
 
-```
+```md
 telecom_travel_demand_model/
 ├── src/
 │   ├── data_ingestion/       # Data loaders for various telecom formats
@@ -84,6 +84,7 @@ od_matrix = od_gen.generate(trips)
 ## Configuration
 
 See `config/config.yaml` for all configurable parameters including:
+
 - Stay detection thresholds
 - Home/work inference time windows
 - Trip filtering criteria
@@ -93,21 +94,25 @@ See `config/config.yaml` for all configurable parameters including:
 ## Data Requirements
 
 ### CDR Data
+
 - IMSI/MSISDN (subscriber identifier)
 - Timestamp
 - Cell ID / LAC / TAC
 - Call type (optional)
 
 ### XDR Data (Optional but recommended)
+
 - Location coordinates (lat/lon)
 - Session information
 - RAT type (LTE/NR)
 
 ### 4G/5G Network Data (Optional)
+
 - Cell locations
 - Signal quality metrics (RSRP, RSRQ, SINR)
 
 ### Zone Definition
+
 - TAC boundaries or custom zone polygons
 - Census/population data for expansion
 
@@ -116,14 +121,14 @@ See `config/config.yaml` for all configurable parameters including:
 Detailed documentation is available in the `docs/` directory:
 
 | Document | Description |
-|----------|-------------|
+| --- | --- |
 | [SYSTEM_DOCUMENTATION.md](docs/SYSTEM_DOCUMENTATION.md) | Complete system architecture and methodology |
 | [MODULE_GUIDE.md](docs/MODULE_GUIDE.md) | Detailed module-by-module documentation |
 | [QUICK_REFERENCE.md](docs/QUICK_REFERENCE.md) | Quick reference card for common tasks |
 
 ## Pipeline Overview
 
-```
+```md
 ┌──────────────┐    ┌──────────────┐    ┌──────────────┐    ┌──────────────┐
 │  CDR / XDR   │───▶│ Preprocess   │───▶│    Stay      │───▶│  Home/Work   │
 │  4G / 5G     │    │  & Clean     │    │  Detection   │    │  Inference   │
@@ -138,27 +143,31 @@ Detailed documentation is available in the `docs/` directory:
 ## Key Algorithms
 
 ### Stay Point Detection (Zheng-Xie)
+
 - Groups consecutive observations within distance threshold
 - Requires minimum time threshold to qualify as stay
 - Uses signal-quality weighted centroids
 - Progressive threshold relaxation for sparse data
 
 ### Home/Work Inference (Alexander et al.)
+
 - Home: Highest score for weekday nights (8PM-7AM) + weekend presence
 - Work: Non-home location with regular weekday visits (7AM-8PM)
 
 ### Trip Expansion (Toole et al.)
+
 - User-level: `expected_daily_trips / observed_daily_rate`
 - Population-level: `zone_population / (observed_users / market_share)`
 
 ### Intra-Zone Estimation
+
 - Adjusts OD matrix diagonal for under-counted short trips
 - Typical target: 20-40% of total trips
 
 ## Expected Metrics
 
 | Metric | Expected Range | Source |
-|--------|---------------|--------|
+| --- | --- | --- |
 | Daily trip rate | 2.5 - 3.5 trips/person | NHTS |
 | Intra-zone trips | 20% - 40% of total | Toole et al. |
 | Home detection | > 90% of users | Alexander et al. |

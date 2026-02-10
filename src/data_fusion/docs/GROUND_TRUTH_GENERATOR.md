@@ -62,7 +62,7 @@ class GroundTruthTrip:
 
 The generator creates a default bus route in **Mumbai (Bandra area)** with 8 stops spanning approximately 3km:
 
-```
+```md
 Bandra Station → Hill Road → Turner Road → Linking Road →
 SV Road Junction → Khar Road → Santacruz Link → Terminal
 ```
@@ -73,7 +73,7 @@ The route is represented as a `LineString` geometry with coordinates.
 
 Real buses don't travel at constant speed. The generator simulates realistic speed profiles:
 
-```
+```md
 Speed Profile Between Stops
 ────────────────────────────────────────────────────────
      ┌─────────────────────────────┐
@@ -89,6 +89,7 @@ Stop A                            Stop B
 ```
 
 Parameters:
+
 - **Acceleration**: 1.2 m/s² (gentle start)
 - **Cruising Speed**: 25 km/h average, 45 km/h max
 - **Deceleration**: 1.5 m/s² (gentle stop)
@@ -96,6 +97,7 @@ Parameters:
 ### 3. Stop Dwell Times
 
 At each stop, the bus waits for passengers:
+
 - Base dwell time: 30 seconds
 - Random variation: ±10-20 seconds
 - Creates realistic schedule deviations
@@ -168,7 +170,7 @@ generator = GroundTruthGenerator(
 ### DataFrame Columns
 
 | Column | Type | Description |
-|--------|------|-------------|
+| --- | --- | --- |
 | `trip_id` | str | Trip identifier |
 | `vehicle_id` | str | Vehicle identifier |
 | `route_id` | str | Route identifier |
@@ -197,15 +199,19 @@ trip_1,bus_1,2025-01-01 08:00:32,19.0598,72.8298,2.4,None
 ## Key Methods
 
 ### `generate_trip()`
+
 Generates a single trip with specified parameters.
 
 ### `generate_trips()`
+
 Generates multiple trips with regular headway (time spacing).
 
 ### `to_dataframe()` / `to_geodataframe()`
+
 Convert trip to pandas DataFrame or GeoPandas GeoDataFrame.
 
 ### `save_ground_truth()`
+
 Save to CSV, GeoJSON, or other formats.
 
 ## Design Decisions
