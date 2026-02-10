@@ -3,7 +3,7 @@
 ## Table of Contents
 
 | Document | Description |
-|----------|-------------|
+| --- | --- |
 | [OVERVIEW.md](OVERVIEW.md) | High-level architecture and methodology |
 | [GROUND_TRUTH_GENERATOR.md](GROUND_TRUTH_GENERATOR.md) | Creating perfect test trajectories |
 | [SENSOR_SIMULATOR.md](SENSOR_SIMULATOR.md) | Simulating GPS, GTFS, and CDR data |
@@ -27,7 +27,7 @@ python src/data_fusion/run_evaluation.py --dashboard
 ### Algorithm Comparison
 
 | Algorithm | RMSE | Best For |
-|-----------|------|----------|
+| --- | --- | --- |
 | GPS+GTFS+OSM ⭐ | ~32m | Transit with GPS gaps |
 | GPS+OSM | ~33m | Reliable GPS data |
 | GTFS+OSM | ~205m | No real-time data |
@@ -35,7 +35,7 @@ python src/data_fusion/run_evaluation.py --dashboard
 
 ### Key Files
 
-```
+```md
 data_fusion/
 ├── run_evaluation.py          # ← Start here
 ├── ground_truth_generator.py  # Perfect trajectories

@@ -138,8 +138,6 @@ Checks that the complete zone generation pipeline can run end-to-end without cra
 
 This test is intended as a basic sanity check.
 
----
-
 ### `test_crs_regressions.py`
 
 Contains tests specifically focused on CRS and unit correctness.
@@ -151,8 +149,6 @@ Examples include:
 - Checking distance outputs are in reasonable units
 
 This file exists to prevent accidental reintroduction of CRS-related bugs.
-
----
 
 ### `test_hex_grid.py`
 
@@ -167,8 +163,6 @@ Coverage includes:
 - Neighborhood and distance consistency
 - Error handling for invalid inputs
 
----
-
 ### `test_barrier_detector.py`
 
 Tests detection and handling of physical barriers.
@@ -182,8 +176,6 @@ Coverage includes:
 - Tagging cells by barrier proximity
 
 These tests ensure that barriers are handled consistently.
-
----
 
 ### `test_feature_engineer.py`
 
@@ -200,8 +192,6 @@ Coverage includes:
 
 The focus is on correctness and numerical stability.
 
----
-
 ### `test_osm_network_extractor.py`
 
 Tests OSM extraction logic with all network access mocked.
@@ -213,8 +203,6 @@ Coverage includes:
 - Geometry coercion (e.g., polygons to centroids)
 - Area and level parsing
 - Output schema of extracted data
-
----
 
 ### `test_centroid_connector.py`
 
@@ -229,8 +217,6 @@ Coverage includes:
 - Transit stop linking
 
 These tests ensure centroids and connectors remain spatially valid.
-
----
 
 ### `test_region_merger.py`
 
@@ -247,8 +233,6 @@ Key checks include:
 
 This file focuses on correctness of the core merging logic.
 
----
-
 ### `test_skim_computer.py`
 
 Tests origin–destination (OD) skim computation.
@@ -262,8 +246,6 @@ Coverage includes:
 - Shape, symmetry, and diagonal checks
 
 The goal is to ensure skims are well-formed and interpretable.
-
----
 
 ### `test_zone_validator.py`
 

@@ -2,8 +2,6 @@
 
 This guide provides detailed documentation for each Python module in the system.
 
----
-
 ## 1. Data Ingestion (`src/data_ingestion/`)
 
 ### `telecom_loader.py`
@@ -25,13 +23,14 @@ class TelecomDataLoader:
 **Input File Formats:**
 
 | Data Type | Required Columns | Optional Columns |
-|-----------|-----------------|------------------|
+| --- | --- | --- |
 | CDR | imsi, timestamp, cell_id | call_type, duration, tac |
 | XDR | imsi, timestamp, cell_id | latitude, longitude, bytes, tac |
 | 4G | imsi, timestamp, tac | enodeb_id, rsrp, rsrq |
 | 5G | imsi, timestamp, tac | gnodeb_id, ss_rsrp |
 
 **Example:**
+
 ```python
 loader = TelecomDataLoader()
 cdr = loader.load_cdr("data/cdr_data.csv")
@@ -41,8 +40,6 @@ xdr = loader.load_xdr("data/xdr_data.csv")
 all_data = loader.load_all("data/")
 # Returns: {'cdr': df, 'xdr': df, '4g': df, '5g': df}
 ```
-
----
 
 ### `cell_tower_loader.py`
 
@@ -69,6 +66,7 @@ When explicit tower locations are unavailable, infer from XDR GPS data:
 3. Also aggregate by TAC for zone-level locations
 
 **Example:**
+
 ```python
 loader = CellTowerLoader()
 
@@ -82,8 +80,6 @@ tac_locations = loader.infer_tac_locations(xdr_df)
 # Add coordinates to records
 enriched_df = loader.add_locations(telecom_df, cell_locations)
 ```
-
----
 
 ### `zone_loader.py`
 
@@ -103,11 +99,13 @@ class ZoneLoader:
 ```
 
 **Zone Types:**
+
 - **TAC Zones**: Based on Tracking Area Codes (coarse, network-defined)
 - **Grid Zones**: Regular square grid (customizable resolution)
 - **Custom Zones**: Load from GeoJSON/Shapefile (administrative boundaries)
 
 **Example:**
+
 ```python
 loader = ZoneLoader()
 
@@ -126,8 +124,6 @@ zones = loader.load_zones("data/wards.geojson")
 # Assign records to zones
 df = loader.assign_zones(telecom_df, zones)
 ```
-
----
 
 ## 2. Preprocessing (`src/preprocessing/`)
 
@@ -148,6 +144,7 @@ class TelecomPreprocessor:
 ```
 
 **Processing Pipeline:**
+
 1. **Process CDR**: Standardize columns, parse timestamps
 2. **Process XDR**: Standardize columns, validate coordinates
 3. **Merge Sources**: Combine all data with unified schema
@@ -156,7 +153,8 @@ class TelecomPreprocessor:
 6. **Spatial Filter**: Keep records in study area (optional)
 
 **Ping-Pong Filtering:**
-```
+
+```md
 What is ping-pong?
 ──────────────────
 When a stationary user's phone oscillates between cell towers:
@@ -173,6 +171,7 @@ Result: Middle observations marked as ping-pong
 ```
 
 **Example:**
+
 ```python
 preprocessor = TelecomPreprocessor()
 
@@ -195,8 +194,6 @@ user_stats = preprocessor.get_user_summary(clean_df)
 #          unique_cells, active_days, avg_daily_records
 ```
 
----
-
 ### `user_filter.py`
 
 **Class: `UserFilter`**
@@ -211,14 +208,16 @@ class UserFilter:
 ```
 
 **Filter Criteria:**
+
 | Criterion | Default | Purpose |
-|-----------|---------|---------|
+| --- | --- | --- |
 | min_records | 10 | Enough data for analysis |
 | min_days | 3 | Observation period |
 | min_daily_records | 2 | Active phone usage |
 | max_daily_records | 1000 | Filter bots/M2M devices |
 
 **Example:**
+
 ```python
 user_filter = UserFilter()
 
@@ -229,8 +228,6 @@ filtered_df = user_filter.filter_users(telecom_df)
 stats = user_filter.get_filter_stats(telecom_df)
 print(f"Kept {stats['valid_users']} of {stats['total_users']} users")
 ```
-
----
 
 ## 3. Stay Detection (`src/stay_detection/`)
 
@@ -249,7 +246,7 @@ class StayPointDetector:
 
 **Algorithm Phases:**
 
-```
+```md
 PHASE 1: Candidate Extraction (Zheng-Xie Algorithm)
 ───────────────────────────────────────────────────
 Input: Time-ordered observations for one user
@@ -292,6 +289,7 @@ For each stay:
 ```
 
 **Signal Quality Weighting:**
+
 ```python
 # Signal strength affects position confidence
 # Strong signal = more reliable location
@@ -310,8 +308,9 @@ longitude = sum(lon_i * weight_i) / sum(weight_i)
 ```
 
 **Output DataFrame:**
+
 | Column | Description |
-|--------|-------------|
+| --- | --- |
 | stay_id | Unique identifier |
 | user_id | User (IMSI) |
 | latitude, longitude | Centroid coordinates |
@@ -322,8 +321,6 @@ longitude = sum(lon_i * weight_i) / sum(weight_i)
 | total_duration | Seconds spent at location |
 | observation_count | Number of observations |
 | location_confidence | 0-1 confidence score |
-
----
 
 ### `home_work_inference.py`
 
@@ -339,7 +336,8 @@ class HomeWorkInference:
 ```
 
 **Home Detection Algorithm:**
-```
+
+```md
 Scoring Components (weighted):
 ─────────────────────────────
 ┌──────────────────────┬────────┬─────────────────────────────┐
@@ -363,7 +361,8 @@ Fallback (no temporal data):
 ```
 
 **Work Detection Algorithm:**
-```
+
+```md
 Criteria:
 1. NOT the home location
 2. >= 500m from home (min_distance_from_home)
@@ -378,11 +377,10 @@ Scoring:
 
 **Output:**
 Adds `location_type` column to stay_points_df:
+
 - `'home'` - Inferred home location
 - `'work'` - Inferred work location
 - `'other'` - All other stays
-
----
 
 ## 4. Trip Generation (`src/trip_generation/`)
 
@@ -402,7 +400,8 @@ class TripGenerator:
 ```
 
 **Trip Extraction:**
-```
+
+```md
 Method 1: From Observations (more accurate)
 ───────────────────────────────────────────
 1. Assign each observation to nearest stay
@@ -422,6 +421,7 @@ Method 2: From Stay Timestamps (fallback)
 ```
 
 **Trip Purpose Logic:**
+
 ```python
 def determine_purpose(origin_type, dest_type):
     if (origin == 'home' and dest == 'work') or \
@@ -434,7 +434,8 @@ def determine_purpose(origin_type, dest_type):
 ```
 
 **Activity Chain Validation:**
-```
+
+```md
 A valid activity chain has:
 1. Spatial continuity: dest(trip_n) == origin(trip_n+1)
 2. Home anchoring: Starts and/or ends at home
@@ -453,8 +454,9 @@ Added columns:
 ```
 
 **Output Columns:**
+
 | Column | Description |
-|--------|-------------|
+| --- | --- |
 | trip_id | Unique identifier (user_id + sequence) |
 | user_id | User (IMSI) |
 | origin_stay, destination_stay | Stay point IDs |
@@ -469,8 +471,6 @@ Added columns:
 | day_type | weekday/weekend |
 | distance_m | Trip distance in meters |
 | duration_s | Trip duration in seconds |
-
----
 
 ### `trip_expander.py`
 
@@ -493,7 +493,7 @@ class TripExpander:
 
 **Expansion Methodology (Toole et al. 2015):**
 
-```
+```md
 STAGE 1: USER-LEVEL EXPANSION
 ═════════════════════════════
 Problem: Telecom only captures trips with phone events.
@@ -542,6 +542,7 @@ Each observed trip contributes 'expansion_factor' to the OD matrix.
 ```
 
 **Trip Rate Validation:**
+
 ```python
 # Validate against NHTS benchmarks
 result = expander.validate_trip_rates(
@@ -559,8 +560,6 @@ result = expander.validate_trip_rates(
     'calibration_factor': 1.0
 }
 ```
-
----
 
 ## 5. OD Matrix (`src/od_matrix/`)
 
@@ -586,7 +585,8 @@ class ODMatrixGenerator:
 ```
 
 **OD Matrix Generation:**
-```
+
+```md
 Input: Expanded trips with origin_zone, dest_zone, expansion_factor
 
 Process:
@@ -604,7 +604,8 @@ Output: DataFrame with columns:
 ```
 
 **Intra-Zone Trip Estimation:**
-```
+
+```md
 Problem: Telecom data misses intra-zone trips because:
 1. Short trips may not trigger phone events
 2. Movement within same cell/TAC is invisible
@@ -631,6 +632,7 @@ Example:
 ```
 
 **Matrix Comparison (for validation):**
+
 ```python
 # Compare telecom OD with survey OD
 stats = generator.compare_matrices(telecom_od, survey_od)
@@ -648,8 +650,6 @@ stats = generator.compare_matrices(telecom_od, survey_od)
     'pairs_only_survey': 30     # Only in survey
 }
 ```
-
----
 
 ## 6. Utilities (`src/utils/`)
 
@@ -718,12 +718,10 @@ for i, item in enumerate(items):
     progress.update(i)
 ```
 
----
-
 ## Summary Table
 
 | Module | Class | Primary Method | Purpose |
-|--------|-------|----------------|---------|
+| --- | --- | --- | --- |
 | telecom_loader | TelecomDataLoader | load_all() | Load raw data |
 | cell_tower_loader | CellTowerLoader | infer_from_xdr() | Get cell locations |
 | zone_loader | ZoneLoader | create_tac_zones() | Define zones |

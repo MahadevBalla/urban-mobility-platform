@@ -5,8 +5,6 @@
 **Project:** 4-Step Travel Demand Modeling Platform  
 **IIT Bombay Research Internship**
 
----
-
 ## Overview
 
 This folder contains a comprehensive transport data ontology designed for multi-source data integration in urban mobility analysis and 4-step travel demand modeling. The ontology provides semantic consistency across 14 diverse data sources.
