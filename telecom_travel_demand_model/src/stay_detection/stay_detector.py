@@ -9,16 +9,19 @@ The algorithm identifies meaningful locations where users stay for significant
 time periods, filtering out noise from intermediate observations.
 """
 
-import logging
-from typing import Dict, List, Optional, Tuple, Union
 from collections import defaultdict
-import pandas as pd
+from typing import Dict, List, Optional
+
 import numpy as np
-from datetime import datetime, timedelta
+import pandas as pd
 
 from src.utils.config import Config, get_config
-from src.utils.logger import setup_logger, ProgressLogger
-from src.utils.geo_utils import haversine_distance, lat_lon_to_grid_cell, calculate_centroid
+from src.utils.geo_utils import (
+    calculate_centroid,
+    haversine_distance,
+    lat_lon_to_grid_cell,
+)
+from src.utils.logger import ProgressLogger, setup_logger
 
 logger = setup_logger(__name__)
 
@@ -50,7 +53,7 @@ class StayPointDetector:
         distance_threshold: Optional[float] = None,
         time_threshold: Optional[int] = None,
         grid_cell_size: Optional[float] = None,
-        min_visits: Optional[int] = None
+        min_visits: Optional[int] = None,
     ):
         """
         Initialize stay point detector.
@@ -66,21 +69,23 @@ class StayPointDetector:
         self.config = config or get_config()
         stay_config = self.config.stay_detection
 
-        self.distance_threshold = distance_threshold or stay_config.get('distance_threshold', 500)
-        self.time_threshold = time_threshold or stay_config.get('time_threshold', 1800)
-        self.grid_cell_size = grid_cell_size or stay_config.get('grid_cell_size', 300)
-        self.min_visits = min_visits or stay_config.get('min_visits', 2)
+        self.distance_threshold = distance_threshold or stay_config.get(
+            "distance_threshold", 500
+        )
+        self.time_threshold = time_threshold or stay_config.get("time_threshold", 1800)
+        self.grid_cell_size = grid_cell_size or stay_config.get("grid_cell_size", 300)
+        self.min_visits = min_visits or stay_config.get("min_visits", 2)
 
         self._user_stay_points: Dict[str, List[dict]] = {}
 
     def detect(
         self,
         df: pd.DataFrame,
-        user_col: str = 'imsi',
-        timestamp_col: str = 'timestamp',
-        lat_col: str = 'latitude',
-        lon_col: str = 'longitude',
-        cell_col: str = 'cell_id'
+        user_col: str = "imsi",
+        timestamp_col: str = "timestamp",
+        lat_col: str = "latitude",
+        lon_col: str = "longitude",
+        cell_col: str = "cell_id",
     ) -> pd.DataFrame:
         """
         Detect stay points for all users in the dataset.
@@ -118,8 +123,7 @@ class StayPointDetector:
             user_df = df[df[user_col] == user_id].copy()
 
             stay_points = self._detect_user_stays(
-                user_df, user_id,
-                timestamp_col, lat_col, lon_col, cell_col
+                user_df, user_id, timestamp_col, lat_col, lon_col, cell_col
             )
 
             if stay_points:
@@ -132,14 +136,25 @@ class StayPointDetector:
 
         # Create result DataFrame with expected columns
         expected_columns = [
-            'user_id', 'stay_id', 'latitude', 'longitude', 'cell_id', 'tac',
-            'first_seen', 'last_seen', 'observation_count', 'visit_count',
-            'total_duration', 'location_type'
+            "user_id",
+            "stay_id",
+            "latitude",
+            "longitude",
+            "cell_id",
+            "tac",
+            "first_seen",
+            "last_seen",
+            "observation_count",
+            "visit_count",
+            "total_duration",
+            "location_type",
         ]
 
         if all_stay_points:
             result_df = pd.DataFrame(all_stay_points)
-            result_df['location_type'] = 'other'  # Default, updated by home/work inference
+            result_df["location_type"] = (
+                "other"  # Default, updated by home/work inference
+            )
         else:
             # Return empty DataFrame with expected columns
             result_df = pd.DataFrame(columns=expected_columns)
@@ -158,7 +173,7 @@ class StayPointDetector:
         timestamp_col: str,
         lat_col: str,
         lon_col: str,
-        cell_col: str
+        cell_col: str,
     ) -> List[dict]:
         """
         Detect stay points for a single user.
@@ -176,22 +191,21 @@ class StayPointDetector:
             lon = row.get(lon_col)
             ts = row[timestamp_col]
             cell = row.get(cell_col)
-            tac = row.get('tac')  # Extract TAC for zone mapping
+            tac = row.get("tac")  # Extract TAC for zone mapping
 
             # Check if we have valid coordinates
-            has_coords = (
-                pd.notna(lat) and pd.notna(lon) and
-                lat != 0 and lon != 0
-            )
+            has_coords = pd.notna(lat) and pd.notna(lon) and lat != 0 and lon != 0
 
-            points.append({
-                'timestamp': ts,
-                'latitude': lat if has_coords else None,
-                'longitude': lon if has_coords else None,
-                'cell_id': cell,
-                'tac': tac,
-                'has_coords': has_coords
-            })
+            points.append(
+                {
+                    "timestamp": ts,
+                    "latitude": lat if has_coords else None,
+                    "longitude": lon if has_coords else None,
+                    "cell_id": cell,
+                    "tac": tac,
+                    "has_coords": has_coords,
+                }
+            )
 
         # Phase 1: Extract candidate stay points with progressive threshold relaxation
         candidate_stays = self._extract_candidate_stays(points)
@@ -235,8 +249,8 @@ class StayPointDetector:
         # Group points by cell
         cell_groups = defaultdict(list)
         for p in points:
-            if p['cell_id'] is not None:
-                cell_groups[p['cell_id']].append(p)
+            if p["cell_id"] is not None:
+                cell_groups[p["cell_id"]].append(p)
 
         if cell_groups:
             # Create a stay for each distinct cell (enables trip detection)
@@ -244,23 +258,20 @@ class StayPointDetector:
                 stay = self._create_stay_from_points(cell_points)
                 if stay:
                     # Set visit_count to min_visits so it passes the filter
-                    stay['visit_count'] = max(self.min_visits, 1)
+                    stay["visit_count"] = max(self.min_visits, 1)
                     stays.append(stay)
         else:
             # No cell data, try to use coordinates
-            coords_points = [p for p in points if p['has_coords']]
+            coords_points = [p for p in points if p["has_coords"]]
             if coords_points:
                 stay = self._create_stay_from_points(coords_points)
                 if stay:
-                    stay['visit_count'] = max(self.min_visits, 1)
+                    stay["visit_count"] = max(self.min_visits, 1)
                     stays.append(stay)
 
         return stays
 
-    def _extract_candidate_stays(
-        self,
-        points: List[dict]
-    ) -> List[dict]:
+    def _extract_candidate_stays(self, points: List[dict]) -> List[dict]:
         """
         Extract candidate stay points using distance and time thresholds.
 
@@ -287,8 +298,7 @@ class StayPointDetector:
             # Check if time span exceeds threshold
             if len(candidate_points) >= 2:
                 time_span = (
-                    candidate_points[-1]['timestamp'] -
-                    candidate_points[0]['timestamp']
+                    candidate_points[-1]["timestamp"] - candidate_points[0]["timestamp"]
                 ).total_seconds()
 
                 if time_span >= self.time_threshold:
@@ -306,7 +316,7 @@ class StayPointDetector:
         self,
         points: List[dict],
         distance_multiplier: float = 1.5,
-        time_multiplier: float = 0.5
+        time_multiplier: float = 0.5,
     ) -> List[dict]:
         """
         Extract stays with progressively relaxed thresholds.
@@ -362,16 +372,15 @@ class StayPointDetector:
     def _points_within_distance(self, p1: dict, p2: dict) -> bool:
         """Check if two points are within distance threshold."""
         # If both have coordinates, use haversine
-        if p1['has_coords'] and p2['has_coords']:
+        if p1["has_coords"] and p2["has_coords"]:
             dist = haversine_distance(
-                p1['latitude'], p1['longitude'],
-                p2['latitude'], p2['longitude']
+                p1["latitude"], p1["longitude"], p2["latitude"], p2["longitude"]
             )
             return dist <= self.distance_threshold
 
         # If using cell IDs, consider same cell as "within distance"
-        if p1['cell_id'] is not None and p2['cell_id'] is not None:
-            return p1['cell_id'] == p2['cell_id']
+        if p1["cell_id"] is not None and p2["cell_id"] is not None:
+            return p1["cell_id"] == p2["cell_id"]
 
         # Can't determine, assume within distance to be conservative
         return True
@@ -387,32 +396,40 @@ class StayPointDetector:
         # Collect points with coordinates and optional signal quality
         coords_with_weights = []
         for p in points:
-            if p['has_coords']:
+            if p["has_coords"]:
                 # Use signal quality as weight if available
                 # Normalize signal to 0-1 (typical range -120 to -50 dBm)
-                signal = p.get('signal_strength', -85)  # Default mid-range
+                signal = p.get("signal_strength", -85)  # Default mid-range
                 if signal is not None and not np.isnan(signal):
                     # Map -120 (bad) to 0.1, -50 (good) to 1.0
                     weight = max(0.1, min(1.0, (signal + 120) / 70))
                 else:
                     weight = 0.5  # Default weight
 
-                coords_with_weights.append({
-                    'lat': p['latitude'],
-                    'lon': p['longitude'],
-                    'weight': weight
-                })
+                coords_with_weights.append(
+                    {"lat": p["latitude"], "lon": p["longitude"], "weight": weight}
+                )
 
         if coords_with_weights:
             # Weighted centroid calculation
-            total_weight = sum(c['weight'] for c in coords_with_weights)
+            total_weight = sum(c["weight"] for c in coords_with_weights)
             if total_weight > 0:
-                lat = sum(c['lat'] * c['weight'] for c in coords_with_weights) / total_weight
-                lon = sum(c['lon'] * c['weight'] for c in coords_with_weights) / total_weight
+                lat = (
+                    sum(c["lat"] * c["weight"] for c in coords_with_weights)
+                    / total_weight
+                )
+                lon = (
+                    sum(c["lon"] * c["weight"] for c in coords_with_weights)
+                    / total_weight
+                )
             else:
                 # Fallback to simple centroid
-                lat = sum(c['lat'] for c in coords_with_weights) / len(coords_with_weights)
-                lon = sum(c['lon'] for c in coords_with_weights) / len(coords_with_weights)
+                lat = sum(c["lat"] for c in coords_with_weights) / len(
+                    coords_with_weights
+                )
+                lon = sum(c["lon"] for c in coords_with_weights) / len(
+                    coords_with_weights
+                )
 
             # Average confidence from signal quality
             avg_weight = total_weight / len(coords_with_weights)
@@ -421,11 +438,13 @@ class StayPointDetector:
             avg_weight = 0.5
 
         # Get most common cell ID
-        cells = [p['cell_id'] for p in points if p['cell_id'] is not None]
+        cells = [p["cell_id"] for p in points if p["cell_id"] is not None]
         cell_id = max(set(cells), key=cells.count) if cells else None
 
         # Get most common TAC (for zone mapping)
-        tacs = [p['tac'] for p in points if p.get('tac') is not None and pd.notna(p['tac'])]
+        tacs = [
+            p["tac"] for p in points if p.get("tac") is not None and pd.notna(p["tac"])
+        ]
         tac = max(set(tacs), key=tacs.count) if tacs else None
 
         # Calculate location confidence score
@@ -434,21 +453,17 @@ class StayPointDetector:
         cell_consistency = len(set(cells)) / max(len(cells), 1) if cells else 0.5
         cell_score = 1.0 - min(cell_consistency, 0.5)  # Lower diversity = higher score
 
-        confidence = (
-            point_score * 0.4 +
-            avg_weight * 0.4 +
-            cell_score * 0.2
-        )
+        confidence = point_score * 0.4 + avg_weight * 0.4 + cell_score * 0.2
 
         return {
-            'latitude': lat,
-            'longitude': lon,
-            'cell_id': cell_id,
-            'tac': tac,
-            'first_seen': points[0]['timestamp'],
-            'last_seen': points[-1]['timestamp'],
-            'point_count': len(points),
-            'location_confidence': round(confidence, 3)
+            "latitude": lat,
+            "longitude": lon,
+            "cell_id": cell_id,
+            "tac": tac,
+            "first_seen": points[0]["timestamp"],
+            "last_seen": points[-1]["timestamp"],
+            "point_count": len(points),
+            "location_confidence": round(confidence, 3),
         }
 
     def _consolidate_stays(self, candidates: List[dict]) -> List[dict]:
@@ -463,32 +478,28 @@ class StayPointDetector:
             return []
 
         # Filter candidates with valid coordinates
-        with_coords = [c for c in candidates if c['latitude'] is not None]
-        without_coords = [c for c in candidates if c['latitude'] is None]
+        with_coords = [c for c in candidates if c["latitude"] is not None]
+        without_coords = [c for c in candidates if c["latitude"] is None]
 
         if not with_coords:
             # No coordinates, group by cell_id
             cell_groups = defaultdict(list)
             for stay in candidates:
-                cell_groups[stay['cell_id']].append(stay)
+                cell_groups[stay["cell_id"]].append(stay)
 
-            return [
-                self._merge_stays(stays)
-                for stays in cell_groups.values()
-            ]
+            return [self._merge_stays(stays) for stays in cell_groups.values()]
 
         # Grid-based clustering for stays with coordinates
         # Find bounding box
-        lats = [c['latitude'] for c in with_coords]
-        lons = [c['longitude'] for c in with_coords]
+        lats = [c["latitude"] for c in with_coords]
+        lons = [c["longitude"] for c in with_coords]
         origin = (min(lats), min(lons))
 
         # Assign to grid cells
         grid_groups = defaultdict(list)
         for stay in with_coords:
             cell = lat_lon_to_grid_cell(
-                stay['latitude'], stay['longitude'],
-                self.grid_cell_size, origin
+                stay["latitude"], stay["longitude"], self.grid_cell_size, origin
             )
             grid_groups[cell].append(stay)
 
@@ -501,7 +512,7 @@ class StayPointDetector:
         # Add stays without coordinates (grouped by cell_id)
         cell_groups = defaultdict(list)
         for stay in without_coords:
-            cell_groups[stay['cell_id']].append(stay)
+            cell_groups[stay["cell_id"]].append(stay)
 
         for stays in cell_groups.values():
             merged = self._merge_stays(stays)
@@ -516,9 +527,7 @@ class StayPointDetector:
 
         # Calculate centroid of coordinates
         coords = [
-            (s['latitude'], s['longitude'])
-            for s in stays
-            if s['latitude'] is not None
+            (s["latitude"], s["longitude"]) for s in stays if s["latitude"] is not None
         ]
 
         if coords:
@@ -527,34 +536,31 @@ class StayPointDetector:
             lat, lon = None, None
 
         # Most common cell
-        cells = [s['cell_id'] for s in stays if s['cell_id'] is not None]
+        cells = [s["cell_id"] for s in stays if s["cell_id"] is not None]
         cell_id = max(set(cells), key=cells.count) if cells else None
 
         # Most common TAC
-        tacs = [s.get('tac') for s in stays if s.get('tac') is not None]
+        tacs = [s.get("tac") for s in stays if s.get("tac") is not None]
         tac = max(set(tacs), key=tacs.count) if tacs else None
 
         # Aggregate time info
-        first_seen = min(s['first_seen'] for s in stays)
-        last_seen = max(s['last_seen'] for s in stays)
-        total_points = sum(s['point_count'] for s in stays)
+        first_seen = min(s["first_seen"] for s in stays)
+        last_seen = max(s["last_seen"] for s in stays)
+        total_points = sum(s["point_count"] for s in stays)
 
         return {
-            'latitude': lat,
-            'longitude': lon,
-            'cell_id': cell_id,
-            'tac': tac,
-            'first_seen': first_seen,
-            'last_seen': last_seen,
-            'point_count': total_points,
-            'visit_count': len(stays)
+            "latitude": lat,
+            "longitude": lon,
+            "cell_id": cell_id,
+            "tac": tac,
+            "first_seen": first_seen,
+            "last_seen": last_seen,
+            "point_count": total_points,
+            "visit_count": len(stays),
         }
 
     def _finalize_stays(
-        self,
-        stays: List[dict],
-        original_points: List[dict],
-        user_id: str
+        self, stays: List[dict], original_points: List[dict], user_id: str
     ) -> List[dict]:
         """
         Finalize stay points with full metrics.
@@ -566,25 +572,25 @@ class StayPointDetector:
             return []
 
         # Filter stays by minimum visits
-        stays = [s for s in stays if s.get('visit_count', 1) >= self.min_visits]
+        stays = [s for s in stays if s.get("visit_count", 1) >= self.min_visits]
 
         # Create final stay records
         final_stays = []
         for idx, stay in enumerate(stays):
             stay_record = {
-                'user_id': user_id,
-                'stay_id': f"{user_id}_S{idx:03d}",
-                'latitude': stay['latitude'],
-                'longitude': stay['longitude'],
-                'cell_id': stay['cell_id'],
-                'tac': stay.get('tac'),  # Include TAC for zone mapping
-                'first_seen': stay['first_seen'],
-                'last_seen': stay['last_seen'],
-                'observation_count': stay['point_count'],
-                'visit_count': stay.get('visit_count', 1),
-                'total_duration': (
-                    stay['last_seen'] - stay['first_seen']
-                ).total_seconds()
+                "user_id": user_id,
+                "stay_id": f"{user_id}_S{idx:03d}",
+                "latitude": stay["latitude"],
+                "longitude": stay["longitude"],
+                "cell_id": stay["cell_id"],
+                "tac": stay.get("tac"),  # Include TAC for zone mapping
+                "first_seen": stay["first_seen"],
+                "last_seen": stay["last_seen"],
+                "observation_count": stay["point_count"],
+                "visit_count": stay.get("visit_count", 1),
+                "total_duration": (
+                    stay["last_seen"] - stay["first_seen"]
+                ).total_seconds(),
             }
             final_stays.append(stay_record)
 

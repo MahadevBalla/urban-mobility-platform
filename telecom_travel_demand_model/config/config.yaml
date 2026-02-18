@@ -7,6 +7,11 @@ general:
   random_seed: 42
   n_workers: 4  # Parallel processing workers
   log_level: "INFO"
+  processing:
+    mode: "chunked"
+    chunk_size_users: 1000
+    intermediate_format: "parquet"
+    intermediate_dir: "data/intermediate"
 
 # Data Source Configuration
 data_sources:
@@ -14,47 +19,32 @@ data_sources:
     enabled: true
     file_pattern: "cdr_*.csv"
     timestamp_format: "%Y-%m-%d %H:%M:%S"
-    required_columns:
-      - "IMSI"
-      - "START_TIME"
-      - "CELL_ID"
-    optional_columns:
-      - "TAC"
-      - "LAC"
-      - "CALL_TYPE"
-      - "DURATION_SEC"
+    required_columns: ["IMSI", "START_TIME", "CELL_ID"]
+    optional_columns: ["TAC", "LAC", "CALL_TYPE", "DURATION_SEC"]
 
   xdr:
     enabled: true
     file_pattern: "xdr_*.csv"
     timestamp_format: "%Y-%m-%d %H:%M:%S"
-    required_columns:
-      - "IMSI"
-      - "TIMESTAMP"
-    location_columns:
-      - "LOCATION_LAT"
-      - "LOCATION_LON"
+    required_columns: ["IMSI", "TIMESTAMP"]
+    location_columns: ["LOCATION_LAT", "LOCATION_LON"]
 
   network_4g:
     enabled: true
     file_pattern: "4g_*.csv"
-    required_columns:
-      - "CELL_ID"
-      - "ENODEB_ID"
+    required_columns: ["CELL_ID", "ENODEB_ID"]
 
   network_5g:
     enabled: true
     file_pattern: "5g_*.csv"
-    required_columns:
-      - "NCI"
-      - "GNODEB_ID"
+    required_columns: ["NCI", "GNODEB_ID"]
 
 # Preprocessing Configuration
 preprocessing:
   # User filtering
   min_records_per_user: 10  # Minimum records to include user
   min_active_days: 3  # Minimum days with activity
-  min_daily_trips: 2.5  # Minimum average daily trips
+  min_daily_trips: 2.5  # Minimum average daily trips (AUDIT 3.1: to be replaced with stratified weighting)
   max_records_per_user: 100000  # Cap to avoid outliers
 
   # Temporal filtering
@@ -73,12 +63,18 @@ preprocessing:
   remove_duplicates: true
   handle_missing_locations: "interpolate"  # drop, interpolate, or nearest_cell
 
+  # Ping-pong filtering to remove spurious location switches 
+  # (AUDIT 3.2: ping-pong filter - set to "velocity" once Round 2 fix is deployed)
+  ping_pong_filter: "aba"    # "aba" | "velocity" | "mdl"
+  ping_pong_time_threshold: 300  # seconds
+
 # Cell Tower / Location Configuration
 cell_towers:
   # Default cell tower radius (meters) when exact location unknown
   default_radius: 500
 
   # Location inference method
+  # AUDIT 2.2: "sector" once Round 2 refactor done
   location_method: "centroid"  # centroid, weighted_centroid, triangulation
 
   # Cell ID to location mapping source
@@ -97,7 +93,7 @@ cell_towers:
 # Stay Point Detection Configuration
 stay_detection:
   # Algorithm: "zheng_xie" (from paper), "dbscan", "incremental", "hybrid"
-  algorithm: "zheng_xie"
+  algorithm: "zheng_xie" # AUDIT 4.1: "dbscan" once Round 3 fix deployed
 
   # Distance threshold (meters) - points within this distance are same location
   distance_threshold: 500
@@ -106,18 +102,19 @@ stay_detection:
   time_threshold: 1800  # 30 minutes
 
   # Grid cell size for clustering consolidation (meters)
-  grid_cell_size: 300
+  grid_cell_size: 300 # AUDIT 4.1: replaced by DBSCAN eps in Round 3
 
   # Minimum visits to consider a location significant
   min_visits: 2
 
   # Signal quality weighting (use network metrics for confidence)
   use_signal_quality: true
-  signal_quality_weight: 0.3
+  signal_quality_weight: 0.3 # AUDIT 4.2: magic number - replace in Round 3
 
 # Home/Work Inference Configuration
 home_work_inference:
   # Home detection
+  # AUDIT 1.2: fixed time windows - clustering-based profiling deferred to Round 4
   home:
     start_hour: 20  # 8 PM
     end_hour: 7     # 7 AM
@@ -136,6 +133,9 @@ home_work_inference:
   # Handle users without work (students, retirees, etc.)
   require_work_location: false
 
+  # AUDIT 5.1: single work location - multi-site support deferred to Round 4
+  allow_multiple_work_locations: false   # set true once Round 4 deployed
+
 # Trip Generation Configuration
 trip_generation:
   # Effective day definition (to handle late night activities)
@@ -146,9 +146,12 @@ trip_generation:
     HBW: "Home-Based Work"
     HBO: "Home-Based Other"
     NHB: "Non-Home-Based"
-
+  
   # Departure time assignment
+  # AUDIT 6.1: Beta params are hardcoded - must be learned from XDR (Round 4)
   departure_time_method: "conditional_probability"  # midpoint, conditional_probability, random
+  departure_time_beta_morning: [2, 4]  # [alpha, beta] - placeholder, not calibrated
+  departure_time_beta_evening: [4, 2]  # [alpha, beta] - placeholder, not calibrated
 
   # Trip filtering
   min_trip_distance: 200  # meters
@@ -158,6 +161,9 @@ trip_generation:
   # Interpolation for missed observations
   max_time_gap: 7200  # Max gap (seconds) to interpolate intermediate locations
 
+  # AUDIT 6.2: strict chain continuity - fuzzy matching deferred to Round 6
+  chain_continuity_tolerance_m: 0   # set to 200 once Round 6 fix deployed
+
 # OD Matrix Configuration
 od_matrix:
   # Zone definition
@@ -165,18 +171,10 @@ od_matrix:
 
   # Time periods
   time_periods:
-    AM_PEAK:
-      start: 7
-      end: 10
-    MIDDAY:
-      start: 10
-      end: 16
-    PM_PEAK:
-      start: 16
-      end: 19
-    NIGHT:
-      start: 19
-      end: 7
+    AM_PEAK: {start: 7,  end: 10}
+    MIDDAY: {start: 10, end: 16}
+    PM_PEAK: {start: 16, end: 19}
+    NIGHT: {start: 19, end: 7}
 
   # Aggregation
   aggregate_by: ["purpose", "time_period"]  # day_type can also be added
@@ -193,10 +191,24 @@ od_matrix:
     apply_vehicle_rate: false
     default_vehicle_rate: 0.3  # 30% use private vehicles
 
+  # AUDIT 7.1: zero-flow fill guarded by SPARSE_ZONE_THRESHOLD=500 in code
+  include_zero_flows: false
+  sparse_zone_threshold: 500  # read by od_generator.py - refuse dense fill above this threshold
+  precision: 2
+
+  # AUDIT 1.1: NHTS default - MUST be overridden with MMRDA/RITES value
+  # Pipeline emits WARNING if this is not explicitly set
+  expected_daily_trips: null  # null = use NHTS fallback (3.0) WITH warning
+
 # Data Fusion Configuration
 data_fusion:
   # Fusion strategy
   strategy: "hierarchical"  # hierarchical, weighted_average, kalman_filter
+
+  # Conflict resolution
+  # AUDIT 2.1: "highest_priority" is winner-takes-all - replace with
+  # "weighted_average" once Round 2 fix is deployed in multi_source_fusion.py
+  conflict_resolution: "highest_priority"  # highest_priority, weighted_average, most_recent
 
   # Source priority (higher = more trusted for location)
   source_priority:
@@ -209,9 +221,6 @@ data_fusion:
   # Temporal alignment window (seconds)
   temporal_window: 60
 
-  # Conflict resolution
-  conflict_resolution: "highest_priority"  # highest_priority, weighted_average, most_recent
-
 # Output Configuration
 output:
   # Output formats
@@ -219,11 +228,6 @@ output:
 
   # Compression
   compress: true
-
-  # OD Matrix outputs
-  od_matrix:
-    include_zero_flows: false
-    precision: 2
 
   # Visualization outputs
   visualizations:

@@ -3,6 +3,7 @@
 import os
 from pathlib import Path
 from typing import Any, Dict, Optional, Union
+
 import yaml
 
 
@@ -32,7 +33,9 @@ class Config:
             self.load(config_path)
         else:
             # Load default configuration
-            default_path = Path(__file__).parent.parent.parent / "config" / "config.yaml"
+            default_path = (
+                Path(__file__).parent.parent.parent / "config" / "config.yaml"
+            )
             if default_path.exists():
                 self.load(default_path)
 
@@ -47,7 +50,7 @@ class Config:
         if not config_path.exists():
             raise FileNotFoundError(f"Configuration file not found: {config_path}")
 
-        with open(config_path, 'r') as f:
+        with open(config_path, "r") as f:
             loaded = yaml.safe_load(f)
             # Handle empty YAML files
             self._config = loaded if loaded is not None else {}
@@ -62,13 +65,14 @@ class Config:
             if key.startswith(env_prefix):
                 # Convert TELECOM_TDM_STAY_DETECTION_DISTANCE_THRESHOLD to
                 # stay_detection.distance_threshold
-                config_key = key[len(env_prefix):].lower().replace("_", ".")
+                config_key = key[len(env_prefix) :].lower().replace("_", ".")
                 self.set(config_key, self._parse_env_value(value))
 
     def _parse_env_value(self, value: str) -> Any:
         """Parse environment variable value to appropriate type."""
         # Try to parse as JSON for complex types
         import json
+
         try:
             return json.loads(value)
         except json.JSONDecodeError:
@@ -142,7 +146,7 @@ class Config:
         if path is None:
             raise ValueError("No path specified for saving configuration")
 
-        with open(path, 'w') as f:
+        with open(path, "w") as f:
             yaml.dump(self._config, f, default_flow_style=False, sort_keys=False)
 
     # Convenience properties for commonly accessed parameters

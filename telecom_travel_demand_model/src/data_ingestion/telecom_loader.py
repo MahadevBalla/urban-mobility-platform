@@ -5,11 +5,10 @@ Handles loading and basic validation of various telecom data formats
 commonly used in Indian telecom operators.
 """
 
-import logging
 from pathlib import Path
-from typing import Dict, List, Optional, Union
+from typing import Dict, Optional, Union
+
 import pandas as pd
-import numpy as np
 
 from src.utils.config import Config, get_config
 from src.utils.logger import setup_logger
@@ -54,7 +53,7 @@ class TelecomDataLoader:
         self,
         path: Union[str, Path],
         parse_dates: bool = True,
-        sample_fraction: Optional[float] = None
+        sample_fraction: Optional[float] = None,
     ) -> pd.DataFrame:
         """
         Load Call Detail Records (CDR) data.
@@ -88,7 +87,7 @@ class TelecomDataLoader:
         # Optional sampling
         if sample_fraction is not None and 0 < sample_fraction < 1:
             df = df.sample(frac=sample_fraction, random_state=42)
-            logger.info(f"Sampled {len(df)} records ({sample_fraction*100:.1f}%)")
+            logger.info(f"Sampled {len(df)} records ({sample_fraction * 100:.1f}%)")
 
         logger.info(f"Loaded {len(df)} CDR records")
         return df
@@ -97,37 +96,37 @@ class TelecomDataLoader:
         """Load a single CDR file."""
         # Define column mapping for standardization
         column_mapping = {
-            'RECORD_ID': 'record_id',
-            'IMSI': 'imsi',
-            'MSISDN': 'msisdn',
-            'IMEI': 'imei',
-            'CALL_TYPE': 'call_type',
-            'START_TIME': 'timestamp',
-            'END_TIME': 'end_time',
-            'DURATION_SEC': 'duration',
-            'CELL_ID': 'cell_id',
-            'LAC': 'lac',
-            'TAC': 'tac',
-            'SERVING_NETWORK': 'plmn',
-            'ROAMING_FLAG': 'roaming',
-            'TERMINATION_CAUSE': 'termination_cause',
-            'CHARGE_AMOUNT': 'charge',
-            'SERVICE_TYPE': 'service_type'
+            "RECORD_ID": "record_id",
+            "IMSI": "imsi",
+            "MSISDN": "msisdn",
+            "IMEI": "imei",
+            "CALL_TYPE": "call_type",
+            "START_TIME": "timestamp",
+            "END_TIME": "end_time",
+            "DURATION_SEC": "duration",
+            "CELL_ID": "cell_id",
+            "LAC": "lac",
+            "TAC": "tac",
+            "SERVING_NETWORK": "plmn",
+            "ROAMING_FLAG": "roaming",
+            "TERMINATION_CAUSE": "termination_cause",
+            "CHARGE_AMOUNT": "charge",
+            "SERVICE_TYPE": "service_type",
         }
 
-        date_cols = ['START_TIME', 'END_TIME'] if parse_dates else None
+        date_cols = ["START_TIME", "END_TIME"] if parse_dates else None
 
         df = pd.read_csv(
             path,
             parse_dates=date_cols,
             dtype={
-                'IMSI': str,
-                'MSISDN': str,
-                'IMEI': str,
-                'CELL_ID': str,
-                'LAC': str,
-                'TAC': str
-            }
+                "IMSI": str,
+                "MSISDN": str,
+                "IMEI": str,
+                "CELL_ID": str,
+                "LAC": str,
+                "TAC": str,
+            },
         )
 
         # Standardize column names
@@ -147,7 +146,7 @@ class TelecomDataLoader:
         self,
         path: Union[str, Path],
         parse_dates: bool = True,
-        sample_fraction: Optional[float] = None
+        sample_fraction: Optional[float] = None,
     ) -> pd.DataFrame:
         """
         Load Extended Data Records (XDR) data.
@@ -189,48 +188,46 @@ class TelecomDataLoader:
     def _load_single_xdr(self, path: Path, parse_dates: bool) -> pd.DataFrame:
         """Load a single XDR file."""
         column_mapping = {
-            'RECORD_TYPE': 'record_type',
-            'TIMESTAMP': 'timestamp',
-            'IMSI': 'imsi',
-            'IMEI': 'imei',
-            'MSISDN': 'msisdn',
-            'EVENT_TYPE': 'event_type',
-            'RAT_TYPE': 'rat_type',
-            'CELL_ID': 'cell_id',
-            'ENODEB_ID': 'enodeb_id',
-            'GNODEB_ID': 'gnodeb_id',
-            'TAC': 'tac',
-            'LAC': 'lac',
-            'SESSION_ID': 'session_id',
-            'BYTES_UPLINK': 'bytes_ul',
-            'BYTES_DOWNLINK': 'bytes_dl',
-            'LOCATION_LAT': 'latitude',
-            'LOCATION_LON': 'longitude',
-            'APPLICATION_ID': 'app_id'
+            "RECORD_TYPE": "record_type",
+            "TIMESTAMP": "timestamp",
+            "IMSI": "imsi",
+            "IMEI": "imei",
+            "MSISDN": "msisdn",
+            "EVENT_TYPE": "event_type",
+            "RAT_TYPE": "rat_type",
+            "CELL_ID": "cell_id",
+            "ENODEB_ID": "enodeb_id",
+            "GNODEB_ID": "gnodeb_id",
+            "TAC": "tac",
+            "LAC": "lac",
+            "SESSION_ID": "session_id",
+            "BYTES_UPLINK": "bytes_ul",
+            "BYTES_DOWNLINK": "bytes_dl",
+            "LOCATION_LAT": "latitude",
+            "LOCATION_LON": "longitude",
+            "APPLICATION_ID": "app_id",
         }
 
-        date_cols = ['TIMESTAMP'] if parse_dates else None
+        date_cols = ["TIMESTAMP"] if parse_dates else None
 
         df = pd.read_csv(
             path,
             parse_dates=date_cols,
             dtype={
-                'IMSI': str,
-                'MSISDN': str,
-                'IMEI': str,
-                'CELL_ID': str,
-                'TAC': str,
-                'LAC': str
-            }
+                "IMSI": str,
+                "MSISDN": str,
+                "IMEI": str,
+                "CELL_ID": str,
+                "TAC": str,
+                "LAC": str,
+            },
         )
 
         df = df.rename(columns=column_mapping)
         return df
 
     def load_network_4g(
-        self,
-        path: Union[str, Path],
-        parse_dates: bool = True
+        self, path: Union[str, Path], parse_dates: bool = True
     ) -> pd.DataFrame:
         """
         Load 4G LTE network performance data.
@@ -248,31 +245,31 @@ class TelecomDataLoader:
         logger.info(f"Loading 4G network data from {path}")
 
         column_mapping = {
-            'TIMESTAMP': 'timestamp',
-            'ENODEB_ID': 'enodeb_id',
-            'CELL_ID': 'cell_id',
-            'EARFCN': 'earfcn',
-            'PCI': 'pci',
-            'TAC': 'tac',
-            'PLMN': 'plmn',
-            'IMSI': 'imsi',
-            'IMEI': 'imei',
-            'RSRP_DBM': 'rsrp',
-            'RSRQ_DB': 'rsrq',
-            'SINR_DB': 'sinr',
-            'CQI': 'cqi',
-            'THROUGHPUT_DL_MBPS': 'throughput_dl',
-            'THROUGHPUT_UL_MBPS': 'throughput_ul',
-            'ACTIVE_USERS': 'active_users',
-            'LATENCY_MS': 'latency'
+            "TIMESTAMP": "timestamp",
+            "ENODEB_ID": "enodeb_id",
+            "CELL_ID": "cell_id",
+            "EARFCN": "earfcn",
+            "PCI": "pci",
+            "TAC": "tac",
+            "PLMN": "plmn",
+            "IMSI": "imsi",
+            "IMEI": "imei",
+            "RSRP_DBM": "rsrp",
+            "RSRQ_DB": "rsrq",
+            "SINR_DB": "sinr",
+            "CQI": "cqi",
+            "THROUGHPUT_DL_MBPS": "throughput_dl",
+            "THROUGHPUT_UL_MBPS": "throughput_ul",
+            "ACTIVE_USERS": "active_users",
+            "LATENCY_MS": "latency",
         }
 
-        date_cols = ['TIMESTAMP'] if parse_dates else None
+        date_cols = ["TIMESTAMP"] if parse_dates else None
 
         df = pd.read_csv(
             path,
             parse_dates=date_cols,
-            dtype={'IMSI': str, 'IMEI': str, 'CELL_ID': str, 'TAC': str}
+            dtype={"IMSI": str, "IMEI": str, "CELL_ID": str, "TAC": str},
         )
 
         df = df.rename(columns=column_mapping)
@@ -280,9 +277,7 @@ class TelecomDataLoader:
         return df
 
     def load_network_5g(
-        self,
-        path: Union[str, Path],
-        parse_dates: bool = True
+        self, path: Union[str, Path], parse_dates: bool = True
     ) -> pd.DataFrame:
         """
         Load 5G NR network performance data.
@@ -297,36 +292,36 @@ class TelecomDataLoader:
         logger.info(f"Loading 5G network data from {path}")
 
         column_mapping = {
-            'TIMESTAMP': 'timestamp',
-            'GNODEB_ID': 'gnodeb_id',
-            'NCI': 'nci',
-            'NR_ARFCN': 'nr_arfcn',
-            'SSB_FREQUENCY_MHZ': 'frequency',
-            'PCI': 'pci',
-            'TAC': 'tac',
-            'PLMN': 'plmn',
-            'IMSI': 'imsi',
-            'IMEI': 'imei',
-            'SS_RSRP_DBM': 'rsrp',
-            'SS_RSRQ_DB': 'rsrq',
-            'SS_SINR_DB': 'sinr',
-            'CQI': 'cqi',
-            'THROUGHPUT_DL_GBPS': 'throughput_dl',
-            'THROUGHPUT_UL_GBPS': 'throughput_ul',
-            'ACTIVE_USERS': 'active_users',
-            'LATENCY_MS': 'latency',
-            'NETWORK_SLICE_ID': 'slice_id',
-            'BEAM_ID': 'beam_id',
-            'NR_BAND': 'band',
-            'BANDWIDTH_MHZ': 'bandwidth'
+            "TIMESTAMP": "timestamp",
+            "GNODEB_ID": "gnodeb_id",
+            "NCI": "nci",
+            "NR_ARFCN": "nr_arfcn",
+            "SSB_FREQUENCY_MHZ": "frequency",
+            "PCI": "pci",
+            "TAC": "tac",
+            "PLMN": "plmn",
+            "IMSI": "imsi",
+            "IMEI": "imei",
+            "SS_RSRP_DBM": "rsrp",
+            "SS_RSRQ_DB": "rsrq",
+            "SS_SINR_DB": "sinr",
+            "CQI": "cqi",
+            "THROUGHPUT_DL_GBPS": "throughput_dl",
+            "THROUGHPUT_UL_GBPS": "throughput_ul",
+            "ACTIVE_USERS": "active_users",
+            "LATENCY_MS": "latency",
+            "NETWORK_SLICE_ID": "slice_id",
+            "BEAM_ID": "beam_id",
+            "NR_BAND": "band",
+            "BANDWIDTH_MHZ": "bandwidth",
         }
 
-        date_cols = ['TIMESTAMP'] if parse_dates else None
+        date_cols = ["TIMESTAMP"] if parse_dates else None
 
         df = pd.read_csv(
             path,
             parse_dates=date_cols,
-            dtype={'IMSI': str, 'IMEI': str, 'NCI': str, 'TAC': str}
+            dtype={"IMSI": str, "IMEI": str, "NCI": str, "TAC": str},
         )
 
         df = df.rename(columns=column_mapping)
@@ -334,9 +329,7 @@ class TelecomDataLoader:
         return df
 
     def load_all(
-        self,
-        data_dir: Union[str, Path],
-        sample_fraction: Optional[float] = None
+        self, data_dir: Union[str, Path], sample_fraction: Optional[float] = None
     ) -> Dict[str, pd.DataFrame]:
         """
         Load all available data sources from a directory.
@@ -354,22 +347,22 @@ class TelecomDataLoader:
         # CDR
         cdr_files = list(data_dir.glob("cdr*.csv"))
         if cdr_files:
-            result['cdr'] = self.load_cdr(cdr_files[0], sample_fraction=sample_fraction)
+            result["cdr"] = self.load_cdr(cdr_files[0], sample_fraction=sample_fraction)
 
         # XDR
         xdr_files = list(data_dir.glob("xdr*.csv"))
         if xdr_files:
-            result['xdr'] = self.load_xdr(xdr_files[0], sample_fraction=sample_fraction)
+            result["xdr"] = self.load_xdr(xdr_files[0], sample_fraction=sample_fraction)
 
         # 4G
         network_4g_files = list(data_dir.glob("4g*.csv"))
         if network_4g_files:
-            result['network_4g'] = self.load_network_4g(network_4g_files[0])
+            result["network_4g"] = self.load_network_4g(network_4g_files[0])
 
         # 5G
         network_5g_files = list(data_dir.glob("5g*.csv"))
         if network_5g_files:
-            result['network_5g'] = self.load_network_5g(network_5g_files[0])
+            result["network_5g"] = self.load_network_5g(network_5g_files[0])
 
         logger.info(f"Loaded data sources: {list(result.keys())}")
         return result

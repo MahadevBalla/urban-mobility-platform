@@ -18,10 +18,9 @@ Two-stage expansion:
    - Scales sample to represent full population
 """
 
-import logging
 from typing import Dict, Optional, Tuple
+
 import pandas as pd
-import numpy as np
 
 from src.utils.config import Config, get_config
 from src.utils.logger import setup_logger
@@ -47,7 +46,7 @@ class TripExpander:
         config: Optional[Config] = None,
         market_share: Optional[float] = None,
         vehicle_rate: Optional[float] = None,
-        expected_daily_trips: Optional[float] = None
+        expected_daily_trips: Optional[float] = None,
     ):
         """
         Initialize trip expander.
@@ -60,41 +59,49 @@ class TripExpander:
                                   Default 3.0 based on NHTS data.
         """
         self.config = config or get_config()
-        expansion_config = self.config.get('od_matrix.expansion', {})
+        expansion_config = self.config.get("od_matrix.expansion", {})
 
-        self.market_share = market_share or expansion_config.get('market_share', 0.35)
-        self.vehicle_rate = vehicle_rate or expansion_config.get('default_vehicle_rate', 0.3)
+        self.market_share = market_share or expansion_config.get("market_share", 0.35)
+        self.vehicle_rate = vehicle_rate or expansion_config.get(
+            "default_vehicle_rate", 0.3
+        )
 
         # Expected daily trips from travel surveys (NHTS average is ~3.0)
         self.expected_daily_trips = expected_daily_trips or expansion_config.get(
-            'expected_daily_trips', 3.0
+            "expected_daily_trips", 3.0
         )
 
         # Minimum observed trip rate to prevent extreme expansion factors
-        self.min_observed_rate = expansion_config.get('min_observed_rate', 0.5)
+        self.min_observed_rate = expansion_config.get("min_observed_rate", 0.5)
 
         # Maximum expansion factor cap to prevent outliers
-        self.max_expansion_factor = expansion_config.get('max_expansion_factor', 20.0)
+        self.max_expansion_factor = expansion_config.get("max_expansion_factor", 20.0)
 
         # Validate parameters to prevent division by zero
         if self.market_share <= 0 or self.market_share > 1:
-            logger.warning(f"Invalid market_share {self.market_share}, defaulting to 0.35")
+            logger.warning(
+                f"Invalid market_share {self.market_share}, defaulting to 0.35"
+            )
             self.market_share = 0.35
         if self.vehicle_rate < 0 or self.vehicle_rate > 1:
-            logger.warning(f"Invalid vehicle_rate {self.vehicle_rate}, defaulting to 0.3")
+            logger.warning(
+                f"Invalid vehicle_rate {self.vehicle_rate}, defaulting to 0.3"
+            )
             self.vehicle_rate = 0.3
         if self.expected_daily_trips <= 0 or self.expected_daily_trips > 10:
-            logger.warning(f"Invalid expected_daily_trips {self.expected_daily_trips}, defaulting to 3.0")
+            logger.warning(
+                f"Invalid expected_daily_trips {self.expected_daily_trips}, defaulting to 3.0"
+            )
             self.expected_daily_trips = 3.0
 
-        self.apply_vehicle_rate = expansion_config.get('apply_vehicle_rate', False)
+        self.apply_vehicle_rate = expansion_config.get("apply_vehicle_rate", False)
 
     def expand(
         self,
         trips_df: pd.DataFrame,
         user_stats: pd.DataFrame,
         zone_populations: Optional[Dict[str, int]] = None,
-        home_zones: Optional[Dict[str, str]] = None
+        home_zones: Optional[Dict[str, str]] = None,
     ) -> pd.DataFrame:
         """
         Expand trips to population level.
@@ -117,9 +124,7 @@ class TripExpander:
 
         # Stage 2: Population-level expansion (market penetration)
         if zone_populations is not None and home_zones is not None:
-            trips = self._expand_population_level(
-                trips, zone_populations, home_zones
-            )
+            trips = self._expand_population_level(trips, zone_populations, home_zones)
         else:
             # Simple global expansion if zone data not available
             trips = self._expand_global(trips)
@@ -136,9 +141,7 @@ class TripExpander:
         return trips
 
     def _expand_user_level(
-        self,
-        trips: pd.DataFrame,
-        user_stats: pd.DataFrame
+        self, trips: pd.DataFrame, user_stats: pd.DataFrame
     ) -> pd.DataFrame:
         """
         Apply user-level expansion following Toole et al. (2015).
@@ -156,11 +159,11 @@ class TripExpander:
         Factor is capped to prevent extreme values from low-activity users.
         """
         # Merge user stats
-        if 'active_days' in user_stats.columns:
-            user_days = user_stats.set_index('imsi')['active_days'].to_dict()
+        if "active_days" in user_stats.columns:
+            user_days = user_stats.set_index("imsi")["active_days"].to_dict()
 
             # Calculate observed trip counts per user
-            user_trip_counts = trips.groupby('user_id')['trip_id'].count().to_dict()
+            user_trip_counts = trips.groupby("user_id")["trip_id"].count().to_dict()
 
             def get_user_factor(user_id):
                 days = max(user_days.get(user_id, 1), 1)
@@ -180,18 +183,18 @@ class TripExpander:
 
                 return user_factor
 
-            trips['user_factor'] = trips['user_id'].apply(get_user_factor)
+            trips["user_factor"] = trips["user_id"].apply(get_user_factor)
 
             # Log statistics
-            mean_factor = trips['user_factor'].mean()
-            max_factor = trips['user_factor'].max()
+            mean_factor = trips["user_factor"].mean()
+            max_factor = trips["user_factor"].max()
             logger.debug(
                 f"User-level expansion: mean_factor={mean_factor:.2f}, "
                 f"max_factor={max_factor:.2f}"
             )
         else:
             # Fallback: assume average observation rate
-            trips['user_factor'] = self.expected_daily_trips / self.min_observed_rate
+            trips["user_factor"] = self.expected_daily_trips / self.min_observed_rate
             logger.warning(
                 "No active_days in user_stats, using default user expansion factor"
             )
@@ -202,7 +205,7 @@ class TripExpander:
         self,
         trips: pd.DataFrame,
         zone_populations: Dict[str, int],
-        home_zones: Dict[str, str]
+        home_zones: Dict[str, str],
     ) -> pd.DataFrame:
         """
         Apply population-level expansion by zone.
@@ -229,11 +232,11 @@ class TripExpander:
                 return zone_factors.get(zone, 1.0)
             return 1.0 / self.market_share  # Default
 
-        trips['zone_factor'] = trips['user_id'].apply(get_zone_factor)
+        trips["zone_factor"] = trips["user_id"].apply(get_zone_factor)
 
         # Combined expansion factor
-        trips['expansion_factor'] = trips['user_factor'] * trips['zone_factor']
-        trips['expanded_trips'] = trips['expansion_factor']
+        trips["expansion_factor"] = trips["user_factor"] * trips["zone_factor"]
+        trips["expanded_trips"] = trips["expansion_factor"]
 
         return trips
 
@@ -243,9 +246,9 @@ class TripExpander:
 
         Used when zone-level population data is not available.
         """
-        trips['zone_factor'] = 1.0 / self.market_share
-        trips['expansion_factor'] = trips['user_factor'] * trips['zone_factor']
-        trips['expanded_trips'] = trips['expansion_factor']
+        trips["zone_factor"] = 1.0 / self.market_share
+        trips["expansion_factor"] = trips["user_factor"] * trips["zone_factor"]
+        trips["expanded_trips"] = trips["expansion_factor"]
 
         return trips
 
@@ -256,9 +259,9 @@ class TripExpander:
         Multiplies expanded trips by vehicle usage rate to estimate
         vehicle trips for traffic assignment.
         """
-        trips['vehicle_factor'] = self.vehicle_rate
-        trips['expanded_vehicle_trips'] = (
-            trips['expanded_trips'] * trips['vehicle_factor']
+        trips["vehicle_factor"] = self.vehicle_rate
+        trips["expanded_vehicle_trips"] = (
+            trips["expanded_trips"] * trips["vehicle_factor"]
         )
 
         logger.info(
@@ -270,16 +273,24 @@ class TripExpander:
 
     def get_expansion_summary(self, trips: pd.DataFrame) -> Dict:
         """Get summary statistics of expansion."""
-        zone_factor_mean = trips['zone_factor'].mean() if 'zone_factor' in trips.columns else 1.0
-        expansion_ratio = trips['expanded_trips'].sum() / len(trips) if len(trips) > 0 else 0.0
+        zone_factor_mean = (
+            trips["zone_factor"].mean() if "zone_factor" in trips.columns else 1.0
+        )
+        expansion_ratio = (
+            trips["expanded_trips"].sum() / len(trips) if len(trips) > 0 else 0.0
+        )
 
         return {
-            'observed_trips': len(trips),
-            'mean_user_factor': trips['user_factor'].mean() if len(trips) > 0 else 0.0,
-            'mean_zone_factor': zone_factor_mean,
-            'mean_expansion_factor': trips['expansion_factor'].mean() if len(trips) > 0 else 0.0,
-            'total_expanded_trips': trips['expanded_trips'].sum() if len(trips) > 0 else 0.0,
-            'expansion_ratio': expansion_ratio
+            "observed_trips": len(trips),
+            "mean_user_factor": trips["user_factor"].mean() if len(trips) > 0 else 0.0,
+            "mean_zone_factor": zone_factor_mean,
+            "mean_expansion_factor": (
+                trips["expansion_factor"].mean() if len(trips) > 0 else 0.0
+            ),
+            "total_expanded_trips": (
+                trips["expanded_trips"].sum() if len(trips) > 0 else 0.0
+            ),
+            "expansion_ratio": expansion_ratio,
         }
 
     def validate_trip_rates(
@@ -287,7 +298,7 @@ class TripExpander:
         trips_df: pd.DataFrame,
         population: int,
         observation_days: int = 1,
-        expected_rate_range: Tuple[float, float] = (2.5, 3.5)
+        expected_rate_range: Tuple[float, float] = (2.5, 3.5),
     ) -> Dict:
         """
         Validate that expanded trips produce reasonable trip rates.
@@ -306,13 +317,13 @@ class TripExpander:
         """
         if len(trips_df) == 0 or population <= 0:
             return {
-                'valid': False,
-                'reason': 'No trips or zero population',
-                'calibration_factor': 1.0
+                "valid": False,
+                "reason": "No trips or zero population",
+                "calibration_factor": 1.0,
             }
 
         # Calculate observed daily trip rate
-        total_expanded = trips_df['expanded_trips'].sum()
+        total_expanded = trips_df["expanded_trips"].sum()
         daily_expanded = total_expanded / max(observation_days, 1)
         observed_rate = daily_expanded / population
 
@@ -322,26 +333,26 @@ class TripExpander:
         if min_rate <= observed_rate <= max_rate:
             valid = True
             calibration_factor = 1.0
-            status = 'within_range'
+            status = "within_range"
         elif observed_rate < min_rate:
             valid = False
             calibration_factor = min_rate / observed_rate
-            status = 'under_estimated'
+            status = "under_estimated"
         else:
             valid = False
             calibration_factor = max_rate / observed_rate
-            status = 'over_estimated'
+            status = "over_estimated"
 
         result = {
-            'valid': valid,
-            'status': status,
-            'observed_trip_rate': observed_rate,
-            'expected_range': expected_rate_range,
-            'calibration_factor': calibration_factor,
-            'total_expanded_trips': total_expanded,
-            'daily_expanded_trips': daily_expanded,
-            'population': population,
-            'observation_days': observation_days
+            "valid": valid,
+            "status": status,
+            "observed_trip_rate": observed_rate,
+            "expected_range": expected_rate_range,
+            "calibration_factor": calibration_factor,
+            "total_expanded_trips": total_expanded,
+            "daily_expanded_trips": daily_expanded,
+            "population": population,
+            "observation_days": observation_days,
         }
 
         logger.info(
@@ -356,7 +367,7 @@ class TripExpander:
         trips_df: pd.DataFrame,
         population: int,
         observation_days: int = 1,
-        target_rate: float = 3.0
+        target_rate: float = 3.0,
     ) -> pd.DataFrame:
         """
         Calibrate expansion factors to match target trip rate.
@@ -379,7 +390,7 @@ class TripExpander:
         trips = trips_df.copy()
 
         # Current trip rate
-        total_expanded = trips['expanded_trips'].sum()
+        total_expanded = trips["expanded_trips"].sum()
         daily_expanded = total_expanded / max(observation_days, 1)
         current_rate = daily_expanded / population
 
@@ -391,9 +402,9 @@ class TripExpander:
         calibration_factor = target_rate / current_rate
 
         # Apply calibration
-        trips['calibration_factor'] = calibration_factor
-        trips['expansion_factor'] = trips['expansion_factor'] * calibration_factor
-        trips['expanded_trips'] = trips['expansion_factor']
+        trips["calibration_factor"] = calibration_factor
+        trips["expansion_factor"] = trips["expansion_factor"] * calibration_factor
+        trips["expanded_trips"] = trips["expansion_factor"]
 
         # Log result
         new_rate = target_rate

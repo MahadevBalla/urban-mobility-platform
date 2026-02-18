@@ -28,6 +28,8 @@ _tmp_test_output/*
 !data/raw/.gitkeep
 !data/processed/.gitkeep
 !data/external/.gitkeep
+telecom_travel_demand_model/data
+sample_config.yaml
 
 # Jupyter
 .ipynb_checkpoints/

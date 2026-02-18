@@ -2,6 +2,4 @@
 
 from src.od_matrix.od_generator import ODMatrixGenerator
 
-__all__ = [
-    'ODMatrixGenerator'
-]
+__all__ = ["ODMatrixGenerator"]

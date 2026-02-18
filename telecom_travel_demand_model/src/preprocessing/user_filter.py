@@ -5,10 +5,9 @@ Filters users based on data quality and activity thresholds
 to ensure reliable trip inference.
 """
 
-import logging
-from typing import List, Optional, Set, Tuple
+from typing import Optional, Set
+
 import pandas as pd
-import numpy as np
 
 from src.utils.config import Config, get_config
 from src.utils.logger import setup_logger
@@ -41,7 +40,7 @@ class UserFilter:
         min_records: Optional[int] = None,
         min_active_days: Optional[int] = None,
         min_daily_trips: Optional[float] = None,
-        max_records: Optional[int] = None
+        max_records: Optional[int] = None,
     ):
         """
         Initialize user filter.
@@ -57,18 +56,20 @@ class UserFilter:
         preprocessing = self.config.preprocessing
 
         # Use provided values or fall back to config
-        self.min_records = min_records or preprocessing.get('min_records_per_user', 10)
-        self.min_active_days = min_active_days or preprocessing.get('min_active_days', 3)
-        self.min_daily_trips = min_daily_trips or preprocessing.get('min_daily_trips', 2.5)
-        self.max_records = max_records or preprocessing.get('max_records_per_user', 100000)
+        self.min_records = min_records or preprocessing.get("min_records_per_user", 10)
+        self.min_active_days = min_active_days or preprocessing.get(
+            "min_active_days", 3
+        )
+        self.min_daily_trips = min_daily_trips or preprocessing.get(
+            "min_daily_trips", 2.5
+        )
+        self.max_records = max_records or preprocessing.get(
+            "max_records_per_user", 100000
+        )
 
         self._filter_stats: dict = {}
 
-    def filter_users(
-        self,
-        df: pd.DataFrame,
-        return_stats: bool = False
-    ) -> Set[str]:
+    def filter_users(self, df: pd.DataFrame, return_stats: bool = False) -> Set[str]:
         """
         Filter users and return set of valid user IDs.
 
@@ -91,41 +92,37 @@ class UserFilter:
         # Minimum records
         if self.min_records > 0:
             before = len(valid_users)
-            valid_users = valid_users[
-                valid_users['record_count'] >= self.min_records
-            ]
-            self._filter_stats['min_records_removed'] = before - len(valid_users)
+            valid_users = valid_users[valid_users["record_count"] >= self.min_records]
+            self._filter_stats["min_records_removed"] = before - len(valid_users)
 
         # Maximum records (outliers)
         if self.max_records is not None and self.max_records > 0:
             before = len(valid_users)
-            valid_users = valid_users[
-                valid_users['record_count'] <= self.max_records
-            ]
-            self._filter_stats['max_records_removed'] = before - len(valid_users)
+            valid_users = valid_users[valid_users["record_count"] <= self.max_records]
+            self._filter_stats["max_records_removed"] = before - len(valid_users)
 
         # Minimum active days
         if self.min_active_days > 0:
             before = len(valid_users)
             valid_users = valid_users[
-                valid_users['active_days'] >= self.min_active_days
+                valid_users["active_days"] >= self.min_active_days
             ]
-            self._filter_stats['min_days_removed'] = before - len(valid_users)
+            self._filter_stats["min_days_removed"] = before - len(valid_users)
 
         # Minimum daily activity (proxy for trip rate)
         if self.min_daily_trips > 0:
             before = len(valid_users)
             valid_users = valid_users[
-                valid_users['avg_daily_records'] >= self.min_daily_trips
+                valid_users["avg_daily_records"] >= self.min_daily_trips
             ]
-            self._filter_stats['min_daily_removed'] = before - len(valid_users)
+            self._filter_stats["min_daily_removed"] = before - len(valid_users)
 
-        valid_imsi_set = set(valid_users['imsi'].values)
+        valid_imsi_set = set(valid_users["imsi"].values)
 
         # Log summary
-        self._filter_stats['total_users'] = total_users
-        self._filter_stats['valid_users'] = len(valid_imsi_set)
-        self._filter_stats['removed_users'] = total_users - len(valid_imsi_set)
+        self._filter_stats["total_users"] = total_users
+        self._filter_stats["valid_users"] = len(valid_imsi_set)
+        self._filter_stats["removed_users"] = total_users - len(valid_imsi_set)
 
         if total_users > 0:
             pct = 100 * len(valid_imsi_set) / total_users
@@ -143,32 +140,30 @@ class UserFilter:
     def _calculate_user_stats(self, df: pd.DataFrame) -> pd.DataFrame:
         """Calculate statistics for each user."""
         # Ensure timestamp is datetime
-        if not pd.api.types.is_datetime64_any_dtype(df['timestamp']):
+        if not pd.api.types.is_datetime64_any_dtype(df["timestamp"]):
             df = df.copy()
-            df['timestamp'] = pd.to_datetime(df['timestamp'])
+            df["timestamp"] = pd.to_datetime(df["timestamp"])
 
         # Group by user
-        stats = df.groupby('imsi').agg({
-            'timestamp': ['count', 'min', 'max']
-        })
+        stats = df.groupby("imsi").agg({"timestamp": ["count", "min", "max"]})
 
-        stats.columns = ['record_count', 'first_seen', 'last_seen']
+        stats.columns = ["record_count", "first_seen", "last_seen"]
         stats = stats.reset_index()
 
         # Calculate active days
-        active_days = df.groupby('imsi').apply(
-            lambda x: x['timestamp'].dt.date.nunique()
+        active_days = df.groupby("imsi").apply(
+            lambda x: x["timestamp"].dt.date.nunique()
         )
-        stats['active_days'] = stats['imsi'].map(active_days)
+        stats["active_days"] = stats["imsi"].map(active_days)
 
         # Calculate observation span
-        stats['observation_days'] = (
-            (stats['last_seen'] - stats['first_seen']).dt.days + 1
+        stats["observation_days"] = (
+            (stats["last_seen"] - stats["first_seen"]).dt.days + 1
         ).clip(lower=1)
 
         # Average daily records (protect against division by zero)
-        stats['avg_daily_records'] = (
-            stats['record_count'] / stats['active_days'].clip(lower=1)
+        stats["avg_daily_records"] = stats["record_count"] / stats["active_days"].clip(
+            lower=1
         )
 
         return stats
@@ -184,7 +179,7 @@ class UserFilter:
             Filtered DataFrame containing only valid users.
         """
         valid_users = self.filter_users(df)
-        return df[df['imsi'].isin(valid_users)].copy()
+        return df[df["imsi"].isin(valid_users)].copy()
 
     @property
     def filter_stats(self) -> dict:
@@ -192,9 +187,7 @@ class UserFilter:
         return self._filter_stats.copy()
 
     def get_user_distribution(
-        self,
-        df: pd.DataFrame,
-        metric: str = 'record_count'
+        self, df: pd.DataFrame, metric: str = "record_count"
     ) -> pd.Series:
         """
         Get distribution of user metric.
