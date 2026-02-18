@@ -1,13 +1,14 @@
 """Time and date utility functions for the telecom travel demand model."""
 
 from datetime import datetime, timedelta
-from typing import Optional, Tuple, Union
+from typing import Optional, Union
+
 import pandas as pd
 
 
 def parse_timestamp(
     timestamp: Union[str, datetime, pd.Timestamp],
-    format_string: str = "%Y-%m-%d %H:%M:%S"
+    format_string: str = "%Y-%m-%d %H:%M:%S",
 ) -> datetime:
     """
     Parse timestamp to datetime object.
@@ -30,8 +31,7 @@ def parse_timestamp(
 
 
 def get_time_period(
-    timestamp: Union[datetime, pd.Timestamp],
-    periods: Optional[dict] = None
+    timestamp: Union[datetime, pd.Timestamp], periods: Optional[dict] = None
 ) -> str:
     """
     Get time period label for a timestamp.
@@ -50,7 +50,7 @@ def get_time_period(
             "MIDDAY": {"start": 10, "end": 16},
             "PM_PEAK": {"start": 16, "end": 19},
             "EVENING": {"start": 19, "end": 22},
-            "NIGHT": {"start": 22, "end": 7}
+            "NIGHT": {"start": 22, "end": 7},
         }
 
     hour = timestamp.hour
@@ -96,8 +96,7 @@ def get_day_type(timestamp: Union[datetime, pd.Timestamp]) -> str:
 
 
 def calculate_duration(
-    start: Union[datetime, pd.Timestamp],
-    end: Union[datetime, pd.Timestamp]
+    start: Union[datetime, pd.Timestamp], end: Union[datetime, pd.Timestamp]
 ) -> float:
     """
     Calculate duration between two timestamps in seconds.
@@ -118,8 +117,7 @@ def calculate_duration(
 
 
 def get_effective_day(
-    timestamp: Union[datetime, pd.Timestamp],
-    day_start_hour: int = 3
+    timestamp: Union[datetime, pd.Timestamp], day_start_hour: int = 3
 ) -> datetime:
     """
     Get effective day for a timestamp.
@@ -145,9 +143,7 @@ def get_effective_day(
 
 
 def is_home_time(
-    timestamp: Union[datetime, pd.Timestamp],
-    home_start: int = 20,
-    home_end: int = 7
+    timestamp: Union[datetime, pd.Timestamp], home_start: int = 20, home_end: int = 7
 ) -> bool:
     """
     Check if timestamp falls within home time window.
@@ -171,9 +167,7 @@ def is_home_time(
 
 
 def is_work_time(
-    timestamp: Union[datetime, pd.Timestamp],
-    work_start: int = 7,
-    work_end: int = 20
+    timestamp: Union[datetime, pd.Timestamp], work_start: int = 7, work_end: int = 20
 ) -> bool:
     """
     Check if timestamp falls within work time window.
@@ -204,9 +198,7 @@ def is_weekday(timestamp: Union[datetime, pd.Timestamp]) -> bool:
 
 
 def generate_departure_time_distribution(
-    observed_start: datetime,
-    observed_end: datetime,
-    distribution_type: str = "uniform"
+    observed_start: datetime, observed_end: datetime, distribution_type: str = "uniform"
 ) -> datetime:
     """
     Generate a probable departure time between two observations.
@@ -255,14 +247,13 @@ def generate_departure_time_distribution(
         return observed_start + timedelta(seconds=random_offset)
 
     else:
-        raise ValueError(f"Unknown distribution type: {distribution_type}. "
-                         f"Valid options: uniform, midpoint, conditional, conditional_probability")
+        raise ValueError(
+            f"Unknown distribution type: {distribution_type}. "
+            f"Valid options: uniform, midpoint, conditional, conditional_probability"
+        )
 
 
-def group_timestamps_by_day(
-    timestamps: list,
-    day_start_hour: int = 3
-) -> dict:
+def group_timestamps_by_day(timestamps: list, day_start_hour: int = 3) -> dict:
     """
     Group timestamps by effective day.
 

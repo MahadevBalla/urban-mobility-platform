@@ -10,7 +10,7 @@ def setup_logger(
     name: str,
     level: Union[str, int] = logging.INFO,
     log_file: Optional[Union[str, Path]] = None,
-    format_string: Optional[str] = None
+    format_string: Optional[str] = None,
 ) -> logging.Logger:
     """
     Set up a logger with console and optional file handlers.
@@ -79,7 +79,7 @@ class ProgressLogger:
         logger: logging.Logger,
         total: int,
         desc: str = "Progress",
-        log_interval: int = 10
+        log_interval: int = 10,
     ):
         """
         Initialize progress logger.

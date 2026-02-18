@@ -17,11 +17,11 @@ project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root))
 
 import pandas as pd
-from src.data_ingestion import TelecomDataLoader, CellTowerLoader, ZoneLoader
-from src.preprocessing import TelecomPreprocessor, UserFilter
-from src.stay_detection import StayPointDetector, HomeWorkInference
-from src.trip_generation import TripGenerator, TripExpander
+from src.data_ingestion import CellTowerLoader, TelecomDataLoader, ZoneLoader
 from src.od_matrix import ODMatrixGenerator
+from src.preprocessing import TelecomPreprocessor, UserFilter
+from src.stay_detection import HomeWorkInference, StayPointDetector
+from src.trip_generation import TripExpander, TripGenerator
 from src.utils.config import Config
 
 
@@ -99,8 +99,8 @@ def main():
         hw_inference = HomeWorkInference(config)
         stay_points = hw_inference.infer(stay_points, clean_df)
 
-        home_count = (stay_points['location_type'] == 'home').sum()
-        work_count = (stay_points['location_type'] == 'work').sum()
+        home_count = (stay_points["location_type"] == "home").sum()
+        work_count = (stay_points["location_type"] == "work").sum()
         print(f"  Homes identified: {home_count}")
         print(f"  Work locations: {work_count}")
     else:
@@ -117,7 +117,7 @@ def main():
 
     if len(trips) > 0:
         # Trip purpose breakdown
-        purpose_counts = trips['trip_purpose'].value_counts()
+        purpose_counts = trips["trip_purpose"].value_counts()
         print("  Trip purposes:")
         for purpose, count in purpose_counts.items():
             print(f"    {purpose}: {count}")
@@ -153,17 +153,20 @@ def main():
         # Show top OD pairs
         if od_pairs > 0:
             print("\n  Top 5 OD pairs:")
-            top_pairs = od_matrix.nlargest(min(5, od_pairs), 'flow')[['origin', 'destination', 'flow']]
+            top_pairs = od_matrix.nlargest(min(5, od_pairs), "flow")[
+                ["origin", "destination", "flow"]
+            ]
             print(top_pairs.to_string(index=False))
 
     # Summary
     print("\n" + "=" * 60)
     print("EXAMPLE COMPLETE")
     print("=" * 60)
-    print(f"""
+    print(
+        f"""
 Results Summary:
 - Input records: {len(clean_df)}
-- Users: {clean_df['imsi'].nunique()}
+- Users: {clean_df["imsi"].nunique()}
 - Stay points: {len(stay_points)}
 - Trips: {len(trips)}
 - OD pairs: {od_pairs}
@@ -173,8 +176,9 @@ Note: This is a demo with sample data. With real telecom data:
 - Longer observation periods
 - Census data for expansion
 - Zone population for accurate scaling
-""")
+"""
+    )
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

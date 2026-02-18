@@ -2,6 +2,4 @@
 
 from src.data_fusion.multi_source_fusion import MultiSourceFusion
 
-__all__ = [
-    'MultiSourceFusion'
-]
+__all__ = ["MultiSourceFusion"]

@@ -5,15 +5,14 @@ Handles loading cell tower locations from various sources and
 inferring locations from XDR data when explicit tower data is unavailable.
 """
 
-import logging
 from pathlib import Path
 from typing import Dict, Optional, Tuple, Union
-import pandas as pd
+
 import numpy as np
+import pandas as pd
 
 from src.utils.config import Config, get_config
 from src.utils.logger import setup_logger
-from src.utils.geo_utils import calculate_centroid
 
 logger = setup_logger(__name__)
 
@@ -44,7 +43,9 @@ class CellTowerLoader:
             config: Configuration object.
         """
         self.config = config or get_config()
-        self._cell_locations: Dict[str, Tuple[float, float, float]] = {}  # cell_id -> (lat, lon, radius)
+        self._cell_locations: Dict[str, Tuple[float, float, float]] = (
+            {}
+        )  # cell_id -> (lat, lon, radius)
         self._tac_locations: Dict[str, Tuple[float, float]] = {}  # tac -> (lat, lon)
 
     def load_from_file(self, path: Union[str, Path]) -> None:
@@ -58,28 +59,26 @@ class CellTowerLoader:
         """
         logger.info(f"Loading cell tower locations from {path}")
 
-        df = pd.read_csv(path, dtype={'cell_id': str})
+        df = pd.read_csv(path, dtype={"cell_id": str})
 
-        required_cols = {'cell_id', 'latitude', 'longitude'}
+        required_cols = {"cell_id", "latitude", "longitude"}
         if not required_cols.issubset(df.columns):
             raise ValueError(f"Missing required columns. Expected: {required_cols}")
 
         default_radius = self.config.get("cell_towers.default_radius", 500)
 
         for _, row in df.iterrows():
-            radius = row.get('radius', default_radius)
-            self._cell_locations[str(row['cell_id'])] = (
-                row['latitude'],
-                row['longitude'],
-                radius
+            radius = row.get("radius", default_radius)
+            self._cell_locations[str(row["cell_id"])] = (
+                row["latitude"],
+                row["longitude"],
+                radius,
             )
 
         logger.info(f"Loaded {len(self._cell_locations)} cell tower locations")
 
     def infer_from_xdr(
-        self,
-        xdr_df: pd.DataFrame,
-        min_samples: int = 3
+        self, xdr_df: pd.DataFrame, min_samples: int = 3
     ) -> Dict[str, Tuple[float, float, float]]:
         """
         Infer cell tower locations from XDR data.
@@ -97,10 +96,9 @@ class CellTowerLoader:
         logger.info("Inferring cell tower locations from XDR data")
 
         # Filter records with valid coordinates
-        valid_df = xdr_df.dropna(subset=['latitude', 'longitude', 'cell_id'])
+        valid_df = xdr_df.dropna(subset=["latitude", "longitude", "cell_id"])
         valid_df = valid_df[
-            (valid_df['latitude'] != 0) &
-            (valid_df['longitude'] != 0)
+            (valid_df["latitude"] != 0) & (valid_df["longitude"] != 0)
         ].copy()
 
         if len(valid_df) == 0:
@@ -108,31 +106,30 @@ class CellTowerLoader:
             return {}
 
         # Ensure cell_id is string
-        valid_df['cell_id'] = valid_df['cell_id'].astype(str)
+        valid_df["cell_id"] = valid_df["cell_id"].astype(str)
 
         # Group by cell_id and calculate centroid
-        cell_groups = valid_df.groupby('cell_id').agg({
-            'latitude': ['mean', 'std', 'count'],
-            'longitude': ['mean', 'std']
-        })
+        cell_groups = valid_df.groupby("cell_id").agg(
+            {"latitude": ["mean", "std", "count"], "longitude": ["mean", "std"]}
+        )
 
-        cell_groups.columns = ['lat_mean', 'lat_std', 'count', 'lon_mean', 'lon_std']
-        cell_groups = cell_groups[cell_groups['count'] >= min_samples]
+        cell_groups.columns = ["lat_mean", "lat_std", "count", "lon_mean", "lon_std"]
+        cell_groups = cell_groups[cell_groups["count"] >= min_samples]
 
         inferred = {}
         for cell_id, row in cell_groups.iterrows():
             # Estimate radius from standard deviation (approximate)
-            lat_std = row['lat_std'] if not pd.isna(row['lat_std']) else 0
-            lon_std = row['lon_std'] if not pd.isna(row['lon_std']) else 0
+            lat_std = row["lat_std"] if not pd.isna(row["lat_std"]) else 0
+            lon_std = row["lon_std"] if not pd.isna(row["lon_std"]) else 0
 
             # Convert degrees to meters (rough approximation)
             radius = max(
                 lat_std * 111320,  # degrees to meters
-                lon_std * 111320 * np.cos(np.radians(row['lat_mean'])),
-                100  # Minimum radius
+                lon_std * 111320 * np.cos(np.radians(row["lat_mean"])),
+                100,  # Minimum radius
             )
 
-            inferred[cell_id] = (row['lat_mean'], row['lon_mean'], min(radius, 2000))
+            inferred[cell_id] = (row["lat_mean"], row["lon_mean"], min(radius, 2000))
 
         self._cell_locations.update(inferred)
         logger.info(f"Inferred locations for {len(inferred)} cells from XDR data")
@@ -140,8 +137,7 @@ class CellTowerLoader:
         return inferred
 
     def infer_tac_locations(
-        self,
-        xdr_df: Optional[pd.DataFrame] = None
+        self, xdr_df: Optional[pd.DataFrame] = None
     ) -> Dict[str, Tuple[float, float]]:
         """
         Infer TAC (Tracking Area Code) centroid locations.
@@ -156,27 +152,22 @@ class CellTowerLoader:
         """
         if xdr_df is not None:
             # Infer from XDR data
-            valid_df = xdr_df.dropna(subset=['latitude', 'longitude', 'tac'])
+            valid_df = xdr_df.dropna(subset=["latitude", "longitude", "tac"])
             valid_df = valid_df[
-                (valid_df['latitude'] != 0) &
-                (valid_df['longitude'] != 0)
+                (valid_df["latitude"] != 0) & (valid_df["longitude"] != 0)
             ].copy()
 
-            tac_groups = valid_df.groupby('tac').agg({
-                'latitude': 'mean',
-                'longitude': 'mean'
-            })
+            tac_groups = valid_df.groupby("tac").agg(
+                {"latitude": "mean", "longitude": "mean"}
+            )
 
             for tac, row in tac_groups.iterrows():
-                self._tac_locations[str(tac)] = (row['latitude'], row['longitude'])
+                self._tac_locations[str(tac)] = (row["latitude"], row["longitude"])
 
         logger.info(f"Inferred locations for {len(self._tac_locations)} TACs")
         return self._tac_locations
 
-    def get_cell_location(
-        self,
-        cell_id: str
-    ) -> Optional[Tuple[float, float, float]]:
+    def get_cell_location(self, cell_id: str) -> Optional[Tuple[float, float, float]]:
         """
         Get location for a cell ID.
 
@@ -203,9 +194,9 @@ class CellTowerLoader:
     def add_locations_to_df(
         self,
         df: pd.DataFrame,
-        cell_id_col: str = 'cell_id',
-        lat_col: str = 'latitude',
-        lon_col: str = 'longitude'
+        cell_id_col: str = "cell_id",
+        lat_col: str = "latitude",
+        lon_col: str = "longitude",
     ) -> pd.DataFrame:
         """
         Add location columns to DataFrame based on cell IDs.
@@ -234,7 +225,9 @@ class CellTowerLoader:
         df[lon_col] = locations[lon_col]
 
         filled = df[lat_col].notna().sum()
-        logger.info(f"Added locations to {filled}/{len(df)} records ({100*filled/len(df):.1f}%)")
+        logger.info(
+            f"Added locations to {filled}/{len(df)} records ({100 * filled / len(df):.1f}%)"
+        )
 
         return df
 
@@ -257,12 +250,14 @@ class CellTowerLoader:
         """
         records = []
         for cell_id, (lat, lon, radius) in self._cell_locations.items():
-            records.append({
-                'cell_id': cell_id,
-                'latitude': lat,
-                'longitude': lon,
-                'radius': radius
-            })
+            records.append(
+                {
+                    "cell_id": cell_id,
+                    "latitude": lat,
+                    "longitude": lon,
+                    "radius": radius,
+                }
+            )
         return pd.DataFrame(records)
 
     def save(self, path: Union[str, Path]) -> None:

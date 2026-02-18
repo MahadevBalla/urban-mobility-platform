@@ -4,19 +4,19 @@ Unit tests for the travel demand pipeline.
 Run with: pytest tests/test_pipeline.py -v
 """
 
-import pytest
-import pandas as pd
-import numpy as np
-from datetime import datetime, timedelta
-from pathlib import Path
-
 # Add src to path
 import sys
-sys.path.insert(0, str(Path(__file__).parent.parent / 'src'))
+from datetime import datetime
+from pathlib import Path
 
-from utils.geo_utils import haversine_distance, lat_lon_to_grid_cell
-from utils.time_utils import get_time_period, get_effective_day, is_home_time
+import pandas as pd
+import pytest
+
+sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
+
 from utils.config import Config
+from utils.geo_utils import haversine_distance, lat_lon_to_grid_cell
+from utils.time_utils import get_effective_day, get_time_period, is_home_time
 
 
 class TestGeoUtils:
@@ -94,32 +94,36 @@ class TestSampleData:
     @pytest.fixture
     def sample_cdr(self):
         """Create sample CDR data."""
-        return pd.DataFrame({
-            'IMSI': ['404451234567890'] * 5,
-            'START_TIME': pd.date_range('2024-02-04 08:00', periods=5, freq='H'),
-            'CELL_ID': ['45231', '45232', '45231', '45233', '45231'],
-            'TAC': ['5012'] * 5,
-            'CALL_TYPE': ['MOC', 'DATA', 'MTC', 'MOC', 'DATA']
-        })
+        return pd.DataFrame(
+            {
+                "IMSI": ["404451234567890"] * 5,
+                "START_TIME": pd.date_range("2024-02-04 08:00", periods=5, freq="H"),
+                "CELL_ID": ["45231", "45232", "45231", "45233", "45231"],
+                "TAC": ["5012"] * 5,
+                "CALL_TYPE": ["MOC", "DATA", "MTC", "MOC", "DATA"],
+            }
+        )
 
     @pytest.fixture
     def sample_xdr(self):
         """Create sample XDR data."""
-        return pd.DataFrame({
-            'IMSI': ['404451234567890'] * 5,
-            'TIMESTAMP': pd.date_range('2024-02-04 08:00', periods=5, freq='H'),
-            'CELL_ID': ['100011', '100021', '100011', '100031', '100011'],
-            'TAC': ['5012'] * 5,
-            'LOCATION_LAT': [19.076, 19.082, 19.076, 19.090, 19.076],
-            'LOCATION_LON': [72.877, 72.885, 72.877, 72.892, 72.877]
-        })
+        return pd.DataFrame(
+            {
+                "IMSI": ["404451234567890"] * 5,
+                "TIMESTAMP": pd.date_range("2024-02-04 08:00", periods=5, freq="H"),
+                "CELL_ID": ["100011", "100021", "100011", "100031", "100011"],
+                "TAC": ["5012"] * 5,
+                "LOCATION_LAT": [19.076, 19.082, 19.076, 19.090, 19.076],
+                "LOCATION_LON": [72.877, 72.885, 72.877, 72.892, 72.877],
+            }
+        )
 
     def test_sample_data_structure(self, sample_cdr, sample_xdr):
         """Verify sample data has expected structure."""
         assert len(sample_cdr) == 5
         assert len(sample_xdr) == 5
-        assert 'IMSI' in sample_cdr.columns
-        assert 'LOCATION_LAT' in sample_xdr.columns
+        assert "IMSI" in sample_cdr.columns
+        assert "LOCATION_LAT" in sample_xdr.columns
 
 
 class TestStayDetection:
@@ -128,10 +132,10 @@ class TestStayDetection:
     def test_consecutive_same_location(self):
         """Users at same cell multiple times should create stay."""
         # This tests the logic, not the actual implementation
-        cells = ['A', 'A', 'A', 'B', 'B', 'A']
+        cells = ["A", "A", "A", "B", "B", "A"]
         expected_stays = 3  # A (start), B (middle), A (end)
         # Simplified counting of transitions
-        transitions = sum(1 for i in range(1, len(cells)) if cells[i] != cells[i-1])
+        transitions = sum(1 for i in range(1, len(cells)) if cells[i] != cells[i - 1])
         # Transitions + 1 = number of stays
         assert transitions + 1 == expected_stays
 
@@ -141,52 +145,52 @@ class TestTripPurpose:
 
     def test_home_to_work_is_hbw(self):
         """Trip from home to work should be HBW."""
-        origin_type = 'home'
-        dest_type = 'work'
+        origin_type = "home"
+        dest_type = "work"
 
-        if origin_type == 'home' and dest_type == 'work':
-            purpose = 'HBW'
-        elif origin_type == 'work' and dest_type == 'home':
-            purpose = 'HBW'
-        elif origin_type == 'home' or dest_type == 'home':
-            purpose = 'HBO'
+        if origin_type == "home" and dest_type == "work":
+            purpose = "HBW"
+        elif origin_type == "work" and dest_type == "home":
+            purpose = "HBW"
+        elif origin_type == "home" or dest_type == "home":
+            purpose = "HBO"
         else:
-            purpose = 'NHB'
+            purpose = "NHB"
 
-        assert purpose == 'HBW'
+        assert purpose == "HBW"
 
     def test_home_to_other_is_hbo(self):
         """Trip from home to other should be HBO."""
-        origin_type = 'home'
-        dest_type = 'other'
+        origin_type = "home"
+        dest_type = "other"
 
-        if origin_type == 'home' and dest_type == 'work':
-            purpose = 'HBW'
-        elif origin_type == 'work' and dest_type == 'home':
-            purpose = 'HBW'
-        elif origin_type == 'home' or dest_type == 'home':
-            purpose = 'HBO'
+        if origin_type == "home" and dest_type == "work":
+            purpose = "HBW"
+        elif origin_type == "work" and dest_type == "home":
+            purpose = "HBW"
+        elif origin_type == "home" or dest_type == "home":
+            purpose = "HBO"
         else:
-            purpose = 'NHB'
+            purpose = "NHB"
 
-        assert purpose == 'HBO'
+        assert purpose == "HBO"
 
     def test_work_to_other_is_nhb(self):
         """Trip from work to other should be NHB."""
-        origin_type = 'work'
-        dest_type = 'other'
+        origin_type = "work"
+        dest_type = "other"
 
-        if origin_type == 'home' and dest_type == 'work':
-            purpose = 'HBW'
-        elif origin_type == 'work' and dest_type == 'home':
-            purpose = 'HBW'
-        elif origin_type == 'home' or dest_type == 'home':
-            purpose = 'HBO'
+        if origin_type == "home" and dest_type == "work":
+            purpose = "HBW"
+        elif origin_type == "work" and dest_type == "home":
+            purpose = "HBW"
+        elif origin_type == "home" or dest_type == "home":
+            purpose = "HBO"
         else:
-            purpose = 'NHB'
+            purpose = "NHB"
 
-        assert purpose == 'NHB'
+        assert purpose == "NHB"
 
 
-if __name__ == '__main__':
-    pytest.main([__file__, '-v'])
+if __name__ == "__main__":
+    pytest.main([__file__, "-v"])
