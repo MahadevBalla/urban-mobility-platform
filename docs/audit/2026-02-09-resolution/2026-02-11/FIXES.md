@@ -107,3 +107,32 @@ Two-mode execution via `config.general.processing.mode`:
 - `chunked`: after step 4, `preprocessed` is written to `config.general.processing.intermediate_dir` as parquet and deleted from memory. Steps 5 and 7 load `chunk_size_users` users at a time via parquet filter pushdown. Peak RAM reduces from O(total records) to O(chunk_size * avg_records_per_user).
 
 No changes required to child classes - StayPointDetector, TripGenerator, and HomeWorkInference already iterate per-user internally.
+
+### Issue 2.1 - Winner-Takes-All Data Fusion
+
+**File:** `src/data_fusion/multi_source_fusion.py`
+**Severity:** CRITICAL
+
+#### Root Cause
+
+`_resolve_conflicts` used `idxmax()` on `location_confidence` for every time bucket, discarding all secondary source records entirely. A 5G record with valid `cell_id` and signal quality at the same timestamp as an XDR record was silently dropped - its cell identity and signal data lost.
+
+#### Fix Applied
+
+Replaced `_weighted_average_fusion` (which still fell back to `idxmax()` for all non-coordinate fields) with `_ivw_fusion`: a proper Inverse Variance Weighting estimator treating `location_confidence` as a precision proxy (1/σ²).
+
+For each user and temporal alignment window:
+
+- **Coordinates:** IVW over all records with valid GPS (`Σ w_i·lat_i / Σ w_i`)
+- **cell_id:** taken from highest-confidence record that has a cell_id (not dropped)
+- **fused_confidence:** mean confidence across contributing sources (heuristic reliability score)
+- **sources:** comma-joined provenance string (e.g. `"xdr_coordinates,network_5g"`)
+- **Timestamp:** confidence-weighted mean within bucket
+
+Single-source buckets produce identical output to the original - no regression.
+
+`weighted_average` is now the default `conflict_resolution` in config.
+
+**Deferred - Round 3:** Kalman Filter trajectory smoothing (sequential noise reduction on the ordered location sequence) belongs in `stay_detector.py` alongside the DBSCAN refactor (Issue 4.1), not here. `strategy: "kalman_filter"` in config is pre-wired for that round.
+
+Reference: IVW estimator - Hartung et al. (2008)

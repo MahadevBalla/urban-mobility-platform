@@ -200,12 +200,12 @@ od_matrix:
 # Data Fusion Configuration
 data_fusion:
   # Fusion strategy
+  # AUDIT 3 (Round 3): add kalman_filter trajectory smoother in stay_detector.py
+  # alongside DBSCAN refactor (Issue 4.1)
   strategy: "hierarchical"  # hierarchical, weighted_average, kalman_filter
 
   # Conflict resolution
-  # AUDIT 2.1: "highest_priority" is winner-takes-all - replace with
-  # "weighted_average" once Round 2 fix is deployed in multi_source_fusion.py
-  conflict_resolution: "highest_priority"  # highest_priority, weighted_average, most_recent
+  conflict_resolution: "weighted_average"  # highest_priority, weighted_average, most_recent
 
   # Source priority (higher = more trusted for location)
   source_priority:

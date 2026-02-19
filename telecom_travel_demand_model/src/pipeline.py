@@ -299,8 +299,6 @@ class TravelDemandPipeline:
         if all_stays:
             return pd.concat(all_stays, ignore_index=True)
 
-        from src.stay_detection.stay_detector import StayPointDetector as SPD
-
         return pd.DataFrame(
             columns=[
                 "user_id",

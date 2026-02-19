@@ -1,13 +1,13 @@
 # Resolution Status - Telecom TDM Audit
 
-- Last updated: 2026-02-18
+- Last updated: 2026-02-19
 
 | ID | Title | Severity | Status | Round | Notes |
 | --- | --- | --- | --- | --- | --- |
 | 7.1 | O(N²) OD matrix explosion | CRITICAL | Resolved | 1 | FIXES.md 7.1 |
 | 7.1b | Dense `to_matrix_form` | HIGH | Resolved | 1 | FIXES.md 7.1b |
 | 8.1 | Sequential in-memory pipeline | CRITICAL | Resolved | 1 | FIXES.md 8.1 |
-| 2.1 | Winner-takes-all data fusion | CRITICAL | Pending | 2 | - |
+| 2.1 | Winner-takes-all data fusion | CRITICAL | Resolved | 2 | FIXES.md 2.1 |
 | 2.2 | XDR centroid oversimplification | HIGH | Pending | 2 | - |
 | 3.2 | Binary ABA ping-pong filter | MEDIUM | Pending | 2 | config pre-wired |
 | 4.1 | Fixed-grid stay consolidation | CRITICAL | Pending | 3 | - |
