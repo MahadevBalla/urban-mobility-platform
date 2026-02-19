@@ -36,6 +36,11 @@ class TravelDemandPipeline:
     7. Trip Expansion - Scale to population level
     8. OD Matrix Creation - Aggregate trips to zone-level OD flows
 
+    Processing modes (config.general.processing.mode):
+        - "full" - All DataFrames held in memory (original behaviour, dev/sample only)
+        "chunked" - preprocessed written to disk after zone creation; steps 5-7
+                    load users in batches to reduce memory usage (recommended for large datasets)
+
     Example:
         >>> pipeline = TravelDemandPipeline()
         >>> results = pipeline.run("data/raw")
@@ -71,6 +76,13 @@ class TravelDemandPipeline:
         # Store intermediate results
         self._results: Dict = {}
 
+        # Processing mode from config
+        proc = self.config.get("general.processing", {})
+        self._mode = proc.get("mode", "full")
+        self._chunk_size = proc.get("chunk_size_users", 1000)
+        self._intermediate_fmt = proc.get("intermediate_format", "parquet")
+        self._intermediate_dir = Path(proc.get("intermediate_dir", "data/intermediate"))
+
     def run(
         self,
         data_path: Union[str, Path],
@@ -104,72 +116,96 @@ class TravelDemandPipeline:
 
         steps = steps or all_steps
 
-        logger.info("=" * 60)
         logger.info("Starting Travel Demand Estimation Pipeline")
-        logger.info("=" * 60)
+
+        if self._mode == "chunked":
+            self._intermediate_dir.mkdir(parents=True, exist_ok=True)
+            logger.info(
+                f"Processing mode: chunked "
+                f"(chunk_size={self._chunk_size} users, "
+                f"format={self._intermediate_fmt})"
+            )
+        else:
+            logger.info("Processing mode: full (in-memory)")
 
         # Step 1: Load Data
         if "load_data" in steps:
-            logger.info("\n[Step 1/9] Loading data...")
+            logger.info("[Step 1/9] Loading data...")
             self._results["raw_data"] = self.data_loader.load_all(
                 data_path, sample_fraction
             )
 
         # Step 2: Preprocess
         if "preprocess" in steps:
-            logger.info("\n[Step 2/9] Preprocessing data...")
+            logger.info("[Step 2/9] Preprocessing data...")
             raw = self._results.get("raw_data", {})
-            self._results["preprocessed"] = self.preprocessor.process(
+            preprocessed = self.preprocessor.process(
                 cdr_df=raw.get("cdr"), xdr_df=raw.get("xdr")
             )
-
-            # Add derived features
-            self._results["preprocessed"] = self.preprocessor.add_derived_features(
-                self._results["preprocessed"]
-            )
+            preprocessed = self.preprocessor.add_derived_features(preprocessed)
 
             # Get user stats before filtering
             self._results["user_stats"] = self.preprocessor.get_user_summary(
-                self._results["preprocessed"]
+                preprocessed
             )
 
             # Filter users
-            valid_users = self.user_filter.filter_users(self._results["preprocessed"])
-            self._results["preprocessed"] = self._results["preprocessed"][
-                self._results["preprocessed"]["imsi"].isin(valid_users)
-            ]
+            valid_users = self.user_filter.filter_users(preprocessed)
+            preprocessed = preprocessed[
+                preprocessed["imsi"].isin(valid_users)
+            ].reset_index(drop=True)
             self._results["filter_stats"] = self.user_filter.filter_stats
+
+            if self._mode == "chunked":
+                # Write to disk; do NOT keep in self._results
+                self._write_intermediate(preprocessed, "preprocessed")
+                # Keep only the list of valid users in memory
+                self._results["valid_users"] = preprocessed["imsi"].unique().tolist()
+                del preprocessed
+            else:
+                self._results["preprocessed"] = preprocessed
 
         # Step 3: Infer Cell Locations
         if "infer_cell_locations" in steps:
-            logger.info("\n[Step 3/9] Inferring cell tower locations...")
-            if self._results.get("preprocessed") is not None:
-                self.cell_loader.infer_from_xdr(self._results["preprocessed"])
-                self.cell_loader.infer_tac_locations(self._results["preprocessed"])
+            logger.info("[Step 3/9] Inferring cell tower locations...")
+            preprocessed = self._get_preprocessed()
+            if preprocessed is not None:
+                self.cell_loader.infer_from_xdr(preprocessed)
+                self.cell_loader.infer_tac_locations(preprocessed)
 
                 # Add locations to data if missing
-                self._results["preprocessed"] = self.cell_loader.add_locations_to_df(
-                    self._results["preprocessed"]
-                )
+                updated = self.cell_loader.add_locations_to_df(preprocessed)
+
+                if self._mode == "chunked":
+                    # Overwrite intermediate with location-enriched version
+                    self._write_intermediate(updated, "preprocessed")
+                    del preprocessed, updated
+                else:
+                    self._results["preprocessed"] = updated
 
         # Step 4: Create Zones
         if "create_zones" in steps:
-            logger.info("\n[Step 4/9] Creating zone definitions...")
-            if self._results.get("preprocessed") is not None:
-                self.zone_loader.create_tac_zones(self._results["preprocessed"])
+            logger.info("[Step 4/9] Creating zone definitions...")
+            preprocessed = self._get_preprocessed()
+            if preprocessed is not None:
+                self.zone_loader.create_tac_zones(preprocessed)
+                # preprocessed no longer needed after zone creation in chunked mode
+                if self._mode == "chunked":
+                    del preprocessed
 
         # Step 5: Detect Stay Points
         if "detect_stays" in steps:
-            logger.info("\n[Step 5/9] Detecting stay points...")
-            self._results["stay_points"] = self.stay_detector.detect(
-                self._results["preprocessed"]
-            )
+            logger.info("[Step 5/9] Detecting stay points...")
+            self._results["stay_points"] = self._run_stay_detection()
 
         # Step 6: Infer Home/Work
         if "infer_home_work" in steps:
-            logger.info("\n[Step 6/9] Inferring home and work locations...")
+            logger.info("[Step 6/9] Inferring home and work locations...")
             self._results["stay_points"] = self.home_work_inference.infer(
-                self._results["stay_points"], self._results.get("preprocessed")
+                self._results["stay_points"],
+                # In chunked mode preprocessed is on disk; home/work inference
+                # only uses stay_points directly so pass None
+                self._results.get("preprocessed"),
             )
             self._results["home_work_summary"] = (
                 self.home_work_inference.get_home_work_summary(
@@ -179,39 +215,21 @@ class TravelDemandPipeline:
 
         # Step 7: Generate Trips
         if "generate_trips" in steps:
-            logger.info("\n[Step 7/9] Generating trips...")
-            self._results["trips"] = self.trip_generator.generate(
-                self._results["stay_points"], self._results.get("preprocessed")
-            )
+            logger.info("[Step 7/9] Generating trips...")
+            self._results["trips"] = self._run_trip_generation()
             self._results["trip_table"] = self.trip_generator.get_trip_table(
                 self._results["trips"]
             )
 
         # Step 8: Expand Trips
         if "expand_trips" in steps:
-            logger.info("\n[Step 8/9] Expanding trips to population level...")
+            logger.info("[Step 8/9] Expanding trips to population level...")
 
             # Build home zone mapping
-            home_zones = {}
-            if "stay_points" in self._results:
-                home_stays = self._results["stay_points"][
-                    self._results["stay_points"]["location_type"] == "home"
-                ]
-                for _, stay in home_stays.iterrows():
-                    tac = stay.get("tac") or stay.get("cell_id")
-                    if tac:
-                        home_zones[stay["user_id"]] = str(tac)
+            home_zones = self._build_home_zones()
 
             # Get zone populations if available
-            zone_pops = None
-            if self.zone_loader.zone_count > 0:
-                zones_df = self.zone_loader.to_dataframe()
-                zone_pops = dict(
-                    zip(
-                        zones_df["zone_id"],
-                        zones_df["population"].fillna(10000),  # Default population
-                    )
-                )
+            zone_pops = self._build_zone_populations()
 
             self._results["trips"] = self.trip_expander.expand(
                 self._results["trips"],
@@ -225,7 +243,7 @@ class TravelDemandPipeline:
 
         # Step 9: Generate OD Matrix
         if "generate_od_matrix" in steps:
-            logger.info("\n[Step 9/9] Generating OD matrix...")
+            logger.info("[Step 9/9] Generating OD matrix...")
 
             # Full OD matrix
             self._results["od_matrix"] = self.od_generator.generate(
@@ -247,20 +265,182 @@ class TravelDemandPipeline:
                 self._results["od_matrix"]
             )
 
-        logger.info("\n" + "=" * 60)
         logger.info("Pipeline Complete")
-        logger.info("=" * 60)
-
         self._log_summary()
 
         return self._results
+
+    # Chunked execution helpers
+    def _run_stay_detection(self) -> pd.DataFrame:
+        """
+        Run stay detection, chunked in chunked mode.
+
+        In full mode: passes full preprocessed DF to StayPointDetector.detect()
+        (original behaviour, unchanged).
+
+        In chunked mode: loads users in batches of chunk_size_users from the
+        intermediate parquet file, calls detect() per batch, concatenates
+        stay_points. Peak RAM per batch =
+            chunk_size_users * avg_records_per_user * record_size
+        instead of full dataset * record_size.
+        """
+        if self._mode != "chunked":
+            return self.stay_detector.detect(self._results["preprocessed"])
+
+        users = self._results["valid_users"]
+        all_stays = []
+
+        for _, batch_df in self._iter_user_chunks(users):
+            batch_stays = self.stay_detector.detect(batch_df)
+            if len(batch_stays) > 0:
+                all_stays.append(batch_stays)
+            del batch_df
+
+        if all_stays:
+            return pd.concat(all_stays, ignore_index=True)
+
+        from src.stay_detection.stay_detector import StayPointDetector as SPD
+
+        return pd.DataFrame(
+            columns=[
+                "user_id",
+                "stay_id",
+                "latitude",
+                "longitude",
+                "cell_id",
+                "tac",
+                "first_seen",
+                "last_seen",
+                "observation_count",
+                "visit_count",
+                "total_duration",
+                "location_type",
+            ]
+        )
+
+    def _run_trip_generation(self) -> pd.DataFrame:
+        """
+        Run trip generation, chunked in chunked mode.
+
+        TripGenerator.generate() needs both stay_points and observations
+        (preprocessed) per user. In chunked mode observations are loaded
+        per batch from disk; stay_points are small and already in memory.
+        """
+        if self._mode != "chunked":
+            return self.trip_generator.generate(
+                self._results["stay_points"],
+                self._results.get("preprocessed"),
+            )
+
+        users = self._results["valid_users"]
+        stay_points = self._results["stay_points"]
+        all_trips = []
+
+        for batch_users, batch_obs in self._iter_user_chunks(users):
+            batch_stays = stay_points[stay_points["user_id"].isin(batch_users)]
+            batch_trips = self.trip_generator.generate(batch_stays, batch_obs)
+            if len(batch_trips) > 0:
+                all_trips.append(batch_trips)
+            del batch_obs, batch_stays
+
+        if all_trips:
+            return pd.concat(all_trips, ignore_index=True)
+        return pd.DataFrame()
+
+    def _iter_user_chunks(self, users: list):
+        """
+        Yield (batch_user_list, batch_df) by loading user chunks from the
+        intermediate preprocessed file.
+
+        Yields:
+            (batch_users: List[str], batch_df: pd.DataFrame)
+        """
+        path = self._intermediate_path("preprocessed")
+
+        for i in range(0, len(users), self._chunk_size):
+            batch_users = users[i : i + self._chunk_size]
+
+            if self._intermediate_fmt == "parquet":
+                # pandas parquet filter pushdown - reads only matching row groups
+                batch_df = pd.read_parquet(
+                    path,
+                    filters=[("imsi", "in", batch_users)],
+                )
+            else:
+                # CSV fallback: must read full file and filter in-memory
+                # Acceptable only for sample/dev; chunked mode should use parquet
+                full = pd.read_csv(path, parse_dates=["timestamp"])
+                batch_df = full[full["imsi"].isin(batch_users)]
+                del full
+
+            logger.debug(
+                f"Loaded chunk {i // self._chunk_size + 1}: "
+                f"{len(batch_users)} users, {len(batch_df)} records"
+            )
+            yield batch_users, batch_df
+
+    # Intermediate file I/O
+    def _intermediate_path(self, name: str) -> Path:
+        ext = "parquet" if self._intermediate_fmt == "parquet" else "csv"
+        return self._intermediate_dir / f"{name}.{ext}"
+
+    def _write_intermediate(self, df: pd.DataFrame, name: str) -> None:
+        path = self._intermediate_path(name)
+        if self._intermediate_fmt == "parquet":
+            df.to_parquet(path, index=False)
+        else:
+            df.to_csv(path, index=False)
+        logger.debug(f"Wrote intermediate '{name}' to {path} ({len(df)} records)")
+
+    def _get_preprocessed(self) -> Optional[pd.DataFrame]:
+        """
+        Return preprocessed DataFrame.
+
+        In full mode: returns from self._results.
+        In chunked mode: loads from disk (needed for steps 3-4 which
+        require the full dataset to infer cell locations and zones).
+        """
+        if self._mode != "chunked":
+            return self._results.get("preprocessed")
+
+        path = self._intermediate_path("preprocessed")
+        if not path.exists():
+            logger.warning(f"Intermediate file not found: {path}")
+            return None
+
+        if self._intermediate_fmt == "parquet":
+            return pd.read_parquet(path)
+        return pd.read_csv(path, parse_dates=["timestamp"])
+
+    # Small helpers (unchanged logic, extracted for clarity)
+    def _build_home_zones(self) -> Dict[str, str]:
+        home_zones = {}
+        if "stay_points" in self._results:
+            home_stays = self._results["stay_points"][
+                self._results["stay_points"]["location_type"] == "home"
+            ]
+            for _, stay in home_stays.iterrows():
+                tac = stay.get("tac") or stay.get("cell_id")
+                if tac:
+                    home_zones[stay["user_id"]] = str(tac)
+        return home_zones
+
+    def _build_zone_populations(self) -> Optional[Dict[str, int]]:
+        if self.zone_loader.zone_count == 0:
+            return None
+        zones_df = self.zone_loader.to_dataframe()
+        return dict(
+            zip(
+                zones_df["zone_id"],
+                zones_df["population"].fillna(10000),
+            )
+        )
 
     def _log_summary(self) -> None:
         """Log summary of pipeline results."""
         r = self._results
 
-        logger.info("\nPipeline Summary:")
-        logger.info("-" * 40)
+        logger.info("-" * 30 + "Pipeline Summary" + "-" * 30)
 
         if "filter_stats" in r:
             logger.info(f"Users: {r['filter_stats'].get('valid_users', 'N/A')}")
@@ -269,13 +449,13 @@ class TravelDemandPipeline:
             logger.info(f"Stay points: {len(r['stay_points'])}")
             home_count = (r["stay_points"]["location_type"] == "home").sum()
             work_count = (r["stay_points"]["location_type"] == "work").sum()
-            logger.info(f"  - Homes: {home_count}, Work locations: {work_count}")
+            logger.info(f"  Homes: {home_count}, Work locations: {work_count}")
 
         if "trips" in r:
             logger.info(f"Trips: {len(r['trips'])}")
             if "expanded_trips" in r["trips"].columns:
                 logger.info(
-                    f"  - Expanded total: {r['trips']['expanded_trips'].sum():.0f}"
+                    f"  Expanded total: {r['trips']['expanded_trips'].sum():.0f}"
                 )
 
         if "od_summary" in r:

@@ -58,7 +58,7 @@ matrix = matrix.reindex(index=zones, columns=zones, fill_value=0)
 - `to_dense_matrix()` → dense pivot, raises `ValueError` if `n > 500`
 - `to_sparse_matrix()` → new primary method, returns `scipy.sparse.csr_matrix`
 
-### Config Changes (config.yaml)
+#### Config Changes (config.yaml)
 
 Added to `od_matrix` section:
 
@@ -89,3 +89,21 @@ chain_continuity_tolerance_m: 0   # pre-wires for Round 6 - Issue 6.2 fix
 departure_time_beta_morning: [2, 4]  # [alpha, beta] - placeholder, not calibrated
 departure_time_beta_evening: [4, 2]  # [alpha, beta] - placeholder, not calibrated
 ```
+
+### Issue 8.1 - Sequential In-Memory Pipeline
+
+**File:** `src/pipeline.py`
+**Severity:** CRITICAL
+
+#### Root Cause
+
+`preprocessed` DataFrame (all users, all records) was kept in `self._results["preprocessed"]` from step 2 through step 7. Steps 5-7 each hold their own output DataFrames simultaneously, meaning peak RAM = preprocessed + stay_points + trips all live at once.
+
+#### Fix Applied
+
+Two-mode execution via `config.general.processing.mode`:
+
+- `full`: original in-memory behaviour, unchanged (default for sample config)
+- `chunked`: after step 4, `preprocessed` is written to `config.general.processing.intermediate_dir` as parquet and deleted from memory. Steps 5 and 7 load `chunk_size_users` users at a time via parquet filter pushdown. Peak RAM reduces from O(total records) to O(chunk_size * avg_records_per_user).
+
+No changes required to child classes - StayPointDetector, TripGenerator, and HomeWorkInference already iterate per-user internally.

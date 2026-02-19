@@ -1,6 +1,3 @@
-# Telecom Travel Demand Model Configuration
-# ==========================================
-
 # General Settings
 general:
   project_name: "telecom_travel_demand"
@@ -8,10 +5,10 @@ general:
   n_workers: 4  # Parallel processing workers
   log_level: "INFO"
   processing:
-    mode: "chunked"
-    chunk_size_users: 1000
-    intermediate_format: "parquet"
-    intermediate_dir: "data/intermediate"
+    mode: "chunked" # ["full", "chunked"] - chunked mode processes users in batches to manage memory
+    chunk_size_users: 1000 # Number of users per chunk in chunked mode
+    intermediate_format: "parquet" # ["csv", "parquet"] - format for intermediate files
+    intermediate_dir: "data/intermediate" 
 
 # Data Source Configuration
 data_sources:

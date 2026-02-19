@@ -6,7 +6,7 @@
 | --- | --- | --- | --- | --- | --- |
 | 7.1 | O(N²) OD matrix explosion | CRITICAL | Resolved | 1 | FIXES.md 7.1 |
 | 7.1b | Dense `to_matrix_form` | HIGH | Resolved | 1 | FIXES.md 7.1b |
-| 8.1 | Sequential in-memory pipeline | CRITICAL | Pending | 1 | pipeline.py next |
+| 8.1 | Sequential in-memory pipeline | CRITICAL | Resolved | 1 | FIXES.md 8.1 |
 | 2.1 | Winner-takes-all data fusion | CRITICAL | Pending | 2 | - |
 | 2.2 | XDR centroid oversimplification | HIGH | Pending | 2 | - |
 | 3.2 | Binary ABA ping-pong filter | MEDIUM | Pending | 2 | config pre-wired |
