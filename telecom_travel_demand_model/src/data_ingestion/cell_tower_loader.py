@@ -22,14 +22,10 @@ from src.utils.geo_utils import (
     _circle_polygon,
     build_convex_hull_polygon,
     build_sector_polygon,
-    calculate_centroid,
 )
 from src.utils.logger import setup_logger
 
 logger = setup_logger(__name__)
-
-# Minimum GPS samples required before a convex hull is meaningful
-_MIN_HULL_SAMPLES = 5
 
 
 @dataclass
