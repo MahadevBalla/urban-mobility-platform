@@ -11,6 +11,7 @@ from typing import Dict, Optional, Union
 
 import pandas as pd
 
+from src.data_fusion import MultiSourceFusion
 from src.data_ingestion import CellTowerLoader, TelecomDataLoader, ZoneLoader
 from src.od_matrix import ODMatrixGenerator
 from src.preprocessing import TelecomPreprocessor, UserFilter
@@ -104,6 +105,7 @@ class TravelDemandPipeline:
 
         all_steps = [
             "load_data",
+            "fuse_data",
             "preprocess",
             "infer_cell_locations",
             "create_zones",
@@ -130,17 +132,34 @@ class TravelDemandPipeline:
 
         # Step 1: Load Data
         if "load_data" in steps:
-            logger.info("[Step 1/9] Loading data...")
+            logger.info("[Step 1/10] Loading data...")
             self._results["raw_data"] = self.data_loader.load_all(
                 data_path, sample_fraction
             )
 
-        # Step 2: Preprocess
+        # Step 2: Multi-source fusion
+        if "fuse_data" in steps:
+            logger.info("[Step 2/10] Fusing multi-source telecom data...")
+            raw = self._results["raw_data"]
+            fusion = MultiSourceFusion(self.config)
+            fused = fusion.fuse(
+                cdr_df=raw.get("cdr"),
+                xdr_df=raw.get("xdr"),
+                network_4g_df=raw.get("network_4g"),
+                network_5g_df=raw.get("network_5g"),
+            )
+            self._results["fused_data"] = fused
+            logger.info(f"Fusion summary: {fusion.get_fusion_summary(fused)}")
+
+        # Step 3: Preprocess
         if "preprocess" in steps:
-            logger.info("[Step 2/9] Preprocessing data...")
+            logger.info("[Step 3/10] Preprocessing data...")
+            # Use fused_data if available, fall back to raw XDR+CDR
+            fused = self._results.get("fused_data")
             raw = self._results.get("raw_data", {})
             preprocessed = self.preprocessor.process(
-                cdr_df=raw.get("cdr"), xdr_df=raw.get("xdr")
+                cdr_df=raw.get("cdr"),
+                xdr_df=fused if fused is not None else raw.get("xdr"),
             )
             preprocessed = self.preprocessor.add_derived_features(preprocessed)
 
@@ -165,12 +184,13 @@ class TravelDemandPipeline:
             else:
                 self._results["preprocessed"] = preprocessed
 
-        # Step 3: Infer Cell Locations
+        # Step 4: Infer Cell Locations
         if "infer_cell_locations" in steps:
-            logger.info("[Step 3/9] Inferring cell tower locations...")
+            logger.info("[Step 4/10] Inferring cell tower locations...")
+            min_samples = int(self.config.get("cell_towers.min_hull_samples", 5))
             preprocessed = self._get_preprocessed()
             if preprocessed is not None:
-                self.cell_loader.infer_from_xdr(preprocessed)
+                self.cell_loader.infer_from_xdr(preprocessed, min_samples=min_samples)
                 self.cell_loader.infer_tac_locations(preprocessed)
 
                 # Add locations to data if missing
@@ -183,9 +203,9 @@ class TravelDemandPipeline:
                 else:
                     self._results["preprocessed"] = updated
 
-        # Step 4: Create Zones
+        # Step 5: Create Zones
         if "create_zones" in steps:
-            logger.info("[Step 4/9] Creating zone definitions...")
+            logger.info("[Step 5/10] Creating zone definitions...")
             preprocessed = self._get_preprocessed()
             if preprocessed is not None:
                 self.zone_loader.create_tac_zones(preprocessed)
@@ -193,14 +213,14 @@ class TravelDemandPipeline:
                 if self._mode == "chunked":
                     del preprocessed
 
-        # Step 5: Detect Stay Points
+        # Step 6: Detect Stay Points
         if "detect_stays" in steps:
-            logger.info("[Step 5/9] Detecting stay points...")
+            logger.info("[Step 6/10] Detecting stay points...")
             self._results["stay_points"] = self._run_stay_detection()
 
-        # Step 6: Infer Home/Work
+        # Step 7: Infer Home/Work
         if "infer_home_work" in steps:
-            logger.info("[Step 6/9] Inferring home and work locations...")
+            logger.info("[Step 7/10] Inferring home and work locations...")
             self._results["stay_points"] = self.home_work_inference.infer(
                 self._results["stay_points"],
                 # In chunked mode preprocessed is on disk; home/work inference
@@ -213,17 +233,17 @@ class TravelDemandPipeline:
                 )
             )
 
-        # Step 7: Generate Trips
+        # Step 8: Generate Trips
         if "generate_trips" in steps:
-            logger.info("[Step 7/9] Generating trips...")
+            logger.info("[Step 8/10] Generating trips...")
             self._results["trips"] = self._run_trip_generation()
             self._results["trip_table"] = self.trip_generator.get_trip_table(
                 self._results["trips"]
             )
 
-        # Step 8: Expand Trips
+        # Step 9: Expand Trips
         if "expand_trips" in steps:
-            logger.info("[Step 8/9] Expanding trips to population level...")
+            logger.info("[Step 9/10] Expanding trips to population level...")
 
             # Build home zone mapping
             home_zones = self._build_home_zones()
@@ -241,9 +261,9 @@ class TravelDemandPipeline:
                 self.trip_expander.get_expansion_summary(self._results["trips"])
             )
 
-        # Step 9: Generate OD Matrix
+        # Step 10: Generate OD Matrix
         if "generate_od_matrix" in steps:
-            logger.info("[Step 9/9] Generating OD matrix...")
+            logger.info("[Step 10/10] Generating OD matrix...")
 
             # Full OD matrix
             self._results["od_matrix"] = self.od_generator.generate(

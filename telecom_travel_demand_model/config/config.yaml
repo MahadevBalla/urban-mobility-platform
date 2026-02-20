@@ -71,8 +71,9 @@ cell_towers:
   default_radius: 500
 
   # Location inference method
-  # AUDIT 2.2: "sector" once Round 2 refactor done
-  location_method: "centroid"  # centroid, weighted_centroid, triangulation
+  # audit 2.2 resolved; "sector_model" when antenna data available
+  location_method: "convex_hull"
+  min_hull_samples: 5 # min GPS points for hull; below this → circular fallback
 
   # Cell ID to location mapping source
   cell_location_source: "xdr_derived"  # xdr_derived, network_data, external_file

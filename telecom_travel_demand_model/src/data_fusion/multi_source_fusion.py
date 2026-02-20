@@ -72,6 +72,15 @@ class MultiSourceFusion:
             "conflict_resolution", "weighted_average"
         )
 
+    @staticmethod
+    def _normalise_cell_id(col: Optional[pd.Series]) -> pd.Series:
+        """Cast cell_id to str, normalise NaN/'nan'/'None' → None."""
+        if col is None:
+            return pd.Series([None] * 0, dtype=object)
+        return col.astype(str).replace(
+            {"nan": None, "None": None, "NaN": None, "<NA>": None}
+        )
+
     def fuse(
         self,
         cdr_df: Optional[pd.DataFrame] = None,
@@ -145,7 +154,7 @@ class MultiSourceFusion:
             {
                 "imsi": df["imsi"].astype(str),
                 "timestamp": pd.to_datetime(df["timestamp"]),
-                "cell_id": df.get("cell_id", pd.Series(dtype=str)).astype(str),
+                "cell_id": self._normalise_cell_id(df.get("cell_id")),
                 "tac": df.get("tac", pd.Series(dtype=str)).astype(str),
                 "latitude": df.get("latitude"),
                 "longitude": df.get("longitude"),
@@ -179,9 +188,7 @@ class MultiSourceFusion:
             {
                 "imsi": df["imsi"].astype(str),
                 "timestamp": pd.to_datetime(df["timestamp"]),
-                "cell_id": df.get(
-                    "nci", df.get("cell_id", pd.Series(dtype=str))
-                ).astype(str),
+                "cell_id": self._normalise_cell_id(df.get("nci", df.get("cell_id"))),
                 "tac": df.get("tac", pd.Series(dtype=str)).astype(str),
                 "latitude": np.nan,
                 "longitude": np.nan,
@@ -207,7 +214,7 @@ class MultiSourceFusion:
             {
                 "imsi": df["imsi"].astype(str),
                 "timestamp": pd.to_datetime(df["timestamp"]),
-                "cell_id": df.get("cell_id", pd.Series(dtype=str)).astype(str),
+                "cell_id": self._normalise_cell_id(df.get("cell_id")),
                 "tac": df.get("tac", pd.Series(dtype=str)).astype(str),
                 "latitude": np.nan,
                 "longitude": np.nan,
@@ -231,7 +238,7 @@ class MultiSourceFusion:
             {
                 "imsi": df["imsi"].astype(str),
                 "timestamp": pd.to_datetime(df["timestamp"]),
-                "cell_id": df.get("cell_id", pd.Series(dtype=str)).astype(str),
+                "cell_id": self._normalise_cell_id(df.get("cell_id")),
                 "tac": df.get("tac", pd.Series(dtype=str)).astype(str),
                 "latitude": np.nan,
                 "longitude": np.nan,
@@ -370,7 +377,8 @@ class MultiSourceFusion:
                 fused_lon = np.nan
 
             # Cell ID: highest-confidence record that has a cell_id
-            has_cell = group["cell_id"].notna() & (group["cell_id"] != "None")
+            _NULL_CELL = {"None", "nan", "NaN", "none", "<NA>", ""}
+            has_cell = group["cell_id"].notna() & ~group["cell_id"].isin(_NULL_CELL)
             if has_cell.any():
                 best_cell_idx = group.loc[has_cell, "location_confidence"].idxmax()
                 fused_cell = group.loc[best_cell_idx, "cell_id"]
@@ -381,9 +389,11 @@ class MultiSourceFusion:
 
             # Timestamp: confidence-weighted mean within bucket
             ts_seconds = group["timestamp"].apply(lambda t: t.timestamp()).values
-            fused_ts = pd.Timestamp(
-                float(np.dot(weights, ts_seconds) / W), unit="s", tz="UTC"
-            ).tz_localize(None)
+            fused_ts = (
+                pd.Timestamp(float(np.dot(weights, ts_seconds) / W), unit="s", tz="UTC")
+                .tz_localize(None)
+                .floor("s")
+            )
 
             # fused_confidence = mean precision (combined reliability)
             # Interpretation: average confidence across all contributing sources.
