@@ -136,3 +136,38 @@ Single-source buckets produce identical output to the original - no regression.
 **Deferred - Round 3:** Kalman Filter trajectory smoothing (sequential noise reduction on the ordered location sequence) belongs in `stay_detector.py` alongside the DBSCAN refactor (Issue 4.1), not here. `strategy: "kalman_filter"` in config is pre-wired for that round.
 
 Reference: IVW estimator - Hartung et al. (2008)
+
+## Issue 2.2 - XDR Centroid Oversimplification
+
+**File:** `src/data_ingestion/cell_tower_loader.py`, `src/utils/geo_utils.py`
+**Severity:** HIGH
+
+#### Root Cause
+
+`infer_from_xdr` reduced all GPS observations for a cell to a single `(lat_mean, lon_mean)` point plus a radius derived from standard deviation. This destroys any directional information in the point cloud — a sectorized tower with three antenna lobes collapses to one centroid near the tower base, which is neither the tower location nor any sector center.
+
+#### Fix Applied
+
+Introduced `CellRecord` dataclass to carry both the centroid (backward-compat) and a polygon geometry per cell. Cell geometry is now built according to `config.cell_towers.location_method`:
+
+- **`convex_hull`** (new default): `scipy.spatial.ConvexHull` on the raw XDR GPS point cloud per `cell_id`. Preserves the spatial extent and directional bias of the point cloud deterministically. Falls back to a circular polygon when GPS sample count < `config.cell_towers.min_hull_samples` (default 5). Collinear degenerate case buffered via `shapely` (local import, not a hard dep).
+
+- **`centroid`** (legacy): original behaviour unchanged, available via config.
+
+- **`sector_model`** (pre-wired): analytically exact wedge polygon from azimuth + beamwidth. Requires operator NMS/BSS antenna metadata not present in raw XDR. `infer_from_xdr` logs a warning and falls back to `convex_hull`. Activates automatically via `load_from_file()` once antenna data is available.
+
+Backward compatibility preserved: `get_cell_location(cell_id)` still returns `(lat, lon, radius)`. New API: `get_cell_record(cell_id)` returns full `CellRecord` with `geometry` and `geometry_type`.
+
+`add_locations_to_df` now only fills rows with missing coordinates (was overwriting all rows including valid GPS — silent correctness bug).
+
+**Downstream note:** stay_detector, trip_generator, home_work_inference all consume `(lat, lon)` centroid only. Polygon geometry is stored for future zone-containment queries; integration planned for Round 3 `zone_loader` refactor.
+
+Added to `geo_utils.py`: `build_convex_hull_polygon`, `build_sector_polygon`, `_circle_polygon`.
+
+Config changes:
+
+```yaml
+cell_towers:
+  location_method: "convex_hull"   # was "centroid"
+  min_hull_samples: 5
+```
