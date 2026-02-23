@@ -92,8 +92,8 @@ departure_time_beta_evening: [4, 2]  # [alpha, beta] - placeholder, not calibrat
 
 ### Issue 8.1 - Sequential In-Memory Pipeline
 
-**File:** `src/pipeline.py`
-**Severity:** CRITICAL
+**File:** `src/pipeline.py`  
+**Severity:** CRITICAL  
 
 #### Root Cause
 
@@ -110,8 +110,8 @@ No changes required to child classes - StayPointDetector, TripGenerator, and Hom
 
 ### Issue 2.1 - Winner-Takes-All Data Fusion
 
-**File:** `src/data_fusion/multi_source_fusion.py`
-**Severity:** CRITICAL
+**File:** `src/data_fusion/multi_source_fusion.py`  
+**Severity:** CRITICAL  
 
 #### Root Cause
 
@@ -139,12 +139,12 @@ Reference: IVW estimator - Hartung et al. (2008)
 
 ## Issue 2.2 - XDR Centroid Oversimplification
 
-**File:** `src/data_ingestion/cell_tower_loader.py`, `src/utils/geo_utils.py`
-**Severity:** HIGH
+**File:** `src/data_ingestion/cell_tower_loader.py`, `src/utils/geo_utils.py`  
+**Severity:** HIGH  
 
 #### Root Cause
 
-`infer_from_xdr` reduced all GPS observations for a cell to a single `(lat_mean, lon_mean)` point plus a radius derived from standard deviation. This destroys any directional information in the point cloud — a sectorized tower with three antenna lobes collapses to one centroid near the tower base, which is neither the tower location nor any sector center.
+`infer_from_xdr` reduced all GPS observations for a cell to a single `(lat_mean, lon_mean)` point plus a radius derived from standard deviation. This destroys any directional information in the point cloud - a sectorized tower with three antenna lobes collapses to one centroid near the tower base, which is neither the tower location nor any sector center.
 
 #### Fix Applied
 
@@ -158,7 +158,7 @@ Introduced `CellRecord` dataclass to carry both the centroid (backward-compat) a
 
 Backward compatibility preserved: `get_cell_location(cell_id)` still returns `(lat, lon, radius)`. New API: `get_cell_record(cell_id)` returns full `CellRecord` with `geometry` and `geometry_type`.
 
-`add_locations_to_df` now only fills rows with missing coordinates (was overwriting all rows including valid GPS — silent correctness bug).
+`add_locations_to_df` now only fills rows with missing coordinates (was overwriting all rows including valid GPS - silent correctness bug).
 
 **Downstream note:** stay_detector, trip_generator, home_work_inference all consume `(lat, lon)` centroid only. Polygon geometry is stored for future zone-containment queries; integration planned for Round 3 `zone_loader` refactor.
 
@@ -170,4 +170,64 @@ Config changes:
 cell_towers:
   location_method: "convex_hull"   # was "centroid"
   min_hull_samples: 5
+```
+
+## Issue 3.2 - Ping-Pong Filtering Logic
+
+**File:** `src/preprocessing/telecom_preprocessor.py`  
+**Severity:** MEDIUM  
+
+### Root Cause
+
+The previous implementation used a strict ABA oscillation rule (A→B→A within a fixed time window) with two limitations:
+
+1. Required ≥3 oscillations before flagging, allowing single A→B→A round-trips to pass.
+2. Executed before `add_locations_to_df()` in the pipeline, meaning CDR rows lacked coordinates and velocity-based validation was not feasible.
+
+No speed-based plausibility check was implemented.
+
+### Resolution
+
+Ping-pong filtering was refactored to support two config-driven methods via `preprocessing.ping_pong_filter`:
+
+#### 1. `aba` (corrected)
+
+Flags the middle record of any A→B→A oscillation occurring within `ping_pong_time_threshold` seconds.
+
+Used as fallback when coordinate data is unavailable.
+
+#### 2. `velocity` (default)
+
+Flags records where implied travel speed between consecutive observations exceeds a physically plausible threshold.
+
+Source-aware thresholds:
+
+- `source="xdr"` with `has_coordinates=True` → `gps_max_speed_ms` (42 m/s)
+- `source="cdr"` or centroid-derived coordinates → `centroid_max_speed_ms` (80 m/s)
+
+Pairs where `dt < min_time_gap_s` are skipped (not flagged) to avoid unreliable speed estimation at sub-resolution timestamps.
+
+Per-user fallback to ABA occurs automatically if coordinates are missing.
+
+### Pipeline Wiring Fix
+
+`remove_ping_pong()` is now called in `pipeline.py` Step 4 immediately after `add_locations_to_df()`:
+
+```python
+updated = self.cell_loader.add_locations_to_df(preprocessed)
+updated = self.preprocessor.remove_ping_pong(updated)
+```
+
+This ensures centroid coordinates are available before velocity filtering.
+
+### Configuration Additions
+
+```yaml
+ping_pong_filter: "velocity"
+ping_pong_time_threshold: 300
+
+ping_pong_velocity:
+  gps_max_speed_ms: 42.0
+  centroid_max_speed_ms: 80.0
+  min_time_gap_s: 5
 ```
