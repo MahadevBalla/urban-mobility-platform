@@ -60,10 +60,14 @@ preprocessing:
   remove_duplicates: true
   handle_missing_locations: "interpolate"  # drop, interpolate, or nearest_cell
 
-  # Ping-pong filtering to remove spurious location switches 
-  # (AUDIT 3.2: ping-pong filter - set to "velocity" once Round 2 fix is deployed)
-  ping_pong_filter: "aba"    # "aba" | "velocity" | "mdl"
+  # Ping-pong filtering
+  ping_pong_filter: "velocity"    # "aba" | "velocity" | "mdl"
   ping_pong_time_threshold: 300  # seconds
+
+  ping_pong_velocity:
+    gps_max_speed_ms: 42.0              # ~150 km/h - strict threshold for true XDR GPS rows
+    centroid_max_speed_ms: 80.0         # relaxed threshold for centroid-filled CDR rows
+    min_time_gap_s: 5                   # pairs with dt < this: skip speed calc, don't flag
 
 # Cell Tower / Location Configuration
 cell_towers:

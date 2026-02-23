@@ -195,6 +195,7 @@ class TravelDemandPipeline:
 
                 # Add locations to data if missing
                 updated = self.cell_loader.add_locations_to_df(preprocessed)
+                updated = self.preprocessor.remove_ping_pong(updated)
 
                 if self._mode == "chunked":
                     # Overwrite intermediate with location-enriched version
