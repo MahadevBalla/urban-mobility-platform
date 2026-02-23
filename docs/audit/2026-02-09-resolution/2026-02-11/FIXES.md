@@ -58,7 +58,7 @@ matrix = matrix.reindex(index=zones, columns=zones, fill_value=0)
 - `to_dense_matrix()` → dense pivot, raises `ValueError` if `n > 500`
 - `to_sparse_matrix()` → new primary method, returns `scipy.sparse.csr_matrix`
 
-### Config Changes (config.yaml)
+#### Config Changes (config.yaml)
 
 Added to `od_matrix` section:
 
@@ -88,4 +88,146 @@ Added to `trip_generation`:
 chain_continuity_tolerance_m: 0   # pre-wires for Round 6 - Issue 6.2 fix
 departure_time_beta_morning: [2, 4]  # [alpha, beta] - placeholder, not calibrated
 departure_time_beta_evening: [4, 2]  # [alpha, beta] - placeholder, not calibrated
+```
+
+### Issue 8.1 - Sequential In-Memory Pipeline
+
+**File:** `src/pipeline.py`  
+**Severity:** CRITICAL  
+
+#### Root Cause
+
+`preprocessed` DataFrame (all users, all records) was kept in `self._results["preprocessed"]` from step 2 through step 7. Steps 5-7 each hold their own output DataFrames simultaneously, meaning peak RAM = preprocessed + stay_points + trips all live at once.
+
+#### Fix Applied
+
+Two-mode execution via `config.general.processing.mode`:
+
+- `full`: original in-memory behaviour, unchanged (default for sample config)
+- `chunked`: after step 4, `preprocessed` is written to `config.general.processing.intermediate_dir` as parquet and deleted from memory. Steps 5 and 7 load `chunk_size_users` users at a time via parquet filter pushdown. Peak RAM reduces from O(total records) to O(chunk_size * avg_records_per_user).
+
+No changes required to child classes - StayPointDetector, TripGenerator, and HomeWorkInference already iterate per-user internally.
+
+### Issue 2.1 - Winner-Takes-All Data Fusion
+
+**File:** `src/data_fusion/multi_source_fusion.py`  
+**Severity:** CRITICAL  
+
+#### Root Cause
+
+`_resolve_conflicts` used `idxmax()` on `location_confidence` for every time bucket, discarding all secondary source records entirely. A 5G record with valid `cell_id` and signal quality at the same timestamp as an XDR record was silently dropped - its cell identity and signal data lost.
+
+#### Fix Applied
+
+Replaced `_weighted_average_fusion` (which still fell back to `idxmax()` for all non-coordinate fields) with `_ivw_fusion`: a proper Inverse Variance Weighting estimator treating `location_confidence` as a precision proxy (1/σ²).
+
+For each user and temporal alignment window:
+
+- **Coordinates:** IVW over all records with valid GPS (`Σ w_i·lat_i / Σ w_i`)
+- **cell_id:** taken from highest-confidence record that has a cell_id (not dropped)
+- **fused_confidence:** mean confidence across contributing sources (heuristic reliability score)
+- **sources:** comma-joined provenance string (e.g. `"xdr_coordinates,network_5g"`)
+- **Timestamp:** confidence-weighted mean within bucket
+
+Single-source buckets produce identical output to the original - no regression.
+
+`weighted_average` is now the default `conflict_resolution` in config.
+
+**Deferred - Round 3:** Kalman Filter trajectory smoothing (sequential noise reduction on the ordered location sequence) belongs in `stay_detector.py` alongside the DBSCAN refactor (Issue 4.1), not here. `strategy: "kalman_filter"` in config is pre-wired for that round.
+
+Reference: IVW estimator - Hartung et al. (2008)
+
+## Issue 2.2 - XDR Centroid Oversimplification
+
+**File:** `src/data_ingestion/cell_tower_loader.py`, `src/utils/geo_utils.py`  
+**Severity:** HIGH  
+
+#### Root Cause
+
+`infer_from_xdr` reduced all GPS observations for a cell to a single `(lat_mean, lon_mean)` point plus a radius derived from standard deviation. This destroys any directional information in the point cloud - a sectorized tower with three antenna lobes collapses to one centroid near the tower base, which is neither the tower location nor any sector center.
+
+#### Fix Applied
+
+Introduced `CellRecord` dataclass to carry both the centroid (backward-compat) and a polygon geometry per cell. Cell geometry is now built according to `config.cell_towers.location_method`:
+
+- **`convex_hull`** (new default): `scipy.spatial.ConvexHull` on the raw XDR GPS point cloud per `cell_id`. Preserves the spatial extent and directional bias of the point cloud deterministically. Falls back to a circular polygon when GPS sample count < `config.cell_towers.min_hull_samples` (default 5). Collinear degenerate case buffered via `shapely` (local import, not a hard dep).
+
+- **`centroid`** (legacy): original behaviour unchanged, available via config.
+
+- **`sector_model`** (pre-wired): analytically exact wedge polygon from azimuth + beamwidth. Requires operator NMS/BSS antenna metadata not present in raw XDR. `infer_from_xdr` logs a warning and falls back to `convex_hull`. Activates automatically via `load_from_file()` once antenna data is available.
+
+Backward compatibility preserved: `get_cell_location(cell_id)` still returns `(lat, lon, radius)`. New API: `get_cell_record(cell_id)` returns full `CellRecord` with `geometry` and `geometry_type`.
+
+`add_locations_to_df` now only fills rows with missing coordinates (was overwriting all rows including valid GPS - silent correctness bug).
+
+**Downstream note:** stay_detector, trip_generator, home_work_inference all consume `(lat, lon)` centroid only. Polygon geometry is stored for future zone-containment queries; integration planned for Round 3 `zone_loader` refactor.
+
+Added to `geo_utils.py`: `build_convex_hull_polygon`, `build_sector_polygon`, `_circle_polygon`.
+
+Config changes:
+
+```yaml
+cell_towers:
+  location_method: "convex_hull"   # was "centroid"
+  min_hull_samples: 5
+```
+
+## Issue 3.2 - Ping-Pong Filtering Logic
+
+**File:** `src/preprocessing/telecom_preprocessor.py`  
+**Severity:** MEDIUM  
+
+### Root Cause
+
+The previous implementation used a strict ABA oscillation rule (A→B→A within a fixed time window) with two limitations:
+
+1. Required ≥3 oscillations before flagging, allowing single A→B→A round-trips to pass.
+2. Executed before `add_locations_to_df()` in the pipeline, meaning CDR rows lacked coordinates and velocity-based validation was not feasible.
+
+No speed-based plausibility check was implemented.
+
+### Resolution
+
+Ping-pong filtering was refactored to support two config-driven methods via `preprocessing.ping_pong_filter`:
+
+#### 1. `aba` (corrected)
+
+Flags the middle record of any A→B→A oscillation occurring within `ping_pong_time_threshold` seconds.
+
+Used as fallback when coordinate data is unavailable.
+
+#### 2. `velocity` (default)
+
+Flags records where implied travel speed between consecutive observations exceeds a physically plausible threshold.
+
+Source-aware thresholds:
+
+- `source="xdr"` with `has_coordinates=True` → `gps_max_speed_ms` (42 m/s)
+- `source="cdr"` or centroid-derived coordinates → `centroid_max_speed_ms` (80 m/s)
+
+Pairs where `dt < min_time_gap_s` are skipped (not flagged) to avoid unreliable speed estimation at sub-resolution timestamps.
+
+Per-user fallback to ABA occurs automatically if coordinates are missing.
+
+### Pipeline Wiring Fix
+
+`remove_ping_pong()` is now called in `pipeline.py` Step 4 immediately after `add_locations_to_df()`:
+
+```python
+updated = self.cell_loader.add_locations_to_df(preprocessed)
+updated = self.preprocessor.remove_ping_pong(updated)
+```
+
+This ensures centroid coordinates are available before velocity filtering.
+
+### Configuration Additions
+
+```yaml
+ping_pong_filter: "velocity"
+ping_pong_time_threshold: 300
+
+ping_pong_velocity:
+  gps_max_speed_ms: 42.0
+  centroid_max_speed_ms: 80.0
+  min_time_gap_s: 5
 ```

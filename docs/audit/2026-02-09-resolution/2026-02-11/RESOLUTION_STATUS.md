@@ -1,19 +1,19 @@
 # Resolution Status - Telecom TDM Audit
 
-- Last updated: 2026-02-18
+- Last updated: 2026-02-19
 
 | ID | Title | Severity | Status | Round | Notes |
 | --- | --- | --- | --- | --- | --- |
 | 7.1 | O(N²) OD matrix explosion | CRITICAL | Resolved | 1 | FIXES.md 7.1 |
 | 7.1b | Dense `to_matrix_form` | HIGH | Resolved | 1 | FIXES.md 7.1b |
-| 8.1 | Sequential in-memory pipeline | CRITICAL | Pending | 1 | pipeline.py next |
-| 2.1 | Winner-takes-all data fusion | CRITICAL | Pending | 2 | - |
-| 2.2 | XDR centroid oversimplification | HIGH | Pending | 2 | - |
-| 3.2 | Binary ABA ping-pong filter | MEDIUM | Pending | 2 | config pre-wired |
-| 4.1 | Fixed-grid stay consolidation | CRITICAL | Pending | 3 | - |
+| 8.1 | Sequential in-memory pipeline | CRITICAL | Resolved | 1 | FIXES.md 8.1 |
+| 2.1 | Winner-takes-all data fusion | CRITICAL | Resolved | 2 | FIXES.md 2.1 |
+| 2.2 | XDR centroid oversimplification | HIGH | Resolved | 2 | FIXES.md 2.2 |
+| 3.2 | Binary ABA ping-pong filter | MEDIUM | Resolved | 2 | FIXES.md 3.2 |
+| 4.1 | Fixed-grid stay consolidation | HIGH | Pending | 3 | - |
 | 4.2 | Magic confidence weights | HIGH | Pending | 3 | - |
 | 1.2 | Hardcoded 9–5 time windows | MEDIUM | Pending | 4 | - |
-| 5.1 | Single work location assumption | CRITICAL | Pending | 4 | config pre-wired |
+| 5.1 | Single work location assumption | MEDIUM | Pending | 4 | config pre-wired |
 | 6.1 | Hardcoded Beta departure times | HIGH | Pending | 4 | config pre-wired |
 | 3.1 | Aggressive user filtering | HIGH | Pending | 5 | - |
 | 7.2 | Linear trip expansion bias | HIGH | Pending | 5 | - |

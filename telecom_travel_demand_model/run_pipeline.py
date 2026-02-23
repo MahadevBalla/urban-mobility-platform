@@ -112,9 +112,9 @@ Examples:
         logger.info("Pipeline completed successfully!")
 
         # Print summary
-        print("\n" + "=" * 60)
+        print("\n" + "-" * 70)
         print("RESULTS SUMMARY")
-        print("=" * 60)
+        print("-" * 70)
 
         if "filter_stats" in results:
             print(
@@ -133,7 +133,7 @@ Examples:
             print(f"OD pairs: {results['od_summary']['non_zero_pairs']}")
             print(f"Total flow: {results['od_summary']['total_flow']:.0f}")
 
-        print("=" * 60)
+        print("-" * 70)
 
     except Exception as e:
         logger.error(f"Pipeline failed: {e}")

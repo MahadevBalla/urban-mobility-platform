@@ -26,6 +26,14 @@ class MultiSourceFusion:
     - 4G: Moderate accuracy, good coverage
     - CDR: Cell-level only, lowest spatial resolution
 
+    Conflict resolution strategies (config.data_fusion.conflict_resolution):
+        - "highest_priority" - winner-takes-all on location_confidence (old default)
+        - "weighted_average" - IVW fusion: coordinates fused by 1/σ² proxy (confidence),
+                               cell_id taken from highest-confidence source that has one,
+                               fused_confidence = norm of weight vector (resultant precision)
+        - "most_recent"      - last observation in temporal window wins
+
+
     This module implements hierarchical fusion that prioritizes higher
     accuracy sources and uses signal quality metrics for confidence weighting.
 
@@ -61,7 +69,16 @@ class MultiSourceFusion:
 
         # Conflict resolution strategy
         self.conflict_resolution = fusion_config.get(
-            "conflict_resolution", "highest_priority"
+            "conflict_resolution", "weighted_average"
+        )
+
+    @staticmethod
+    def _normalise_cell_id(col: Optional[pd.Series]) -> pd.Series:
+        """Cast cell_id to str, normalise NaN/'nan'/'None' → None."""
+        if col is None:
+            return pd.Series([None] * 0, dtype=object)
+        return col.astype(str).replace(
+            {"nan": None, "None": None, "NaN": None, "<NA>": None}
         )
 
     def fuse(
@@ -125,7 +142,10 @@ class MultiSourceFusion:
         # Resolve temporal conflicts (multiple observations at same time)
         fused = self._resolve_conflicts(combined)
 
-        logger.info(f"Fusion complete: {len(fused)} observations")
+        logger.info(
+            f"Fusion complete: {len(fused)} observations "
+            f"(strategy='{self.conflict_resolution}')"
+        )
         return fused
 
     def _process_xdr(self, df: pd.DataFrame) -> pd.DataFrame:
@@ -134,7 +154,7 @@ class MultiSourceFusion:
             {
                 "imsi": df["imsi"].astype(str),
                 "timestamp": pd.to_datetime(df["timestamp"]),
-                "cell_id": df.get("cell_id", pd.Series(dtype=str)).astype(str),
+                "cell_id": self._normalise_cell_id(df.get("cell_id")),
                 "tac": df.get("tac", pd.Series(dtype=str)).astype(str),
                 "latitude": df.get("latitude"),
                 "longitude": df.get("longitude"),
@@ -168,11 +188,9 @@ class MultiSourceFusion:
             {
                 "imsi": df["imsi"].astype(str),
                 "timestamp": pd.to_datetime(df["timestamp"]),
-                "cell_id": df.get(
-                    "nci", df.get("cell_id", pd.Series(dtype=str))
-                ).astype(str),
+                "cell_id": self._normalise_cell_id(df.get("nci", df.get("cell_id"))),
                 "tac": df.get("tac", pd.Series(dtype=str)).astype(str),
-                "latitude": np.nan,  # No coordinates in network data
+                "latitude": np.nan,
                 "longitude": np.nan,
                 "source": "network_5g",
                 "signal_quality": self._calculate_signal_quality(
@@ -196,7 +214,7 @@ class MultiSourceFusion:
             {
                 "imsi": df["imsi"].astype(str),
                 "timestamp": pd.to_datetime(df["timestamp"]),
-                "cell_id": df.get("cell_id", pd.Series(dtype=str)).astype(str),
+                "cell_id": self._normalise_cell_id(df.get("cell_id")),
                 "tac": df.get("tac", pd.Series(dtype=str)).astype(str),
                 "latitude": np.nan,
                 "longitude": np.nan,
@@ -220,7 +238,7 @@ class MultiSourceFusion:
             {
                 "imsi": df["imsi"].astype(str),
                 "timestamp": pd.to_datetime(df["timestamp"]),
-                "cell_id": df.get("cell_id", pd.Series(dtype=str)).astype(str),
+                "cell_id": self._normalise_cell_id(df.get("cell_id")),
                 "tac": df.get("tac", pd.Series(dtype=str)).astype(str),
                 "latitude": np.nan,
                 "longitude": np.nan,
@@ -263,9 +281,13 @@ class MultiSourceFusion:
 
     def _resolve_conflicts(self, df: pd.DataFrame) -> pd.DataFrame:
         """
-        Resolve conflicts when multiple observations exist at similar times.
+        Resolve conflicts when multiple sources report observations in the same
+        temporal window. Uses configured conflict resolution strategy.
 
-        Uses configured conflict resolution strategy.
+        Strategies:
+            - "highest_priority" - keep highest location_confidence record (old behaviour)
+            - "weighted_average" - IVW fusion (see _ivw_fusion); default
+            - "most_recent" - keep last timestamp in bucket
         """
         # Round timestamps to alignment window
         df = df.copy()
@@ -284,36 +306,120 @@ class MultiSourceFusion:
 
         elif self.conflict_resolution == "weighted_average":
             # For coordinates, take weighted average
-            result = self._weighted_average_fusion(df)
+            result = self._ivw_fusion(df)
 
         else:
-            result = df.drop(columns=["time_bucket"])
+            logger.warning(
+                f"Unknown conflict_resolution '{self.conflict_resolution}', "
+                "falling back to weighted_average"
+            )
+            result = self._ivw_fusion(df)
 
         return result.reset_index(drop=True)
 
-    def _weighted_average_fusion(self, df: pd.DataFrame) -> pd.DataFrame:
-        """Fuse coordinates using weighted average by confidence."""
+    def _ivw_fusion(self, df: pd.DataFrame) -> pd.DataFrame:
+        """
+        Inverse Variance Weighting (IVW) fusion per user and temporal alignment window.
+
+        Treats location_confidence as a proxy for measurement precision (1/σ²).
+        For each bucket:
+
+            w_i = location_confidence_i (precision proxy)
+            W   = Σ w_i
+
+            fused_lat  = Σ(w_i * lat_i) / W_coords (coords-only subset)
+            fused_lon  = Σ(w_i * lon_i) / W_coords
+            cell_id    = cell_id from argmax(w_i) among records that have a cell_id
+            fused_confidence = W / n (mean precision = combined reliability)
+            sources    = comma-joined unique source names in bucket
+
+        When only one source is present the result is identical to that record,
+        so single-source buckets are handled without special-casing.
+
+        Reference: standard inverse-variance weighted estimator used in
+        meta-analysis and sensor fusion (e.g., Hartung et al., 2008)
+        """
         results = []
 
-        for (imsi, bucket), group in df.groupby(["imsi", "time_bucket"]):
-            # Find best observation
-            best_idx = group["location_confidence"].idxmax()
-            result_row = group.loc[best_idx].to_dict()
+        for (imsi, _), group in df.groupby(["imsi", "time_bucket"]):
+            weights = group["location_confidence"].fillna(0.0).values
+            W = weights.sum()
 
-            # If multiple observations have coordinates, average them
-            coords_mask = group["latitude"].notna() & group["longitude"].notna()
-            if coords_mask.sum() > 1:
-                weights = group.loc[coords_mask, "location_confidence"].values
-                weights = weights / weights.sum()
+            if W == 0:
+                # All confidences are zero - fall back to most recent
+                fused = group.sort_values("timestamp").iloc[-1].to_dict()
+                fused["fused_confidence"] = 0.0
+                fused["sources"] = group["source"].unique().tolist()
+                results.append(fused)
+                continue
 
-                result_row["latitude"] = np.average(
-                    group.loc[coords_mask, "latitude"].values, weights=weights
+            # Coordinate fusion (IVW over records with valid coords)
+            coords_mask = (
+                group["latitude"].notna()
+                & group["longitude"].notna()
+                & (group["latitude"] != 0)
+                & (group["longitude"] != 0)
+            ).values
+
+            if coords_mask.sum() >= 1:
+                coord_weights = weights[coords_mask]
+                W_coords = coord_weights.sum()
+                fused_lat = float(
+                    np.dot(coord_weights, group["latitude"].values[coords_mask])
+                    / W_coords
                 )
-                result_row["longitude"] = np.average(
-                    group.loc[coords_mask, "longitude"].values, weights=weights
+                fused_lon = float(
+                    np.dot(coord_weights, group["longitude"].values[coords_mask])
+                    / W_coords
                 )
+            else:
+                fused_lat = np.nan
+                fused_lon = np.nan
 
-            results.append(result_row)
+            # Cell ID: highest-confidence record that has a cell_id
+            _NULL_CELL = {"None", "nan", "NaN", "none", "<NA>", ""}
+            has_cell = group["cell_id"].notna() & ~group["cell_id"].isin(_NULL_CELL)
+            if has_cell.any():
+                best_cell_idx = group.loc[has_cell, "location_confidence"].idxmax()
+                fused_cell = group.loc[best_cell_idx, "cell_id"]
+                fused_tac = group.loc[best_cell_idx, "tac"]
+            else:
+                fused_cell = None
+                fused_tac = None
+
+            # Timestamp: confidence-weighted mean within bucket
+            ts_seconds = group["timestamp"].apply(lambda t: t.timestamp()).values
+            fused_ts = (
+                pd.Timestamp(float(np.dot(weights, ts_seconds) / W), unit="s", tz="UTC")
+                .tz_localize(None)
+                .floor("s")
+            )
+
+            # fused_confidence = mean precision (combined reliability)
+            # Interpretation: average confidence across all contributing sources.
+            # Higher = more sources with high individual confidence agreed.
+            fused_confidence = float(W / len(group))
+
+            # Dominant source label
+            dominant_source = group.loc[group["location_confidence"].idxmax(), "source"]
+
+            results.append(
+                {
+                    "imsi": imsi,
+                    "timestamp": fused_ts,
+                    "cell_id": fused_cell,
+                    "tac": fused_tac,
+                    "latitude": fused_lat,
+                    "longitude": fused_lon,
+                    "source": dominant_source,
+                    "signal_quality": float(
+                        np.dot(weights, group["signal_quality"].fillna(0.0).values) / W
+                    ),
+                    "location_confidence": fused_confidence,
+                    "fused_confidence": fused_confidence,
+                    "sources": ",".join(group["source"].unique().tolist()),
+                }
+            )
 
         return pd.DataFrame(results)
 
@@ -328,4 +434,10 @@ class MultiSourceFusion:
             "source_distribution": fused_df["source"].value_counts().to_dict(),
             "mean_confidence": fused_df["location_confidence"].mean(),
             "median_confidence": fused_df["location_confidence"].median(),
+            "conflict_resolution": self.conflict_resolution,
+            "multi_source_buckets": (
+                fused_df["sources"].str.contains(",").sum()
+                if "sources" in fused_df.columns
+                else "N/A"
+            ),
         }

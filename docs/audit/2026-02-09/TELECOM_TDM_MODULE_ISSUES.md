@@ -45,7 +45,7 @@
 
 - **File:** `src/data_ingestion/cell_tower_loader.py`
 - **Function / Section:** `infer_from_xdr`
-- **Why This Is Wrong:** XDR data often reveals sectorization (directional antennas). Averaging GPS points to a simple centroid destroys the sector geometry, effectively downgrading precise XDR data to omni-directional cell accuracy.
+- **Why This Is Wrong:** XDR data often reveals sectorization (directional antennas). Averaging GPS points to a simple centroid destroys the sector geometry, effectively downgrading precise XDR data to omni-directional cell accuracy. Acceptable for MVP; sector/polygon modeling remains architectural enhancement.
 - **Impact:**
   - **On OD Accuracy:** Increases localization error for trips starting/ending at cell edges.
 - **Proposed Fix:**
@@ -59,7 +59,7 @@
 - **Function / Section:** `filter_users`
 - **Why This Is Wrong:**
   - **Socio-economic Bias:** Users with lower phone usage (shared devices, pay-per-use, low income) are systematically removed.
-  - **Real Micro-mobility:** Short trips often don't generate CDRs. Filtering users who appear "sedentary" removes genuine short-distance travelers.
+  - **Real Micro-mobility:** Short trips often don't generate CDRs. Filtering users who appear "sedentary" removes genuine short-distance travelers. Filtering is necessary for noise reduction; however, expansion must account for representativeness.
 - **Impact:**
   - **On Representativeness:** The resulting sample skews towards white-collar, high-mobility users, introducing systematic sampling bias that must be corrected via weighting.
 - **Proposed Fix:**
@@ -70,7 +70,7 @@
 - **File:** `src/preprocessing/telecom_preprocessor.py`
 - **Function / Section:** `filter_ping_pong`
 - **Why This Is Wrong:**
-  - **Telecom Specific Pitfall:** Signal handover often involves complex patterns (A-B-C-B-A) or rapid switching between >2 towers in dense urban canyons. The current logic only detects immediate binary switching.
+  - **Telecom Specific Pitfall:** Signal handover often involves complex patterns (A-B-C-B-A) or rapid switching between >2 towers in dense urban canyons. The current logic only detects immediate binary switching. More complex multi-tower oscillation patterns not yet modeled.
 - **Impact:**
   - **On Trip Generation:**  Falsely identifies signal jitter as "short trips", inflating intra-zone trip counts.
 - **Proposed Fix:**
@@ -78,7 +78,7 @@
 
 ## 4. Stay Point Detection
 
-### 4.1 **Issue:** Grid-based consolidation with fixed `grid_cell_size` (default 300m) [SEVERITY: CRITICAL]
+### 4.1 **Issue:** Grid-based consolidation with fixed `grid_cell_size` (default 300m) [SEVERITY: HIGH]
 
 - **File:** `src/stay_detection/stay_detector.py`
 - **Function / Section:** `_consolidate_stays`
@@ -101,12 +101,12 @@
 
 ## 5. Home–Work Inference
 
-### 5.1 **Issue:** Single work location assumption [SEVERITY: CRITICAL]
+### 5.1 **Issue:** Single work location assumption [SEVERITY: MEDIUM]
 
 - **File:** `src/stay_detection/home_work_inference.py`
 - **Function / Section:** `_infer_work`
 - **Why This Is Wrong:**
-  - **Modern Mobility:** Gig workers, delivery personnel, and sales agents have *no* fixed work location or *multiple* sites. The code forces a single "Work" label or returns None.
+  - **Modern Mobility:** Gig workers, delivery personnel, and sales agents have *no* fixed work location or *multiple* sites. The code forces a single "Work" label or returns None. Advanced behavioral extension needed.
 - **Impact:**
   - **On Policy Decision Making:** Completely blinds the model to the mobility needs of the gig economy.
 - **Proposed Fix:**
@@ -167,9 +167,9 @@
 - **File:** `src/pipeline.py`
 - **Function / Section:** General Architecture
 - **Why This Is Wrong:**
-  - **Scalability Failure:** The pipeline loads *all* data into memory. Telecom data volume (TB scale) requires streaming or distributed processing (Spark/Dask).
+  - **Scalability Failure:** The pipeline loads *all* data into memory. Telecom data volume (large scale) requires streaming or distributed processing (Spark/Dask).
 - **Impact:**
-  - **Usability:** Cannot run on real-world datasets, only samples.
+  - **Usability:** Cannot run on distributed-scale yet, only medium/large datasets.
 - **Proposed Fix:**
   - **Architectural Refactor:** Rewrite using PySpark or Dask. At minimum, implement chunk-based processing for the `preprocessing` and `trip_generation` stages.
 

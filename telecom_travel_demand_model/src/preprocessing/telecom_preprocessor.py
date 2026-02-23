@@ -32,6 +32,8 @@ class TelecomPreprocessor:
         >>> clean_df = preprocessor.process(cdr_df, xdr_df)
     """
 
+    _VELOCITY_CFG_KEY = "preprocessing.ping_pong_velocity"
+
     def __init__(self, config: Optional[Config] = None):
         """
         Initialize preprocessor.
@@ -311,99 +313,186 @@ class TelecomPreprocessor:
         return summary.reset_index()
 
     def filter_ping_pong(
-        self, df: pd.DataFrame, time_threshold_s: int = 300, max_oscillations: int = 3
+        self,
+        df: pd.DataFrame,
+        method: Optional[str] = None,
+        time_threshold_s: Optional[int] = None,
     ) -> pd.DataFrame:
         """
-        Filter ping-pong movements (cell tower oscillations).
+        Flag ping-pong (tower oscillation) records per user.
 
-        Ping-pong occurs when a stationary user's phone rapidly switches
-        between cell towers due to signal fluctuations. This creates
-        false movement patterns that should be filtered.
+        Two methods, config-driven via preprocessing.ping_pong_filter:
+            - "aba"     :   flags the middle record of A→B→A sequences occurring
+                            within the configured time window.
 
-        Detection criteria:
-        1. Rapid back-and-forth between same cells (< time_threshold)
-        2. More than max_oscillations switches in short period
-        3. Pattern: A->B->A->B... where switches are very fast
-
+            - "velocity":   Flags records where implied travel speed from the previous
+                            observation is physically implausible.  Speed threshold varies
+                            by coordinate quality:
+                                - source="xdr" with has_coordinates=True  →  gps_max_speed_ms
+                                - source="cdr" (centroid-filled)          →  centroid_max_speed_ms
+                            Pairs where dt < min_time_gap_s are skipped (not flagged) -
+                            timestamp resolution at sub-5s is unreliable.
+                            Falls back to ABA for pairs where either record lacks coordinates.
         Args:
-            df: DataFrame with telecom observations.
-            time_threshold_s: Max seconds between switches to consider ping-pong.
-            max_oscillations: Maximum allowed rapid oscillations.
+            df              : Preprocessed DataFrame (standard schema).
+            method          : Override config method ("aba" or "velocity").
+            time_threshold_s: Override ping_pong_time_threshold.
 
         Returns:
-            DataFrame with ping-pong observations flagged.
+            DataFrame with boolean column is_ping_pong added.
         """
         if len(df) == 0:
             return df
 
+        cfg_method = method or self.preprocessing_config.get("ping_pong_filter", "aba")
+        cfg_threshold = time_threshold_s or int(
+            self.preprocessing_config.get("ping_pong_time_threshold", 300)
+        )
+
+        if cfg_method not in {"aba", "velocity"}:
+            logger.warning(
+                f"Unknown ping_pong_filter='{cfg_method}', falling back to 'aba'"
+            )
+            cfg_method = "aba"
+
+        # Load velocity config
+        vel_cfg = self.config.get(self._VELOCITY_CFG_KEY, {})
+        gps_max_speed = float(vel_cfg.get("gps_max_speed_ms", 42.0))
+        centroid_max_speed = float(vel_cfg.get("centroid_max_speed_ms", 80.0))
+        min_time_gap = float(vel_cfg.get("min_time_gap_s", 5))
+
+        has_coords = (
+            "latitude" in df.columns
+            and "longitude" in df.columns
+            and df["latitude"].notna().any()
+        )
+
         result = df.copy()
         result["is_ping_pong"] = False
 
-        # Process each user
-        for user_id in result["imsi"].unique():
-            user_mask = result["imsi"] == user_id
-            user_df = result[user_mask].sort_values("timestamp")
+        for user_id, user_df in result.groupby("imsi"):
+            user_df = user_df.sort_values("timestamp")
 
-            if len(user_df) < 3:
+            if len(user_df) < 2:
                 continue
 
-            indices = user_df.index.tolist()
-            cells = user_df["cell_id"].tolist()
-            times = user_df["timestamp"].tolist()
+            if cfg_method == "velocity" and has_coords:
+                flagged = self._velocity_filter(
+                    user_df,
+                    gps_max_speed_ms=gps_max_speed,
+                    centroid_max_speed_ms=centroid_max_speed,
+                    min_time_gap_s=min_time_gap,
+                )
+            else:
+                if cfg_method == "velocity":
+                    logger.debug(
+                        f"User {user_id}: no coordinates - falling back to ABA filter"
+                    )
+                flagged = self._aba_filter(user_df, cfg_threshold)
 
-            # Detect oscillation patterns
-            i = 0
-            while i < len(cells) - 2:
-                # Check for A-B-A pattern
-                if cells[i] == cells[i + 2] and cells[i] != cells[i + 1]:
-                    # Check if rapid oscillation
-                    time_diff = (times[i + 2] - times[i]).total_seconds()
-
-                    if time_diff < time_threshold_s:
-                        # Count consecutive oscillations
-                        oscillation_count = 1
-                        j = i + 2
-
-                        while j < len(cells) - 2:
-                            if (
-                                cells[j] == cells[j + 2]
-                                and cells[j] != cells[j + 1]
-                                and (times[j + 2] - times[j]).total_seconds()
-                                < time_threshold_s
-                            ):
-                                oscillation_count += 1
-                                j += 2
-                            else:
-                                break
-
-                        # Mark as ping-pong if too many oscillations
-                        if oscillation_count >= max_oscillations:
-                            # Mark middle points of oscillations
-                            for k in range(i + 1, min(j + 2, len(indices)), 2):
-                                result.loc[indices[k], "is_ping_pong"] = True
-
-                        i = j
-                    else:
-                        i += 1
-                else:
-                    i += 1
+            if flagged:
+                result.loc[flagged, "is_ping_pong"] = True
 
         ping_pong_count = result["is_ping_pong"].sum()
         if ping_pong_count > 0:
             logger.info(
-                f"Detected {ping_pong_count} ping-pong observations "
-                f"({100 * ping_pong_count / len(result):.1f}% of records)"
+                f"Ping-pong filter (method='{cfg_method}'): flagged "
+                f"{ping_pong_count} records "
+                f"({100 * ping_pong_count / len(result):.1f}%)"
             )
-
         return result
+
+    def _aba_filter(self, user_df: pd.DataFrame, time_threshold_s: int) -> list:
+        """
+        Identify A→B→A oscillation patterns within the given time window.
+
+        Returns:
+            List of index labels corresponding to the middle (B) records.
+        """
+        flagged = []
+        cells = user_df["cell_id"].tolist()
+        times = user_df["timestamp"].tolist()
+        indices = user_df.index.tolist()
+
+        for i in range(1, len(cells) - 1):
+            if (
+                cells[i - 1] == cells[i + 1]  # A→B→A pattern
+                and cells[i] != cells[i - 1]  # B is distinct
+                and (times[i + 1] - times[i - 1]).total_seconds() <= time_threshold_s
+            ):
+                flagged.append(indices[i])
+
+        return flagged
+
+    def _velocity_filter(
+        self,
+        user_df: pd.DataFrame,
+        gps_max_speed_ms: float,
+        centroid_max_speed_ms: float,
+        min_time_gap_s: float,
+    ) -> list:
+        """
+        Identify records where implied speed from the previous observation
+        exceeds a threshold determined by coordinate quality.
+
+        - GPS rows use `gps_max_speed_ms`.
+        - Centroid-derived rows use `centroid_max_speed_ms`.
+        - Pairs with insufficient time gap or missing coordinates are skipped.
+
+        Args:
+            user_df              : Single-user DataFrame, sorted by timestamp.
+            gps_max_speed_ms     : Speed ceiling (m/s) for true GPS rows.
+            centroid_max_speed_ms: Speed ceiling (m/s) for centroid-derived rows.
+            min_time_gap_s       : Skip speed check if dt < this value.
+
+        Returns:
+            List of index labels to flag.
+        """
+        from src.utils.geo_utils import haversine_distance
+
+        flagged = []
+        rows = user_df.reset_index()  # preserves original index in "index" column
+
+        for i in range(1, len(rows)):
+            prev = rows.iloc[i - 1]
+            curr = rows.iloc[i]
+
+            lat0, lon0 = prev["latitude"], prev["longitude"]
+            lat1, lon1 = curr["latitude"], curr["longitude"]
+
+            # Skip pairs where either record lacks coordinates
+            if any(pd.isna(v) for v in [lat0, lon0, lat1, lon1]):
+                continue
+
+            dt = (curr["timestamp"] - prev["timestamp"]).total_seconds()
+
+            # Skip - don't flag - when time gap is below reliable resolution
+            if dt < min_time_gap_s:
+                continue
+
+            dist_m = haversine_distance(lat0, lon0, lat1, lon1)
+            speed_ms = dist_m / dt
+
+            # Select threshold based on coordinate quality of the CURRENT record.
+            # A centroid-filled CDR row has source="cdr"; true XDR GPS has
+            # source="xdr" with has_coordinates=True.
+            curr_is_gps = curr.get("source") == "xdr" and bool(
+                curr.get("has_coordinates", False)
+            )
+            threshold = gps_max_speed_ms if curr_is_gps else centroid_max_speed_ms
+
+            if speed_ms > threshold:
+                flagged.append(curr["index"])
+
+        return flagged
 
     def remove_ping_pong(self, df: pd.DataFrame, **kwargs) -> pd.DataFrame:
         """
-        Remove ping-pong observations from data.
+        Remove ping-pong observations and drop the is_ping_pong column.
 
         Args:
-            df: DataFrame with telecom observations.
-            **kwargs: Arguments passed to filter_ping_pong.
+            df      : DataFrame with telecom observations.
+            **kwargs: Forwarded to filter_ping_pong if column not yet present.
 
         Returns:
             DataFrame with ping-pong observations removed.
@@ -412,7 +501,7 @@ class TelecomPreprocessor:
             df = self.filter_ping_pong(df, **kwargs)
 
         initial_count = len(df)
-        result = df[~df["is_ping_pong"]].copy()
+        result = df[~df["is_ping_pong"]].drop(columns=["is_ping_pong"]).copy()
         removed = initial_count - len(result)
 
         if removed > 0:

@@ -1,6 +1,3 @@
-# Telecom Travel Demand Model Configuration
-# ==========================================
-
 # General Settings
 general:
   project_name: "telecom_travel_demand"
@@ -8,10 +5,10 @@ general:
   n_workers: 4  # Parallel processing workers
   log_level: "INFO"
   processing:
-    mode: "chunked"
-    chunk_size_users: 1000
-    intermediate_format: "parquet"
-    intermediate_dir: "data/intermediate"
+    mode: "chunked" # ["full", "chunked"] - chunked mode processes users in batches to manage memory
+    chunk_size_users: 1000 # Number of users per chunk in chunked mode
+    intermediate_format: "parquet" # ["csv", "parquet"] - format for intermediate files
+    intermediate_dir: "data/intermediate" 
 
 # Data Source Configuration
 data_sources:
@@ -63,10 +60,14 @@ preprocessing:
   remove_duplicates: true
   handle_missing_locations: "interpolate"  # drop, interpolate, or nearest_cell
 
-  # Ping-pong filtering to remove spurious location switches 
-  # (AUDIT 3.2: ping-pong filter - set to "velocity" once Round 2 fix is deployed)
-  ping_pong_filter: "aba"    # "aba" | "velocity" | "mdl"
+  # Ping-pong filtering
+  ping_pong_filter: "velocity"    # "aba" | "velocity" | "mdl"
   ping_pong_time_threshold: 300  # seconds
+
+  ping_pong_velocity:
+    gps_max_speed_ms: 42.0              # ~150 km/h - strict threshold for true XDR GPS rows
+    centroid_max_speed_ms: 80.0         # relaxed threshold for centroid-filled CDR rows
+    min_time_gap_s: 5                   # pairs with dt < this: skip speed calc, don't flag
 
 # Cell Tower / Location Configuration
 cell_towers:
@@ -74,8 +75,9 @@ cell_towers:
   default_radius: 500
 
   # Location inference method
-  # AUDIT 2.2: "sector" once Round 2 refactor done
-  location_method: "centroid"  # centroid, weighted_centroid, triangulation
+  # audit 2.2 resolved; "sector_model" when antenna data available
+  location_method: "convex_hull"
+  min_hull_samples: 5 # min GPS points for hull; below this → circular fallback
 
   # Cell ID to location mapping source
   cell_location_source: "xdr_derived"  # xdr_derived, network_data, external_file
@@ -203,12 +205,12 @@ od_matrix:
 # Data Fusion Configuration
 data_fusion:
   # Fusion strategy
+  # AUDIT 3 (Round 3): add kalman_filter trajectory smoother in stay_detector.py
+  # alongside DBSCAN refactor (Issue 4.1)
   strategy: "hierarchical"  # hierarchical, weighted_average, kalman_filter
 
   # Conflict resolution
-  # AUDIT 2.1: "highest_priority" is winner-takes-all - replace with
-  # "weighted_average" once Round 2 fix is deployed in multi_source_fusion.py
-  conflict_resolution: "highest_priority"  # highest_priority, weighted_average, most_recent
+  conflict_resolution: "weighted_average"  # highest_priority, weighted_average, most_recent
 
   # Source priority (higher = more trusted for location)
   source_priority:

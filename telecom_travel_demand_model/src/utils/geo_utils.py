@@ -4,6 +4,7 @@ import math
 from typing import List, Optional, Tuple
 
 import numpy as np
+from scipy.spatial import ConvexHull
 
 # Earth's radius in meters
 EARTH_RADIUS_M = 6371000
@@ -309,3 +310,128 @@ def lat_lon_to_grid_cell(
     col = int(lon_m / cell_size_m)
 
     return (row, col)
+
+
+def _circle_polygon(
+    lat: float, lon: float, radius_m: float, n_pts: int = 16
+) -> List[Tuple[float, float]]:
+    """
+    Circular polygon approximation used as a fallback when a convex hull
+    cannot be formed (degenerate point cloud or insufficient samples).
+
+    Args:
+        lat, lon    :  Centre point in degrees.
+        radius_m    :  Radius in metres.
+        n_pts       :  Number of vertices (closed - last == first).
+
+    Returns:
+        List of (lat, lon) vertex tuples forming a closed polygon.
+    """
+    lat_per_m = 1.0 / 111320
+    lon_per_m = 1.0 / (111320 * math.cos(math.radians(lat)))
+
+    vertices = []
+    for i in range(n_pts):
+        angle = 2 * math.pi * i / n_pts
+        vertices.append(
+            (
+                lat + radius_m * math.sin(angle) * lat_per_m,
+                lon + radius_m * math.cos(angle) * lon_per_m,
+            )
+        )
+
+    vertices.append(vertices[0])  # close
+    return vertices
+
+
+def build_convex_hull_polygon(
+    points: List[Tuple[float, float]],
+    fallback_radius_m: float = 500.0,
+) -> List[Tuple[float, float]]:
+    """
+    Build a convex hull polygon from XDR GPS observations for one cell_id.
+
+    Preserves the true spatial extent and directional bias of a cell sector's
+    GPS point cloud instead of collapsing it to a mean centroid.
+
+    Args:
+        points              : List of (lat, lon) tuples - XDR GPS observations.
+        fallback_radius_m   : Radius for circular fallback on degenerate input.
+
+    Returns:
+        Closed list of (lat, lon) vertex tuples forming a convex polygon.
+    """
+    if len(points) < 3:
+        lat_c = float(np.mean([p[0] for p in points]))
+        lon_c = float(np.mean([p[1] for p in points]))
+        return _circle_polygon(lat_c, lon_c, fallback_radius_m)
+
+    arr = np.array(points)  # shape (n, 2): col-0 = lat, col-1 = lon
+
+    try:
+        hull = ConvexHull(arr)
+        # ConvexHull.vertices are indices in CCW order
+        hull_pts = arr[hull.vertices].tolist()
+        hull_pts.append(hull_pts[0])  # close
+        return [(float(lat), float(lon)) for lat, lon in hull_pts]
+
+    except Exception:
+        # QhullError: all points are collinear → buffer the line
+        lat_c = float(np.mean(arr[:, 0]))
+        lon_c = float(np.mean(arr[:, 1]))
+
+        try:
+            from shapely.geometry import MultiPoint
+
+            mp = MultiPoint([(lon, lat) for lat, lon in points])
+            lat_per_m = 1.0 / 111320
+            buffered = mp.convex_hull.buffer(10 * lat_per_m)
+            coords = list(buffered.exterior.coords)
+            return [(float(lat), float(lon)) for lon, lat in coords]
+        except ImportError:
+            return _circle_polygon(lat_c, lon_c, fallback_radius_m)
+
+
+def build_sector_polygon(
+    tower_lat: float,
+    tower_lon: float,
+    azimuth_deg: float,
+    beamwidth_deg: float,
+    radius_m: float,
+    n_arc_pts: int = 12,
+) -> List[Tuple[float, float]]:
+    """
+    Build a wedge polygon from operator antenna parameters.
+
+    Telecom-correct representation of a directional cell sector.
+    Requires azimuth and beamwidth from operator NMS/BSS data -
+    pre-wired for when that data becomes available.
+
+    Args:
+        tower_lat, tower_lon: Tower position in degrees.
+        azimuth_deg         :  Boresight direction, clockwise from North (0-360°).
+        beamwidth_deg       : Half-power beamwidth (typically 60-120°).
+        radius_m            :     Maximum coverage radius in metres.
+        n_arc_pts           :    Arc resolution.
+
+    Returns:
+        Closed list of (lat, lon) vertex tuples forming a wedge polygon.
+    """
+    half_bw = beamwidth_deg / 2.0
+    start_az = math.radians(azimuth_deg - half_bw)
+    end_az = math.radians(azimuth_deg + half_bw)
+
+    lat_per_m = 1.0 / 111320
+    lon_per_m = 1.0 / (111320 * math.cos(math.radians(tower_lat)))
+
+    vertices = [(tower_lat, tower_lon)]
+    for i in range(n_arc_pts + 1):
+        az = start_az + (end_az - start_az) * i / n_arc_pts
+        vertices.append(
+            (
+                tower_lat + radius_m * math.cos(az) * lat_per_m,  # North component
+                tower_lon + radius_m * math.sin(az) * lon_per_m,  # East component
+            )
+        )
+    vertices.append((tower_lat, tower_lon))  # close
+    return vertices
