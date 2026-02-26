@@ -14,12 +14,12 @@ from typing import Dict, List, Optional
 
 import numpy as np
 import pandas as pd
+from sklearn.cluster import HDBSCAN
 
 from src.utils.config import Config, get_config
 from src.utils.geo_utils import (
     calculate_centroid,
     haversine_distance,
-    lat_lon_to_grid_cell,
 )
 from src.utils.logger import ProgressLogger, setup_logger
 
@@ -468,7 +468,8 @@ class StayPointDetector:
 
     def _consolidate_stays(self, candidates: List[dict]) -> List[dict]:
         """
-        Consolidate nearby candidate stays using grid-based clustering.
+        Consolidate nearby candidate stays using HDBSCAN on haversine distances.
+        Falls back to cell-ID grouping when coordinates are unavailable.
 
         Multiple candidate stays that are actually the same location
         (estimated at slightly different coordinates on different days)
@@ -480,43 +481,48 @@ class StayPointDetector:
         # Filter candidates with valid coordinates
         with_coords = [c for c in candidates if c["latitude"] is not None]
         without_coords = [c for c in candidates if c["latitude"] is None]
-
-        if not with_coords:
-            # No coordinates, group by cell_id
-            cell_groups = defaultdict(list)
-            for stay in candidates:
-                cell_groups[stay["cell_id"]].append(stay)
-
-            return [self._merge_stays(stays) for stays in cell_groups.values()]
-
-        # Grid-based clustering for stays with coordinates
-        # Find bounding box
-        lats = [c["latitude"] for c in with_coords]
-        lons = [c["longitude"] for c in with_coords]
-        origin = (min(lats), min(lons))
-
-        # Assign to grid cells
-        grid_groups = defaultdict(list)
-        for stay in with_coords:
-            cell = lat_lon_to_grid_cell(
-                stay["latitude"], stay["longitude"], self.grid_cell_size, origin
-            )
-            grid_groups[cell].append(stay)
-
-        # Merge stays within same grid cell
+        
         consolidated = []
-        for stays in grid_groups.values():
-            merged = self._merge_stays(stays)
-            consolidated.append(merged)
+        if len(with_coords) >= 2:
+            coords_rad = np.radians(
+                [[c["latitude"], c["longitude"]] for c in with_coords]
+            )
 
-        # Add stays without coordinates (grouped by cell_id)
+            consolidation_cfg = self.config.stay_detection.get("consolidation", {})
+            min_cluster_size = consolidation_cfg.get("min_cluster_size", 2)
+            min_samples = consolidation_cfg.get("min_samples", 1)
+            method = consolidation_cfg.get("cluster_selection_method", "eom")
+
+            # HDBSCAN with haversine requires ball_tree algorithm
+            clusterer = HDBSCAN(
+                min_cluster_size=min_cluster_size,
+                min_samples=min_samples,
+                metric="haversine",
+                algorithm="ball_tree",
+                cluster_selection_method=method,
+                copy=False,
+            )
+            labels = clusterer.fit_predict(coords_rad)
+
+            # Group by cluster label; label == -1 means noise (treat as singleton stay)
+            from collections import defaultdict
+
+            cluster_groups = defaultdict(list)
+            for stay, label in zip(with_coords, labels):
+                cluster_groups[label].append(stay)
+
+            for label, group in cluster_groups.items():
+                consolidated.append(self._merge_stays(group))
+        elif len(with_coords) == 1:
+            # Single candidate, no clustering needed
+            consolidated.append(with_coords[0])
+
+        # Stays without coordinates: group by cell_id as before
         cell_groups = defaultdict(list)
         for stay in without_coords:
             cell_groups[stay["cell_id"]].append(stay)
-
-        for stays in cell_groups.values():
-            merged = self._merge_stays(stays)
-            consolidated.append(merged)
+        for group in cell_groups.values():
+            consolidated.append(self._merge_stays(group))
 
         return consolidated
 

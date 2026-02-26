@@ -103,15 +103,20 @@ stay_detection:
   # Time threshold (seconds) - minimum stay duration
   time_threshold: 1800  # 30 minutes
 
-  # Grid cell size for clustering consolidation (meters)
-  grid_cell_size: 300 # AUDIT 4.1: replaced by DBSCAN eps in Round 3
-
   # Minimum visits to consider a location significant
   min_visits: 2
 
   # Signal quality weighting (use network metrics for confidence)
   use_signal_quality: true
   signal_quality_weight: 0.3 # AUDIT 4.2: magic number - replace in Round 3
+
+  consolidation:
+    method: "hdbscan"          # "hdbscan" | "dbscan" | "grid" (grid kept as fallback)
+    min_cluster_size: 2        # minimum visits to form a location cluster
+    min_samples: 1             # HDBSCAN: controls noise sensitivity (1 = no noise rejection)
+    cluster_selection_method: "eom"   # "eom" (conservative) | "leaf" (fine-grained)
+    metric: "haversine"        # must use haversine, NOT euclidean on lat/lon
+    grid_cell_size: 300        # meters - used if method=grid or as fallback for small samples
 
 # Home/Work Inference Configuration
 home_work_inference:
