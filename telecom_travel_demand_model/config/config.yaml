@@ -95,7 +95,7 @@ cell_towers:
 # Stay Point Detection Configuration
 stay_detection:
   # Algorithm: "zheng_xie" (from paper), "dbscan", "incremental", "hybrid"
-  algorithm: "zheng_xie" # AUDIT 4.1: "dbscan" once Round 3 fix deployed
+  algorithm: "zheng_xie"
 
   # Distance threshold (meters) - points within this distance are same location
   distance_threshold: 500
@@ -108,7 +108,7 @@ stay_detection:
 
   # Signal quality weighting (use network metrics for confidence)
   use_signal_quality: true
-  signal_quality_weight: 0.3 # AUDIT 4.2: magic number - replace in Round 3
+  signal_quality_weight: 0.3
 
   consolidation:
     method: "hdbscan"          # "hdbscan" | "dbscan" | "grid" (grid kept as fallback)
@@ -210,8 +210,7 @@ od_matrix:
 # Data Fusion Configuration
 data_fusion:
   # Fusion strategy
-  # AUDIT 3 (Round 3): add kalman_filter trajectory smoother in stay_detector.py
-  # alongside DBSCAN refactor (Issue 4.1)
+  # planned but not yet implemented: add kalman_filter trajectory smoother in stay_detector.py
   strategy: "hierarchical"  # hierarchical, weighted_average, kalman_filter
 
   # Conflict resolution
