@@ -1,6 +1,6 @@
 # Resolution Status - Telecom TDM Audit
 
-- Last updated: 2026-02-19
+- Last updated: 2026-03-04
 
 | ID | Title | Severity | Status | Round | Notes |
 | --- | --- | --- | --- | --- | --- |
@@ -10,8 +10,8 @@
 | 2.1 | Winner-takes-all data fusion | CRITICAL | Resolved | 2 | FIXES.md 2.1 |
 | 2.2 | XDR centroid oversimplification | HIGH | Resolved | 2 | FIXES.md 2.2 |
 | 3.2 | Binary ABA ping-pong filter | MEDIUM | Resolved | 2 | FIXES.md 3.2 |
-| 4.1 | Fixed-grid stay consolidation | HIGH | Pending | 3 | - |
-| 4.2 | Magic confidence weights | HIGH | Pending | 3 | - |
+| 4.1 | Fixed-grid stay consolidation | HIGH | Resolved | 3 | FIXES.md 4.1 |
+| 4.2 | Magic confidence weights | HIGH | Deferred | Future | Unused in pipeline |
 | 1.2 | Hardcoded 9–5 time windows | MEDIUM | Pending | 4 | - |
 | 5.1 | Single work location assumption | MEDIUM | Pending | 4 | config pre-wired |
 | 6.1 | Hardcoded Beta departure times | HIGH | Pending | 4 | config pre-wired |
