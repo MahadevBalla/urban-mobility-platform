@@ -14,7 +14,7 @@
 | 4.2 | Magic confidence weights | HIGH | Deferred | Future | Unused in pipeline |
 | 1.2 | Hardcoded 9–5 time windows | MEDIUM | Resolved | 4 | Temporal windows configurable; approach follows Alexander et al. (2015). Future work may explore clustering-based temporal profiling |
 | 5.1 | Single work location assumption | MEDIUM | Deferred | Future | Behavioural extension (multi-site workers) |
-| 6.1 | Hardcoded Beta departure times | HIGH | Pending | 4 | config pre-wired |
+| 6.1 | Hardcoded Beta departure times | HIGH | Pending | 4 | FIXES.md 6.1 |
 | 3.1 | Aggressive user filtering | HIGH | Pending | 5 | - |
 | 7.2 | Linear trip expansion bias | HIGH | Deferred | Future | Requires trip-length observability modelling (ground-truth data) |
 | 6.2 | Strict activity chain continuity | MEDIUM | Pending | 6 | config pre-wired |

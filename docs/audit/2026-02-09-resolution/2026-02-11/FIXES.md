@@ -327,3 +327,93 @@ stay_detection:
 - Improves structural robustness of downstream home/work and trip inference.
 
 Downstream modules continue to consume `(lat, lon)` centroids.
+
+## FIXES - Round 4 (2026-03-04)
+
+### Issues Addressed: 1.2, 6.1
+
+### Issue 6.1 – Hardcoded Beta Departure Time Parameters
+
+**File:** `src/trip_generation/trip_generator.py`, `src/utils/time_utils.py`  
+**Severity:** HIGH  
+
+#### Root Cause
+
+Departure time estimation used a `conditional_probability` approach where the Beta distribution parameters controlling the departure offset were hardcoded:
+
+- random_offset = random.betavariate(2, 4)
+- random_offset = random.betavariate(4, 2)
+
+These values implicitly assumed fixed temporal behavior patterns without calibration.
+
+Hardcoding distribution parameters creates two problems:
+
+1. **Statistical Bias**
+
+- Departure distributions become fixed regardless of city context, telecom sampling rate, or behavioral patterns.
+
+2. **Calibration Impossibility**
+
+- Model users cannot adjust the departure distribution without modifying source code.
+- This violates the principle that behavioral parameters should be **externally configurable and empirically calibrated**.
+
+#### Fix Applied
+
+- Beta parameters are now configurable via `config.yaml`.
+
+- TripGenerator loads the parameters during initialization:
+
+  ```python
+  self.beta_morning = tuple(
+  trip_config.get("departure_time_beta_morning", [2, 4])
+  )
+
+  self.beta_evening = tuple(
+  trip_config.get("departure_time_beta_evening", [4, 2])
+  )
+  ```
+
+- `generate_departure_time_distribution()` now accepts these parameters:
+
+  ```python
+  generate_departure_time_distribution(
+  departure_obs_time,
+  arrival_obs_time,
+  self.departure_method,
+  beta_morning=self.beta_morning,
+  beta_evening=self.beta_evening,
+  )
+  ```
+
+- The time utility now uses the provided parameters:
+
+  ```python
+  alpha_m, beta_m = beta_morning
+  alpha_e, beta_e = beta_evening
+
+  random_offset = random.betavariate(alpha_m, beta_m)
+  ```
+
+#### Configuration
+
+- Added to `config.yaml`:
+
+  ```yaml
+  trip_generation:
+  departure_time_beta_morning: [2, 4]
+  departure_time_beta_evening: [4, 2]
+  ```
+
+- These remain **placeholder defaults** consistent with the previous implementation.
+
+#### Calibration Requirement
+
+- These parameters should ideally be calibrated using **high-frequency trajectory data** (e.g., XDR GPS observations) to match observed departure-time distributions.
+
+- The current defaults preserve backward compatibility while enabling empirical calibration.
+
+#### Impact
+
+- Removes hardcoded behavioral parameters from source code.
+- Enables dataset-specific calibration without code modification.
+- Improves scientific defensibility of departure-time estimation.
