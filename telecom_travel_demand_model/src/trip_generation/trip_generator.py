@@ -55,6 +55,12 @@ class TripGenerator:
         self.departure_method = trip_config.get(
             "departure_time_method", "conditional_probability"
         )
+        self.beta_morning = tuple(
+            trip_config.get("departure_time_beta_morning", [2, 4])
+        )
+        self.beta_evening = tuple(
+            trip_config.get("departure_time_beta_evening", [4, 2])
+        )
 
     def generate(
         self,
@@ -306,7 +312,11 @@ class TripGenerator:
 
         # Estimate departure time
         departure_time = generate_departure_time_distribution(
-            departure_obs_time, arrival_obs_time, self.departure_method
+            departure_obs_time,
+            arrival_obs_time,
+            self.departure_method,
+            beta_morning=self.beta_morning,
+            beta_evening=self.beta_evening,
         )
 
         # Calculate duration (ensure non-negative)

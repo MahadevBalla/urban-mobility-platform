@@ -198,7 +198,11 @@ def is_weekday(timestamp: Union[datetime, pd.Timestamp]) -> bool:
 
 
 def generate_departure_time_distribution(
-    observed_start: datetime, observed_end: datetime, distribution_type: str = "uniform"
+    observed_start: datetime,
+    observed_end: datetime,
+    distribution_type: str = "uniform",
+    beta_morning: tuple = (2, 4),
+    beta_evening: tuple = (4, 2),
 ) -> datetime:
     """
     Generate a probable departure time between two observations.
@@ -210,6 +214,8 @@ def generate_departure_time_distribution(
         observed_start: Last observation at origin.
         observed_end: First observation at destination.
         distribution_type: "uniform", "conditional", or "midpoint".
+        beta_morning: Beta parameters for morning distribution (alpha, beta).
+        beta_evening: Beta parameters for evening distribution (alpha, beta).
 
     Returns:
         Estimated departure time.
@@ -233,13 +239,15 @@ def generate_departure_time_distribution(
         # Simplified: weight earlier times more heavily during morning,
         # later times during evening
         hour = observed_start.hour
+        alpha_m, beta_m = beta_morning
+        alpha_e, beta_e = beta_evening
 
         if 6 <= hour < 12:
             # Morning: bias toward earlier departure
-            random_offset = random.betavariate(2, 4) * duration
+            random_offset = random.betavariate(alpha_m, beta_m) * duration
         elif 16 <= hour < 21:
             # Evening: bias toward later departure
-            random_offset = random.betavariate(4, 2) * duration
+            random_offset = random.betavariate(alpha_e, beta_e) * duration
         else:
             # Other times: uniform
             random_offset = random.uniform(0, duration)
