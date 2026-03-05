@@ -166,8 +166,9 @@ trip_generation:
   # Interpolation for missed observations
   max_time_gap: 7200  # Max gap (seconds) to interpolate intermediate locations
 
-  # AUDIT 6.2: strict chain continuity - fuzzy matching deferred to Round 6
-  chain_continuity_tolerance_m: 0   # set to 200 once Round 6 fix deployed
+  # Set to 200 for Mumbai urban density to absorb HDBSCAN centroid deviation and LTE handover jitter
+  # 0 preserves strict stay_id equality (original behaviour)
+  chain_continuity_tolerance_m: 0
 
 # OD Matrix Configuration
 od_matrix:

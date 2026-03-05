@@ -61,6 +61,9 @@ class TripGenerator:
         self.beta_evening = tuple(
             trip_config.get("departure_time_beta_evening", [4, 2])
         )
+        self.chain_continuity_tolerance_m = trip_config.get(
+            "chain_continuity_tolerance_m", 0
+        )
 
     def generate(
         self,
@@ -477,15 +480,42 @@ class TripGenerator:
             # Check spatial continuity
             chain_valid = True
             prev_dest = None
+            prev_dest_lat = None
+            prev_dest_lon = None
+            tolerance_m = self.chain_continuity_tolerance_m
             for idx in indices:
                 trip = trips.loc[idx]
                 if prev_dest is not None:
-                    # Check if origin matches previous destination
                     origin_stay = trip.get("origin_stay")
-                    if origin_stay != prev_dest:
-                        chain_valid = False
-                        break
+                    if tolerance_m == 0:
+                        if origin_stay != prev_dest:
+                            chain_valid = False
+                            break
+                    else:
+                        origin_lat = trip.get("origin_lat")
+                        origin_lon = trip.get("origin_lon")
+                        if (
+                            origin_lat is not None
+                            and origin_lon is not None
+                            and prev_dest_lat is not None
+                            and prev_dest_lon is not None
+                        ):
+                            if (
+                                haversine_distance(
+                                    prev_dest_lat, prev_dest_lon, origin_lat, origin_lon
+                                )
+                                > tolerance_m
+                            ):
+                                chain_valid = False
+                                break
+                        else:
+                            # Coordinates unavailable — fall back to strict ID equality
+                            if origin_stay != prev_dest:
+                                chain_valid = False
+                                break
                 prev_dest = trip.get("destination_stay")
+                prev_dest_lat = trip.get("dest_lat")
+                prev_dest_lon = trip.get("dest_lon")
 
             trips.loc[indices, "chain_valid"] = chain_valid
 
