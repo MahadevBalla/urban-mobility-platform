@@ -41,7 +41,6 @@ preprocessing:
   # User filtering
   min_records_per_user: 10  # Minimum records to include user
   min_active_days: 3  # Minimum days with activity
-  min_daily_trips: 2.5  # Minimum average daily trips (AUDIT 3.1: to be replaced with stratified weighting)
   max_records_per_user: 100000  # Cap to avoid outliers
 
   # Temporal filtering

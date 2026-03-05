@@ -330,7 +330,7 @@ Downstream modules continue to consume `(lat, lon)` centroids.
 
 ## FIXES - Round 4 (2026-03-04)
 
-### Issues Addressed: 1.2, 6.1
+### Issues Addressed: 6.1
 
 ### Issue 6.1 – Hardcoded Beta Departure Time Parameters
 
@@ -417,3 +417,86 @@ Hardcoding distribution parameters creates two problems:
 - Removes hardcoded behavioral parameters from source code.
 - Enables dataset-specific calibration without code modification.
 - Improves scientific defensibility of departure-time estimation.
+
+## FIXES - Round 5 (2026-03-05)
+
+### Issue 3.1 – Aggressive User Filtering
+
+**File:** `src/preprocessing/user_filter.py`
+**Severity:** HIGH
+
+#### Root Cause
+
+- User filtering previously applied a behavioural threshold:
+
+  ```python
+  valid_users = valid_users[
+      valid_users["avg_daily_records"] >= self.min_daily_trips
+  ]
+  ```
+
+- `avg_daily_records` was used as a proxy for trip frequency, and users below the threshold were removed.
+
+- However, telecom activity frequency is **not a reliable proxy for mobility behaviour**. Low-phone-usage users (e.g. prepaid users, shared devices, informal workers) may still have normal travel patterns.
+
+- Filtering these users introduces **systematic sampling bias**, over-representing high-phone-usage individuals.
+
+- At the same time, the pipeline’s expansion module already corrects sampling bias via activity-based weighting:
+
+  ```python
+  user_factor = expected_daily_trips / observed_daily_rate
+  ```
+
+- Removing low-activity users before expansion prevents this correction from operating.
+
+#### Fix Applied
+
+- The behavioural filtering rule was removed.
+
+- `UserFilter` now applies **data-quality filters only**:
+
+  - `min_records_per_user` – ensures sufficient observations for stay inference
+  - `min_active_days` – ensures temporal coverage for home/work inference
+  - `max_records_per_user` – removes anomalous high-frequency SIMs
+
+- The following filter was removed: `avg_daily_records >= min_daily_trips`
+
+- Low-activity users are now retained so that expansion weighting can correct for under-representation.
+
+#### Code Changes
+
+- Removed the filtering block:
+
+  ```python
+  if self.min_daily_trips > 0:
+      valid_users = valid_users[
+          valid_users["avg_daily_records"] >= self.min_daily_trips
+      ]
+  ```
+
+- `min_daily_trips` is now deprecated and ignored.
+
+#### Configuration Changes
+
+- Removed from `config.yaml`:
+
+  ```yaml
+  preprocessing:
+    min_daily_trips: 2.5
+  ```
+
+- Remaining filters:
+
+  ```yaml
+  preprocessing:
+    min_records_per_user: 10
+    min_active_days: 3
+    max_records_per_user: 100000
+  ```
+
+#### Impact
+
+- Eliminates behavioural filtering based on telecom activity
+- Retains low-phone-usage users in the sample
+- Allows downstream expansion weighting to correct sampling bias
+- No changes required in downstream modules
