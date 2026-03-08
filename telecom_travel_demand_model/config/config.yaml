@@ -41,7 +41,6 @@ preprocessing:
   # User filtering
   min_records_per_user: 10  # Minimum records to include user
   min_active_days: 3  # Minimum days with activity
-  min_daily_trips: 2.5  # Minimum average daily trips (AUDIT 3.1: to be replaced with stratified weighting)
   max_records_per_user: 100000  # Cap to avoid outliers
 
   # Temporal filtering
@@ -75,7 +74,7 @@ cell_towers:
   default_radius: 500
 
   # Location inference method
-  # audit 2.2 resolved; "sector_model" when antenna data available
+  # "sector_model" when antenna data available
   location_method: "convex_hull"
   min_hull_samples: 5 # min GPS points for hull; below this → circular fallback
 
@@ -121,7 +120,7 @@ stay_detection:
 # Home/Work Inference Configuration
 home_work_inference:
   # Home detection
-  # AUDIT 1.2: fixed time windows - clustering-based profiling deferred to Round 4
+  # More flexible approaches such as temporal clustering or shift-pattern discovery could be explored in future iterations.
   home:
     start_hour: 20  # 8 PM
     end_hour: 7     # 7 AM
@@ -140,9 +139,6 @@ home_work_inference:
   # Handle users without work (students, retirees, etc.)
   require_work_location: false
 
-  # AUDIT 5.1: single work location - multi-site support deferred to Round 4
-  allow_multiple_work_locations: false   # set true once Round 4 deployed
-
 # Trip Generation Configuration
 trip_generation:
   # Effective day definition (to handle late night activities)
@@ -155,10 +151,12 @@ trip_generation:
     NHB: "Non-Home-Based"
   
   # Departure time assignment
-  # AUDIT 6.1: Beta params are hardcoded - must be learned from XDR (Round 4)
+  # Parameters for conditional departure-time estimation.
+  # Values represent Beta distribution (alpha, beta) and should ideally
+  # be calibrated using high-frequency XDR/GPS trajectories.
   departure_time_method: "conditional_probability"  # midpoint, conditional_probability, random
-  departure_time_beta_morning: [2, 4]  # [alpha, beta] - placeholder, not calibrated
-  departure_time_beta_evening: [4, 2]  # [alpha, beta] - placeholder, not calibrated
+  departure_time_beta_morning: [2, 4]
+  departure_time_beta_evening: [4, 2]
 
   # Trip filtering
   min_trip_distance: 200  # meters
@@ -168,8 +166,9 @@ trip_generation:
   # Interpolation for missed observations
   max_time_gap: 7200  # Max gap (seconds) to interpolate intermediate locations
 
-  # AUDIT 6.2: strict chain continuity - fuzzy matching deferred to Round 6
-  chain_continuity_tolerance_m: 0   # set to 200 once Round 6 fix deployed
+  # Set to 200 for Mumbai urban density to absorb HDBSCAN centroid deviation and LTE handover jitter
+  # 0 preserves strict stay_id equality (original behaviour)
+  chain_continuity_tolerance_m: 0
 
 # OD Matrix Configuration
 od_matrix:
@@ -198,12 +197,11 @@ od_matrix:
     apply_vehicle_rate: false
     default_vehicle_rate: 0.3  # 30% use private vehicles
 
-  # AUDIT 7.1: zero-flow fill guarded by SPARSE_ZONE_THRESHOLD=500 in code
   include_zero_flows: false
   sparse_zone_threshold: 500  # read by od_generator.py - refuse dense fill above this threshold
   precision: 2
 
-  # AUDIT 1.1: NHTS default - MUST be overridden with MMRDA/RITES value
+  # NHTS default - MUST be overridden with MMRDA/RITES value
   # Pipeline emits WARNING if this is not explicitly set
   expected_daily_trips: null  # null = use NHTS fallback (3.0) WITH warning
 

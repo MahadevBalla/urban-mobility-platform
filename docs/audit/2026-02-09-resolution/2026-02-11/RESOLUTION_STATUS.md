@@ -1,6 +1,6 @@
 # Resolution Status - Telecom TDM Audit
 
-- Last updated: 2026-03-04
+- Last updated: 2026-03-05
 
 | ID | Title | Severity | Status | Round | Notes |
 | --- | --- | --- | --- | --- | --- |
@@ -12,11 +12,11 @@
 | 3.2 | Binary ABA ping-pong filter | MEDIUM | Resolved | 2 | FIXES.md 3.2 |
 | 4.1 | Fixed-grid stay consolidation | HIGH | Resolved | 3 | FIXES.md 4.1 |
 | 4.2 | Magic confidence weights | HIGH | Deferred | Future | Unused in pipeline |
-| 1.2 | Hardcoded 9–5 time windows | MEDIUM | Pending | 4 | - |
-| 5.1 | Single work location assumption | MEDIUM | Pending | 4 | config pre-wired |
-| 6.1 | Hardcoded Beta departure times | HIGH | Pending | 4 | config pre-wired |
-| 3.1 | Aggressive user filtering | HIGH | Pending | 5 | - |
-| 7.2 | Linear trip expansion bias | HIGH | Pending | 5 | - |
-| 6.2 | Strict activity chain continuity | MEDIUM | Pending | 6 | config pre-wired |
-| 9.1 | No ground-truth validation hooks | HIGH | Pending | 7 | - |
-| 1.1 | NHTS trip rate for Indian context | HIGH | Mitigated | 8 | Warning emitted; needs MMRDA data |
+| 1.2 | Hardcoded 9–5 time windows | MEDIUM | Resolved | 4 | Temporal windows configurable; approach follows Alexander et al. (2015). Future work may explore clustering-based temporal profiling |
+| 5.1 | Single work location assumption | MEDIUM | Deferred | Future | Behavioural extension (multi-site workers) |
+| 6.1 | Hardcoded Beta departure times | HIGH | Resolved | 4 | FIXES.md 6.1 |
+| 3.1 | Aggressive user filtering | HIGH | Resolved | 5 | FIXES.md 3.1 |
+| 7.2 | Linear trip expansion bias | HIGH | Deferred | Future | Requires trip-length observability modelling (ground-truth data) |
+| 6.2 | Strict activity chain continuity | MEDIUM | Resolved | 6 | FIXES.md 6.2 |
+| 9.1 | No ground-truth validation hooks | HIGH | Deferred | Future | Requires external validation datasets |
+| 1.1 | NHTS trip rate for Indian context | HIGH | Deferred | Future | Requires external travel survey calibration |

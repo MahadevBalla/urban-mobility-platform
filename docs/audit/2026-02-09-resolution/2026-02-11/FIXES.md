@@ -1,8 +1,40 @@
+# Telecom TDM Audit – Resolution Log
+
+## Table of Contents
+
+### Round 1 - 2026-02-18
+
+- [7.1 O(N^2) OD Matrix Explosion](#issue-71---on2-memory-explosion-in-_add_zero_flows)
+- [7.1b Dense Pivot in to_matrix_form](#issue-71b---dense-pivot-in-to_matrix_form)
+- [8.1 Sequential In-Memory Pipeline](#issue-81---sequential-in-memory-pipeline)
+
+### Round 2 - 2026-02-19 → 2026-02-20
+
+- [2.1 Winner-Takes-All Data Fusion](#issue-21---winner-takes-all-data-fusion)
+- [2.2 XDR Centroid Oversimplification](#issue-22---xdr-centroid-oversimplification)
+- [3.2 Ping-Pong Filtering Logic](#issue-32---ping-pong-filtering-logic)
+
+### Round 3 - 2026-02-26
+
+- [4.1 Fixed-Grid Stay Consolidation](#issue-41--fixed-grid-stay-consolidation)
+
+### Round 4 - 2026-03-04
+
+- [6.1 Hardcoded Beta Departure Times](#issue-61--hardcoded-beta-departure-time-parameters)
+
+### Round 5 - 2026-03-05
+
+- [3.1 Aggressive User Filtering](#issue-31--aggressive-user-filtering)
+
+### Round 6 - 2026-03-05
+
+- [6.2 Strict Activity Chain Continuity](#issue-62--strict-activity-chain-continuity)
+
 ## FIXES - Round 1 (2026-02-18)
 
 ### Issues Addressed: 7.1, 7.1b (to_matrix_form)
 
-### Issue 7.1 - O(N²) Memory Explosion in `_add_zero_flows`
+### Issue 7.1 - O(N^2) Memory Explosion in `_add_zero_flows`
 
 **File:** `src/od_matrix/od_generator.py`  
 **Function:** `_add_zero_flows`  
@@ -264,7 +296,7 @@ Both effects silently distort downstream:
 - Trip generation
 - OD estimation
 
-No explicit error is raised — the distortion propagates.
+No explicit error is raised - the distortion propagates.
 
 #### Fix Applied
 
@@ -327,3 +359,233 @@ stay_detection:
 - Improves structural robustness of downstream home/work and trip inference.
 
 Downstream modules continue to consume `(lat, lon)` centroids.
+
+## FIXES - Round 4 (2026-03-04)
+
+### Issues Addressed: 6.1
+
+### Issue 6.1 – Hardcoded Beta Departure Time Parameters
+
+**File:** `src/trip_generation/trip_generator.py`, `src/utils/time_utils.py`  
+**Severity:** HIGH  
+
+#### Root Cause
+
+Departure time estimation used a `conditional_probability` approach where the Beta distribution parameters controlling the departure offset were hardcoded:
+
+- random_offset = random.betavariate(2, 4)
+- random_offset = random.betavariate(4, 2)
+
+These values implicitly assumed fixed temporal behavior patterns without calibration.
+
+Hardcoding distribution parameters creates two problems:
+
+1. **Statistical Bias**
+
+- Departure distributions become fixed regardless of city context, telecom sampling rate, or behavioral patterns.
+
+2. **Calibration Impossibility**
+
+- Model users cannot adjust the departure distribution without modifying source code.
+- This violates the principle that behavioral parameters should be **externally configurable and empirically calibrated**.
+
+#### Fix Applied
+
+- Beta parameters are now configurable via `config.yaml`.
+- TripGenerator loads the parameters during initialization:
+
+  ```python
+  self.beta_morning = tuple(
+  trip_config.get("departure_time_beta_morning", [2, 4])
+  )
+
+  self.beta_evening = tuple(
+  trip_config.get("departure_time_beta_evening", [4, 2])
+  )
+  ```
+
+- `generate_departure_time_distribution()` now accepts these parameters:
+
+  ```python
+  generate_departure_time_distribution(
+  departure_obs_time,
+  arrival_obs_time,
+  self.departure_method,
+  beta_morning=self.beta_morning,
+  beta_evening=self.beta_evening,
+  )
+  ```
+
+- The time utility now uses the provided parameters:
+
+  ```python
+  alpha_m, beta_m = beta_morning
+  alpha_e, beta_e = beta_evening
+
+  random_offset = random.betavariate(alpha_m, beta_m)
+  ```
+
+#### Configuration
+
+- Added to `config.yaml`:
+
+  ```yaml
+  trip_generation:
+  departure_time_beta_morning: [2, 4]
+  departure_time_beta_evening: [4, 2]
+  ```
+
+- These remain **placeholder defaults** consistent with the previous implementation.
+
+#### Calibration Requirement
+
+- These parameters should ideally be calibrated using **high-frequency trajectory data** (e.g., XDR GPS observations) to match observed departure-time distributions.
+- The current defaults preserve backward compatibility while enabling empirical calibration.
+
+#### Impact
+
+- Removes hardcoded behavioral parameters from source code.
+- Enables dataset-specific calibration without code modification.
+- Improves scientific defensibility of departure-time estimation.
+
+## FIXES - Round 5 (2026-03-05)
+
+### Issue 3.1 – Aggressive User Filtering
+
+**File:** `src/preprocessing/user_filter.py`
+**Severity:** HIGH
+
+#### Root Cause
+
+- User filtering previously applied a behavioural threshold:
+
+  ```python
+  valid_users = valid_users[
+      valid_users["avg_daily_records"] >= self.min_daily_trips
+  ]
+  ```
+
+- `avg_daily_records` was used as a proxy for trip frequency, and users below the threshold were removed.
+- However, telecom activity frequency is **not a reliable proxy for mobility behaviour**. Low-phone-usage users (e.g. prepaid users, shared devices, informal workers) may still have normal travel patterns.
+- Filtering these users introduces **systematic sampling bias**, over-representing high-phone-usage individuals.
+- At the same time, the pipeline’s expansion module already corrects sampling bias via activity-based weighting:
+
+  ```python
+  user_factor = expected_daily_trips / observed_daily_rate
+  ```
+
+- Removing low-activity users before expansion prevents this correction from operating.
+
+#### Fix Applied
+
+- The behavioural filtering rule was removed.
+
+- `UserFilter` now applies **data-quality filters only**:
+  - `min_records_per_user` – ensures sufficient observations for stay inference
+  - `min_active_days` – ensures temporal coverage for home/work inference
+  - `max_records_per_user` – removes anomalous high-frequency SIMs
+- The following filter was removed: `avg_daily_records >= min_daily_trips`
+- Low-activity users are now retained so that expansion weighting can correct for under-representation.
+
+#### Code Changes
+
+- Removed the filtering block:
+
+  ```python
+  if self.min_daily_trips > 0:
+      valid_users = valid_users[
+          valid_users["avg_daily_records"] >= self.min_daily_trips
+      ]
+  ```
+
+- `min_daily_trips` is now deprecated and ignored.
+
+#### Configuration Changes
+
+- Removed from `config.yaml`:
+
+  ```yaml
+  preprocessing:
+    min_daily_trips: 2.5
+  ```
+
+- Remaining filters:
+
+  ```yaml
+  preprocessing:
+    min_records_per_user: 10
+    min_active_days: 3
+    max_records_per_user: 100000
+  ```
+
+#### Impact
+
+- Eliminates behavioural filtering based on telecom activity
+- Retains low-phone-usage users in the sample
+- Allows downstream expansion weighting to correct sampling bias
+- No changes required in downstream modules
+
+## FIXES - Round 6 (2026-03-05)
+
+### Issue 6.2 – Strict Activity Chain Continuity
+
+**File:** `src/trip_generation/trip_generator.py`  
+**Severity:** MEDIUM
+
+#### Root Cause
+
+- Activity chain validation relied on strict equality of stay identifiers: `origin_stay == prev_dest`
+- Telecom-derived locations are subject to spatial uncertainty caused by:
+  - LTE tower handover
+  - sector overlap
+  - clustering centroid variation
+- Even after HDBSCAN stay consolidation (Issue 4.1), the same physical location may produce two nearby stay centroids.
+- Strict equality therefore breaks otherwise valid activity chains.
+- Example:
+
+  ```md
+  Trip N destination → Stay A
+  Trip N+1 origin → Stay B
+  distance(Stay A, Stay B) ≈ 50–150 m
+  ```
+
+Although both observations correspond to the same place, strict equality marks the chain as invalid.
+
+#### Fix Applied
+
+- Activity chain validation now supports configurable spatial tolerance.
+- Continuity logic: `distance(prev_dest, curr_origin) <= chain_continuity_tolerance_m`
+- Where distance is computed using `haversine_distance`.
+- Behaviour:
+
+  ```md
+    chain_continuity_tolerance_m = 0 → strict stay equality (original behaviour)
+
+  chain_continuity_tolerance_m > 0 → fuzzy spatial match within tolerance
+  ```
+
+When coordinates are unavailable, the system falls back to strict stay ID equality.
+
+#### Configuration
+
+Added configurable tolerance:
+
+```yaml
+trip_generation:
+  chain_continuity_tolerance_m: 0
+```
+
+- Typical recommended values:
+
+  | Context | Tolerance |
+  | --- | --- |
+  | Urban telecom OD estimation | 100–200 m |
+  | Mixed-density networks | 200–300 m |
+
+- The default value `0` preserves backward compatibility.
+
+#### Impact
+
+- Prevents valid activity chains from being broken by minor spatial jitter
+- Improves robustness of trip sequences derived from telecom data
+- No changes required to downstream modules

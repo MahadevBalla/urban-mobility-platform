@@ -39,7 +39,7 @@ class UserFilter:
         config: Optional[Config] = None,
         min_records: Optional[int] = None,
         min_active_days: Optional[int] = None,
-        min_daily_trips: Optional[float] = None,
+        min_daily_trips: Optional[float] = None,   # deprecated - ignored
         max_records: Optional[int] = None,
     ):
         """
@@ -67,18 +67,40 @@ class UserFilter:
             "max_records_per_user", 100000
         )
 
+        # min_daily_trips is read from config for the deprecation warning only.
+        # It is NOT applied as a filter.
+        _cfg_daily = preprocessing.get("min_daily_trips", 0) or 0
+        _arg_daily = min_daily_trips or 0
+        if max(_cfg_daily, _arg_daily) > 0:
+            logger.warning(
+                "min_daily_trips > 0 detected but is no longer applied as a hard filter "
+                "(Issue 3.1 resolution). Behavioral filtering on trip rate introduces "
+                "socioeconomic sampling bias by removing low-phone-usage users "
+                "(informal workers, shared devices, prepaid plans). "
+                "Their under-representation is corrected via activity-proportional "
+                "expansion weighting in TripExpander. "
+                "Set min_daily_trips to null in config to suppress this warning."
+            )
+
         self._filter_stats: dict = {}
 
     def filter_users(self, df: pd.DataFrame, return_stats: bool = False) -> Set[str]:
         """
-        Filter users and return set of valid user IDs.
+        Filter users on data quality and return set of valid IMSIs.
+
+        Applies only:
+            1. min_records      — removes SIMs with too few observations
+            2. max_records      — removes machine/bot SIMs
+            3. min_active_days  — removes SIMs seen on only one day
+
+        Does NOT apply min_daily_trips (removed in Issue 3.1).
 
         Args:
             df: DataFrame with 'imsi' and 'timestamp' columns.
-            return_stats: If True, also return filtering statistics.
+            return_stats: If True, also return filtering statistics dict.
 
         Returns:
-            Set of valid IMSI values (and optionally stats dict).
+            Set of valid IMSI strings (and optionally stats dict).
         """
         logger.info("Filtering users based on activity criteria")
 
@@ -108,14 +130,6 @@ class UserFilter:
                 valid_users["active_days"] >= self.min_active_days
             ]
             self._filter_stats["min_days_removed"] = before - len(valid_users)
-
-        # Minimum daily activity (proxy for trip rate)
-        if self.min_daily_trips > 0:
-            before = len(valid_users)
-            valid_users = valid_users[
-                valid_users["avg_daily_records"] >= self.min_daily_trips
-            ]
-            self._filter_stats["min_daily_removed"] = before - len(valid_users)
 
         valid_imsi_set = set(valid_users["imsi"].values)
 
