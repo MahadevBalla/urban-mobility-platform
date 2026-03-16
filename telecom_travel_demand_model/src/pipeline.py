@@ -448,6 +448,13 @@ class TravelDemandPipeline:
         if self.zone_loader.zone_count == 0:
             return None
         zones_df = self.zone_loader.to_dataframe()
+        dummy_count = int(zones_df["population"].isna().sum())
+        if dummy_count > 0:
+            logger.warning(
+                f"AUDIT: {dummy_count}/{len(zones_df)} zones have no real population data "
+                f"- defaulting to 10,000 per zone. Zone expansion factors are physically "
+                f"meaningless until real census populations are plugged into zone_loader."
+            )
         return dict(
             zip(
                 zones_df["zone_id"],
@@ -517,6 +524,11 @@ class TravelDemandPipeline:
         if "od_by_purpose" in results:
             for purpose, matrix in results["od_by_purpose"].items():
                 matrix.to_csv(output_dir / f"od_matrix_{purpose}.csv", index=False)
+
+        # Save OD by time period
+        if "od_by_time" in results:
+            for period, matrix in results["od_by_time"].items():
+                matrix.to_csv(output_dir / f"od_matrix_{period}.csv", index=False)
 
         # Save home/work summary
         if "home_work_summary" in results:
