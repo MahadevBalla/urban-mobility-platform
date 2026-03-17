@@ -192,6 +192,28 @@ class ODMatrixGenerator:
         )
         return full_matrix
 
+    def _resolve_expected_daily_trips(
+        self, explicit_value: Optional[float] = None
+    ) -> float:
+        if explicit_value is not None:
+            return float(explicit_value)
+
+        candidates = [
+            self.config.get("od_matrix.expansion.expected_daily_trips"),
+            self.config.get("od_matrix.expected_daily_trips"),
+            self.config.get("trip_generation.expected_daily_trips"),
+        ]
+
+        for value in candidates:
+            if value is not None:
+                return float(value)
+
+        logger.warning(
+            "NOTE: expected_daily_trips not configured; "
+            "using NHTS fallback 3.0. Set od_matrix.expansion.expected_daily_trips before production use."
+        )
+        return 3.0
+
     def to_sparse_matrix(
         self, od_df: pd.DataFrame, value_col: str = "flow"
     ) -> Tuple[csr_matrix, List[str]]:
@@ -442,13 +464,13 @@ class ODMatrixGenerator:
 
         elif method == "population" and zone_populations is not None:
             logger.warning(
-                "AUDIT ISSUE 1.1 ACTIVE: daily_trips_per_capita=3.0 is an "
-                "NHTS (US) benchmark. Replace with MMRDA survey value before "
-                "production use. Set config.trip_generation.expected_daily_trips."
+                "AUDIT ISSUE 1.1 ACTIVE: population intra-zone correction depends on "
+                "expected_daily_trips. Replace fallback/default values with an "
+                "MMRDA/RITES-calibrated value before production use."
             )
             # Estimate intra-zone from population-based trip generation
             # Trips_ii = population_i * daily_trips * intra_zone_rate
-            daily_trips = self.config.get("trip_generation.expected_daily_trips", 3.0)
+            daily_trips = self._resolve_expected_daily_trips()
             zones = set(od["origin"].unique()) | set(od["destination"].unique())
 
             for zone in zones:

@@ -9,6 +9,8 @@ from datetime import datetime
 from typing import Dict, List, Optional
 
 import pandas as pd
+import numpy as np
+from sklearn.neighbors import BallTree
 
 from src.utils.config import Config, get_config
 from src.utils.geo_utils import haversine_distance
@@ -258,37 +260,76 @@ class TripGenerator:
         stays: pd.DataFrame,
         max_distance: float = 1000,
     ) -> pd.DataFrame:
-        """Assign each observation to its nearest stay point."""
+        """Assign each observation to its nearest stay point.
+
+        Production-oriented hybrid implementation:
+        1. Exact cell-ID lookup via hash map.
+        2. BallTree nearest-neighbor search on unresolved observations.
+        3. Distance cutoff preserved via max_distance.
+
+        This avoids the original O(n_obs * n_stays) nested loop while preserving
+        the intended matching semantics: exact telecom-cell match first, then
+        nearest geographic stay within threshold.
+        """
         obs = observations.copy()
         obs["assigned_stay"] = None
 
-        for idx, row in obs.iterrows():
-            best_stay = None
-            best_dist = float("inf")
+        if len(obs) == 0 or len(stays) == 0:
+            return obs
 
-            # Try cell ID match first
-            obs_cell = row.get("cell_id")
+        # Step 1: exact cell-ID lookup
+        # Preserve original first-match behaviour by keeping the first stay_id
+        # encountered for each cell_id in DataFrame order.
+        if "cell_id" in stays.columns:
+            valid_cell_stays = stays[stays["cell_id"].notna()][["cell_id", "stay_id"]]
+            if len(valid_cell_stays) > 0:
+                cell_to_stay = (
+                    valid_cell_stays.drop_duplicates(subset=["cell_id"], keep="first")
+                    .set_index("cell_id")["stay_id"]
+                    .to_dict()
+                )
+                if "cell_id" in obs.columns:
+                    obs["assigned_stay"] = obs["cell_id"].map(cell_to_stay)
 
-            for _, stay in stays.iterrows():
-                # Cell ID match
-                if obs_cell is not None and stay.get("cell_id") == obs_cell:
-                    best_stay = stay["stay_id"]
-                    break
+        unresolved = obs["assigned_stay"].isna()
+        if not unresolved.any():
+            return obs
 
-                # Coordinate match
-                if row.get("latitude") is not None and stay.get("latitude") is not None:
-                    dist = haversine_distance(
-                        row["latitude"],
-                        row["longitude"],
-                        stay["latitude"],
-                        stay["longitude"],
-                    )
+        # Step 2: geographic nearest-neighbor lookup for unresolved observations
+        stay_coords = stays[["stay_id", "latitude", "longitude"]].copy()
+        stay_coords["latitude"] = pd.to_numeric(stay_coords["latitude"], errors="coerce")
+        stay_coords["longitude"] = pd.to_numeric(stay_coords["longitude"], errors="coerce")
+        stay_coords = stay_coords.dropna(subset=["latitude", "longitude"]).reset_index(drop=True)
 
-                    if dist < best_dist and dist <= max_distance:
-                        best_dist = dist
-                        best_stay = stay["stay_id"]
+        if len(stay_coords) == 0:
+            return obs
 
-            obs.at[idx, "assigned_stay"] = best_stay
+        unresolved_idx = obs.index[unresolved]
+        obs_coords = obs.loc[unresolved_idx, ["latitude", "longitude"]].copy()
+        obs_coords["latitude"] = pd.to_numeric(obs_coords["latitude"], errors="coerce")
+        obs_coords["longitude"] = pd.to_numeric(obs_coords["longitude"], errors="coerce")
+        valid_obs_mask = obs_coords["latitude"].notna() & obs_coords["longitude"].notna()
+
+        if not valid_obs_mask.any():
+            return obs
+
+        valid_obs_idx = obs_coords.index[valid_obs_mask]
+
+        stay_rad = np.radians(stay_coords[["latitude", "longitude"]].to_numpy())
+        obs_rad = np.radians(obs_coords.loc[valid_obs_mask, ["latitude", "longitude"]].to_numpy())
+
+        tree = BallTree(stay_rad, metric="haversine")
+        dist_rad, ind = tree.query(obs_rad, k=1)
+
+        earth_radius_m = 6_371_000.0
+        dist_m = dist_rad[:, 0] * earth_radius_m
+        nearest_pos = ind[:, 0]
+        within = dist_m <= max_distance
+
+        if np.any(within):
+            matched_obs_idx = valid_obs_idx[within]
+            matched_stay_ids = stay_coords.iloc[nearest_pos[within]]["stay_id"].to_numpy()
+            obs.loc[matched_obs_idx, "assigned_stay"] = matched_stay_ids
 
         return obs
 

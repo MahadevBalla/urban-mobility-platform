@@ -66,9 +66,9 @@ class TripExpander:
             "default_vehicle_rate", 0.3
         )
 
-        # Expected daily trips from travel surveys (NHTS average is ~3.0)
-        self.expected_daily_trips = expected_daily_trips or expansion_config.get(
-            "expected_daily_trips", 3.0
+        # Expected daily trips
+        self.expected_daily_trips = self._resolve_expected_daily_trips(
+            expected_daily_trips
         )
 
         # Minimum observed trip rate to prevent extreme expansion factors
@@ -128,6 +128,17 @@ class TripExpander:
         else:
             # Simple global expansion if zone data not available
             trips = self._expand_global(trips)
+
+        # Propagate chain quality penalty into expansion factor
+        if "chain_weight" in trips.columns:
+            trips["expansion_factor"] = trips["expansion_factor"] * trips["chain_weight"]
+            trips["expanded_trips"] = trips["expansion_factor"]
+            n_penalised = int((trips["chain_weight"] < 1.0).sum())
+            logger.info(
+                f"chain_weight applied: {n_penalised} trips from incomplete chains "
+                f"penalised (mean weight {trips['chain_weight'].mean():.3f}). "
+                f"30% penalty for broken chains now reaches the OD matrix."
+            )
 
         # Optional: Convert to vehicle trips
         if self.apply_vehicle_rate:
@@ -270,6 +281,29 @@ class TripExpander:
         )
 
         return trips
+
+    def _resolve_expected_daily_trips(
+        self, explicit_value: Optional[float] = None
+    ) -> float:
+        if explicit_value is not None:
+            return float(explicit_value)
+
+        candidates = [
+            self.config.get("od_matrix.expansion.expected_daily_trips"),
+            self.config.get("od_matrix.expected_daily_trips"),
+            self.config.get("trip_generation.expected_daily_trips"),
+        ]
+
+        for value in candidates:
+            if value is not None:
+                return float(value)
+
+        logger.warning(
+            "AUDIT ISSUE 1.1 ACTIVE: expected_daily_trips not configured; "
+            "using NHTS fallback 3.0. Set "
+            "od_matrix.expansion.expected_daily_trips before production use."
+        )
+        return 3.0
 
     def get_expansion_summary(self, trips: pd.DataFrame) -> Dict:
         """Get summary statistics of expansion."""

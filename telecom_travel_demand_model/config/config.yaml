@@ -196,14 +196,11 @@ od_matrix:
     # Vehicle usage rate (for converting person trips to vehicle trips)
     apply_vehicle_rate: false
     default_vehicle_rate: 0.3  # 30% use private vehicles
+    expected_daily_trips: null  # set MMRDA/RITES value here; null => NHTS default fallback 3.0 + warning
 
   include_zero_flows: false
   sparse_zone_threshold: 500  # read by od_generator.py - refuse dense fill above this threshold
   precision: 2
-
-  # NHTS default - MUST be overridden with MMRDA/RITES value
-  # Pipeline emits WARNING if this is not explicitly set
-  expected_daily_trips: null  # null = use NHTS fallback (3.0) WITH warning
 
 # Data Fusion Configuration
 data_fusion:
