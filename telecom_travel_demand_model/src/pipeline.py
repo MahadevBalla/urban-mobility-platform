@@ -84,6 +84,9 @@ class TravelDemandPipeline:
         self._intermediate_fmt = proc.get("intermediate_format", "parquet")
         self._intermediate_dir = Path(proc.get("intermediate_dir", "data/intermediate"))
 
+        # Cache for zone populations to avoid repeated loading
+        self._zone_populations: Optional[Dict[str, int]] = None
+
     def run(
         self,
         data_path: Union[str, Path],
@@ -102,6 +105,7 @@ class TravelDemandPipeline:
             Dictionary containing all intermediate and final results.
         """
         data_path = Path(data_path)
+        self._zone_populations = None  # Reset cache at start of run
 
         all_steps = [
             "load_data",
@@ -210,6 +214,7 @@ class TravelDemandPipeline:
             preprocessed = self._get_preprocessed()
             if preprocessed is not None:
                 self.zone_loader.create_tac_zones(preprocessed)
+                self._zone_populations = self._build_zone_populations()
                 # preprocessed no longer needed after zone creation in chunked mode
                 if self._mode == "chunked":
                     del preprocessed
@@ -246,11 +251,18 @@ class TravelDemandPipeline:
         if "expand_trips" in steps:
             logger.info("[Step 9/10] Expanding trips to population level...")
 
+            # Apply quality gate to filter incomplete chains and assign weights before expansion
+            if len(self._results.get("trips", [])) > 0 and (
+                "chain_complete" not in self._results["trips"].columns
+                or "chain_weight" not in self._results["trips"].columns
+            ):
+                self._apply_chain_quality_gate()
+
             # Build home zone mapping
             home_zones = self._build_home_zones()
 
             # Get zone populations if available
-            zone_pops = self._build_zone_populations()
+            zone_pops = self._get_zone_populations()
 
             self._results["trips"] = self.trip_expander.expand(
                 self._results["trips"],
@@ -280,6 +292,13 @@ class TravelDemandPipeline:
             self._results["od_by_time"] = self.od_generator.generate_by_time_period(
                 self._results["trips"]
             )
+
+            zone_pops = self._get_zone_populations()
+            # Apply intra-zone correction if zone populations are available
+            if zone_pops is not None:
+                self._results["od_matrix"] = self._apply_intra_zone_correction(
+                    self._results["od_matrix"], zone_pops
+                )
 
             # Summary
             self._results["od_summary"] = self.od_generator.get_summary_statistics(
@@ -461,6 +480,48 @@ class TravelDemandPipeline:
                 zones_df["population"].fillna(10000),
             )
         )
+
+    def _apply_chain_quality_gate(self) -> None:
+        """ Validate chains and assign chain_weight before expansion """
+        trips = self._results.get("trips", pd.DataFrame())
+        if len(trips) == 0:
+            return
+
+        logger.info("[Quality Gate] Validating activity chains...")
+        trips = self.trip_generator.validate_activity_chains(trips)
+        trips = self.trip_generator.filter_incomplete_chains(
+            trips, keep_partial=True
+        )
+        self._results["trips"] = trips
+
+        total = trips["chain_id"].nunique()
+        complete = int(trips.groupby("chain_id")["chain_complete"].first().sum())
+        logger.info(
+            f"Quality gate: {complete}/{total} chains complete "
+            f"({100 * complete / max(total, 1):.1f}%). "
+            f"Incomplete chains carry 0.7 weight in expansion."
+        )
+
+    def _apply_intra_zone_correction(
+        self,
+        od_matrix: pd.DataFrame,
+        zone_populations: Optional[Dict[str, int]],
+    ) -> pd.DataFrame:
+        if zone_populations is None or len(od_matrix) == 0:
+            return od_matrix
+
+        return self.od_generator.estimate_intra_zone_trips(
+            od_matrix,
+            zone_populations=zone_populations,
+            method="population",
+        )
+    
+    def _get_zone_populations(self) -> Optional[Dict[str, int]]:
+        if self._zone_populations is not None:
+            return self._zone_populations
+
+        self._zone_populations = self._build_zone_populations()
+        return self._zone_populations
 
     def _log_summary(self) -> None:
         """Log summary of pipeline results."""
