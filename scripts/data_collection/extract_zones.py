@@ -14,6 +14,7 @@ Handles:
 """
 import geopandas as gpd
 import pandas as pd
+import warnings
 from pathlib import Path
 
 BASE_DIR = Path(__file__).resolve().parent
@@ -24,7 +25,9 @@ OUTPUT_CSV = BASE_DIR / "mumbai_zones.csv"
 
 def main():
     print(f"[INFO] Loading file: {INPUT_FILE}")
-    gdf = gpd.read_file(INPUT_FILE, driver="KML")
+    with warnings.catch_warnings():
+        warnings.filterwarnings("ignore", category=RuntimeWarning, module="pyogrio")
+        gdf = gpd.read_file(INPUT_FILE, driver="KML")
 
     print(f"[INFO] Loaded {len(gdf)} geometries")
     print(gdf.geom_type.value_counts())
@@ -54,21 +57,28 @@ def main():
     # Handle MultiPolygons (convert to single geometry)
     gdf = gdf.explode(index_parts=False)
 
+    # Compute area in km² using projected CRS
+    gdf_proj = gdf.to_crs(epsg=32643)
+    gdf["area_km2"] = gdf_proj.geometry.area / 1e6   # m² to km²
+
     # Compute centroids
     # NOTE: centroid in WGS84 is fine (approx)
-    gdf["centroid"] = gdf.geometry.centroid
+    gdf["centroid"] = gdf_proj.geometry.centroid.to_crs(epsg=4326)
 
     # Extract lat/lng
     df = pd.DataFrame({
         "zone_id": gdf["zone_id"],
         "lat": gdf["centroid"].y,
-        "lng": gdf["centroid"].x
+        "lng": gdf["centroid"].x,
+        "area_km2": gdf["area_km2"],
     })
 
-    # Drop duplicates (if any)
-    df = df.groupby("zone_id", as_index=False).mean()
+    df = df.groupby("zone_id", as_index=False).agg({
+        "lat": "mean",
+        "lng": "mean",
+        "area_km2": "sum",
+    })
 
-    # Final sanity check
     df = df.dropna()
     df = df.reset_index(drop=True)
 
