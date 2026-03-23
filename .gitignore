@@ -90,6 +90,4 @@ htmlcov/
 *.temp
 *.bak
 
-google_routes_*.csv
 *.csv
-scripts/data_collection/*.csv
