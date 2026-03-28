@@ -146,8 +146,7 @@ class SkimMatrixComputer:
         np.fill_diagonal(dist_matrix, 0.0)
 
         # Get nearest network nodes for each centroid
-        logger.info("Finding nearest network nodes...")
-        # nearest_nodes = []
+        logger.info(f"Finding nearest network nodes for {n_zones} centroids...")
 
         # Cache key based on centroid index set.
         # Assumes centroid indices are stable across repeated calls with the same sample.
@@ -155,35 +154,54 @@ class SkimMatrixComputer:
 
         if cache_key in self._nearest_nodes_cache:
             nearest_nodes = self._nearest_nodes_cache[cache_key]
+            logger.info("  Using cached nearest nodes")
         else:
-            nearest_nodes = []
-            for centroid in centroids_sample.geometry:
-                try:
-                    node = ox.distance.nearest_nodes(
-                        self.network_graph, centroid.x, centroid.y
-                    )
-                    nearest_nodes.append(node)
-                except Exception as e:
-                    logger.warning(f"Could not find nearest node for a centroid: {e}")
-                    nearest_nodes.append(None)
+            # Use vectorized nearest_nodes for massive speedup
+            # Instead of 5506 individual calls, do ONE call with arrays
+            try:
+                X = centroids_sample.geometry.x.values
+                Y = centroids_sample.geometry.y.values
+                logger.info("  Computing nearest nodes (vectorized)...")
+                nearest_nodes_array = ox.distance.nearest_nodes(
+                    self.network_graph, X, Y
+                )
+                # Convert to list for compatibility
+                nearest_nodes = list(nearest_nodes_array)
+                logger.info(f"  Found {len(nearest_nodes)} nearest nodes")
+            except Exception as e:
+                logger.warning(f"Vectorized nearest_nodes failed: {e}")
+                logger.info("  Falling back to iterative method...")
+                nearest_nodes = []
+                log_interval = max(1, n_zones // 20)
+                for i, centroid in enumerate(centroids_sample.geometry):
+                    if (i + 1) % log_interval == 0:
+                        logger.info(f"  Finding node {i + 1}/{n_zones}...")
+                    try:
+                        node = ox.distance.nearest_nodes(
+                            self.network_graph, centroid.x, centroid.y
+                        )
+                        nearest_nodes.append(node)
+                    except Exception as e2:
+                        logger.warning(f"Could not find nearest node for centroid {i}: {e2}")
+                        nearest_nodes.append(None)
 
             self._nearest_nodes_cache[cache_key] = nearest_nodes
 
         # Compute shortest paths
-        logger.info("Computing shortest paths from centroid nodes...")
+        unique_nodes = [n for n in set(nearest_nodes) if n is not None]
+        logger.info(f"Computing shortest paths from {len(unique_nodes)} unique nodes...")
 
         # Audit correction: Run Dijkstra only from centroid nodes (O(N · E log V))
         # NOTE: Graph is treated as read-only during execution.
         # Threading backend is used to reduce nondeterminism observed with process-based parallelism.
         try:
-            # Calculate all pairs lengths generator
             from joblib import Parallel, delayed
 
-            unique_nodes = [n for n in set(nearest_nodes) if n is not None]
+            logger.info("  Running parallel Dijkstra (this may take a few minutes)...")
             results = Parallel(
                 n_jobs=-1,
                 backend="threading",
-                verbose=5,
+                verbose=10,
             )(
                 delayed(SkimMatrixComputer._dijkstra_from_node)(
                     self.network_graph, node
@@ -191,6 +209,7 @@ class SkimMatrixComputer:
                 for node in unique_nodes
             )
             all_lengths = {node: lengths for node, lengths in results}
+            logger.info(f"  Dijkstra complete for {len(all_lengths)} nodes")
         except Exception as e:
             logger.error(f"Error in all_pairs_dijkstra: {e}")
             all_lengths = {}
