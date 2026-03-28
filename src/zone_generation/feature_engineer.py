@@ -295,10 +295,94 @@ class FeatureEngineer:
                 self.cells_gdf["total_building_area_m2"] = 0
                 self.cells_gdf["avg_building_levels"] = 1
                 self.cells_gdf["proxy_population"] = 0
+                # Fallback: estimate population from road density
+                self._estimate_population_from_roads()
         else:
             self.cells_gdf["total_building_area_m2"] = 0
             self.cells_gdf["avg_building_levels"] = 1
             self.cells_gdf["proxy_population"] = 0
+            # Fallback: estimate population from road density
+            logger.warning("No buildings available - using road density for population estimation")
+            self._estimate_population_from_roads()
+
+    def _estimate_population_from_roads(self):
+        """
+        Fallback population estimation using road network density.
+
+        When building data is unavailable (e.g., Overpass timeout),
+        uses road network density as a proxy for population.
+        Research shows correlation between road network density and population
+        (Barrington-Leigh & Millard-Ball, 2017).
+
+        The relationship varies by context:
+        - Dense urban (South Asia): ~400-600 people per km of road
+        - Medium urban: ~200-400 people per km of road
+        - Suburban/rural: ~50-150 people per km of road
+
+        This method weights different road types differently, as local roads
+        correlate more strongly with residential density than highways.
+        """
+        # Only apply if proxy_population is still 0
+        if self.cells_gdf["proxy_population"].sum() > 0:
+            return
+
+        # Calculate total road length from individual road class columns
+        road_length_cols = [
+            col for col in self.cells_gdf.columns
+            if col.endswith("_length_m") and col != "connector_length_m"
+        ]
+
+        if not road_length_cols:
+            logger.warning("No road length columns found for fallback population estimation")
+            return
+
+        logger.info("  Using road density as fallback population proxy...")
+
+        # Weight roads by type - local/tertiary roads correlate more with residential
+        # while highways correlate more with throughput
+        road_weights = {
+            "motorway_length_m": 0.1,    # Highways don't indicate local population
+            "trunk_length_m": 0.2,
+            "primary_length_m": 0.3,
+            "secondary_length_m": 0.5,
+            "tertiary_length_m": 0.8,
+            "local_length_m": 1.0,       # Local roads = residential areas
+        }
+
+        # Calculate weighted road length in km
+        weighted_road_km = pd.Series(0.0, index=self.cells_gdf.index)
+        for col in road_length_cols:
+            weight = road_weights.get(col, 0.5)  # Default weight for unknown types
+            weighted_road_km += self.cells_gdf[col].fillna(0) * weight / 1000  # m to km
+
+        area_km2 = self.cells_gdf["area_km2"].fillna(0.01)  # Avoid division by zero
+
+        # Get configurable factor with sensible default
+        # Default assumes moderate urban density (Indian context)
+        people_per_road_km = getattr(self.config, 'ROAD_POPULATION_FACTOR', 400)
+
+        # Population = weighted_road_length_km * factor
+        estimated_pop = weighted_road_km * people_per_road_km
+
+        # Apply density-based caps
+        # Min: 100 people/km² (rural minimum)
+        # Max: 50,000 people/km² (dense urban max, e.g., Mumbai)
+        min_pop = area_km2 * 100
+        max_pop = area_km2 * 50000
+        estimated_pop = np.clip(estimated_pop, min_pop, max_pop)
+
+        # Ensure non-negative
+        estimated_pop = np.maximum(estimated_pop, 0)
+
+        self.cells_gdf["proxy_population"] = estimated_pop
+        self.cells_gdf["population_source"] = "road_density_fallback"
+
+        total_pop = estimated_pop.sum()
+        avg_density = total_pop / area_km2.sum() if area_km2.sum() > 0 else 0
+        logger.info(
+            f"  Fallback population estimated: {total_pop:,.0f} "
+            f"(avg density: {avg_density:,.0f}/km²)"
+        )
 
     def compute_poi_proxies(self):
         """Compute POI-based employment proxies"""
