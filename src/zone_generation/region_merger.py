@@ -165,12 +165,15 @@ class RegionMerger:
             # Find potential neighbors (bounding box intersects)
             possible = list(sindex.intersection(geom.bounds))
 
-            # Check actual touching
+            # Check actual adjacency (share edge or corner)
             for j in possible:
                 if j != idx:
                     other = self.cells_gdf.geometry.iloc[j]
-                    if geom.touches(other):
-                        adjacency[idx].append(j)
+                    # touches() returns True if geometries share boundary but not interior
+                    # For robustness, also check if boundaries intersect (handles precision issues)
+                    if geom.touches(other) or geom.boundary.intersects(other.boundary):
+                        if j not in adjacency[idx]:
+                            adjacency[idx].append(j)
 
         logger.info(f"  Adjacency graph built: {len(adjacency)} cells")
         return adjacency
