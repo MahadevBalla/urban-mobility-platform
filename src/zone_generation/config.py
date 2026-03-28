@@ -108,6 +108,17 @@ class ZoneGenConfig:
         float, "Sentinel distance value used for unreachable OD pairs (km)"
     ] = 9000.0
 
+    # OSM extraction settings
+    building_tile_size_km: Annotated[
+        float, "Tile size for chunked building extraction (km)"
+    ] = 5.0
+    building_tiled_threshold_km2: Annotated[
+        float, "Area threshold above which tiled extraction is used (km²)"
+    ] = 100.0
+    osm_request_delay_s: Annotated[
+        float, "Delay between OSM API requests to avoid rate limiting (seconds)"
+    ] = 0.5
+
     # Population model
     POPULATION_MODEL = {
         "residential": {
@@ -135,6 +146,15 @@ class ZoneGenConfig:
         "education": 0.4,
         "healthcare": 0.9,
     }
+
+    # Fallback population estimation from road density
+    # People per km of weighted road length (used when building data unavailable)
+    # Typical values by context:
+    #   - Dense Asian urban (Mumbai, Delhi): 400-600
+    #   - Medium density urban: 200-400
+    #   - Suburban/low density: 50-150
+    # This is applied to weighted road length where local roads have higher weight
+    ROAD_POPULATION_FACTOR: float = 400
 
     def __post_init__(self):
         object.__setattr__(
