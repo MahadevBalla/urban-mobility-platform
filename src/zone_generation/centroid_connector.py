@@ -4,6 +4,7 @@ Creates zone centroids and connects them to transport network
 """
 
 import logging
+import sys
 
 import geopandas as gpd
 import networkx as nx
@@ -16,8 +17,14 @@ from shapely.geometry import LineString
 from .config import ZoneGenConfig
 from .validation_utils import validate_non_empty_gdf, validate_required_columns
 
-logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
+# Ensure logs appear immediately (not buffered)
+if not logger.handlers:
+    handler = logging.StreamHandler(sys.stdout)
+    handler.setLevel(logging.INFO)
+    handler.setFormatter(logging.Formatter("%(levelname)s:%(name)s:%(message)s"))
+    logger.addHandler(handler)
 
 
 class CentroidConnectorGenerator:
@@ -63,57 +70,6 @@ class CentroidConnectorGenerator:
             )
             self._metric_crs = self.config.metric_fallback_crs
 
-    def _activity_weighted_centroid(self, zone_geom, buildings_gdf):
-        """
-        Compute area-weighted centroid from buildings within a zone.
-        Returns None if no valid buildings found.
-
-        NOTE:
-        Building-level population is unavailable in OSM.
-        Centroids are therefore weighted by building footprint area,
-        which acts as a proxy for activity intensity.
-        """
-        if buildings_gdf is None or buildings_gdf.empty:
-            return None
-
-        zone_geom_metric = (
-            gpd.GeoSeries([zone_geom], crs=self.zones_gdf.crs)
-            .to_crs(self._metric_crs)
-            .iloc[0]
-        )
-
-        if buildings_gdf.crs is None:
-            buildings_gdf = buildings_gdf.set_crs(self.zones_gdf.crs)
-        buildings_metric = buildings_gdf.to_crs(self._metric_crs)
-
-        # Select buildings strictly inside zone
-        b = buildings_metric[buildings_metric.within(zone_geom_metric)]
-        if b.empty:
-            return None
-
-        b = b.copy()
-        if "area_m2" not in b.columns:
-            b["area_m2"] = b.geometry.area
-
-        weights = b["area_m2"].values
-        if np.all(weights <= 0):
-            return None
-
-        # Use building centroids as activity points
-        coords = np.array([(g.centroid.x, g.centroid.y) for g in b.geometry])
-
-        wsum = weights.sum()
-        x = np.sum(coords[:, 0] * weights) / wsum
-        y = np.sum(coords[:, 1] * weights) / wsum
-
-        centroid_metric = (
-            gpd.GeoSeries([gpd.points_from_xy([x], [y])[0]], crs=self._metric_crs)
-            .to_crs(self.zones_gdf.crs)
-            .iloc[0]
-        )
-
-        return centroid_metric
-
     def generate_centroids(self, weighted: bool = True) -> gpd.GeoDataFrame:
         """
         Generate zone centroids
@@ -126,19 +82,78 @@ class CentroidConnectorGenerator:
         """
         logger.info("Generating zone centroids...")
 
-        centroids = []
         buildings_gdf = self.osm_data.get("buildings")
-        for idx, zone in self.zones_gdf.iterrows():
-            centroid = None
-            if weighted and buildings_gdf is not None:
-                centroid = self._activity_weighted_centroid(
-                    zone.geometry, buildings_gdf
-                )
+        n_zones = len(self.zones_gdf)
 
-            centroid_method = (
-                "activity_weighted" if centroid is not None else "geometric"
-            )
-            # Safe fallback
+        # Pre-process buildings ONCE (not per-zone)
+        buildings_ready = None
+        building_sindex = None
+        if weighted and buildings_gdf is not None and not buildings_gdf.empty:
+            logger.info(f"  Pre-processing {len(buildings_gdf)} buildings...")
+
+            if buildings_gdf.crs is None:
+                buildings_gdf = buildings_gdf.set_crs(self.zones_gdf.crs)
+
+            # Project to metric CRS once
+            buildings_metric = buildings_gdf.to_crs(self._metric_crs)
+
+            # Pre-compute areas and centroids once
+            buildings_ready = buildings_metric.copy()
+            if "area_m2" not in buildings_ready.columns:
+                buildings_ready["area_m2"] = buildings_ready.geometry.area
+            buildings_ready["centroid_x"] = buildings_ready.geometry.centroid.x
+            buildings_ready["centroid_y"] = buildings_ready.geometry.centroid.y
+
+            # Build spatial index once
+            building_sindex = buildings_ready.sindex
+            logger.info("  Buildings indexed for spatial queries")
+
+        # Project zones to metric CRS once
+        zones_metric = self.zones_gdf.to_crs(self._metric_crs)
+
+        centroids = []
+        activity_count = 0
+        log_interval = max(1, n_zones // 20)  # Log ~20 times
+
+        for i, (idx, zone) in enumerate(self.zones_gdf.iterrows()):
+            if (i + 1) % log_interval == 0 or i == n_zones - 1:
+                logger.info(f"  Processing centroid {i + 1}/{n_zones}...")
+
+            centroid = None
+            zone_geom_metric = zones_metric.loc[idx].geometry
+
+            # Try activity-weighted centroid using spatial index
+            if buildings_ready is not None and building_sindex is not None:
+                # Use spatial index to get candidate buildings
+                candidate_idx = list(building_sindex.intersection(zone_geom_metric.bounds))
+                if candidate_idx:
+                    candidates = buildings_ready.iloc[candidate_idx]
+                    # Filter to buildings actually within zone
+                    within_mask = candidates.geometry.within(zone_geom_metric)
+                    b = candidates[within_mask]
+
+                    if not b.empty:
+                        weights = b["area_m2"].values
+                        if not np.all(weights <= 0):
+                            coords_x = b["centroid_x"].values
+                            coords_y = b["centroid_y"].values
+                            wsum = weights.sum()
+                            x = np.sum(coords_x * weights) / wsum
+                            y = np.sum(coords_y * weights) / wsum
+
+                            centroid = (
+                                gpd.GeoSeries(
+                                    [gpd.points_from_xy([x], [y])[0]],
+                                    crs=self._metric_crs
+                                )
+                                .to_crs(self.zones_gdf.crs)
+                                .iloc[0]
+                            )
+                            activity_count += 1
+
+            centroid_method = "activity_weighted" if centroid is not None else "geometric"
+
+            # Safe fallback to geometric centroid
             if centroid is None:
                 centroid = zone.geometry.representative_point()
 
@@ -161,6 +176,7 @@ class CentroidConnectorGenerator:
         centroids_gdf = gpd.GeoDataFrame(centroids, crs=self.zones_gdf.crs)
 
         logger.info(f"Generated {len(centroids_gdf)} centroids")
+        logger.info(f"  Activity-weighted: {activity_count}, Geometric: {n_zones - activity_count}")
 
         return centroids_gdf
 
@@ -239,9 +255,18 @@ class CentroidConnectorGenerator:
             )
         tree = cKDTree(node_coords)
 
-        connectors = []
+        # Pre-convert nodes to WGS84 for lat/lon lookup
+        nodes_wgs84 = nodes_gdf.to_crs("EPSG:4326")
 
-        for idx, centroid in centroids_gdf.iterrows():
+        connectors = []
+        n_centroids = len(centroids_gdf)
+        log_interval = max(1, n_centroids // 20)
+        skipped = 0
+
+        for i, (idx, centroid) in enumerate(centroids_gdf.iterrows()):
+            if (i + 1) % log_interval == 0 or i == n_centroids - 1:
+                logger.info(f"  Processing connector {i + 1}/{n_centroids}...")
+
             # Get projected centroid
             centroid_geom = centroids_proj.loc[idx].geometry
             centroid_coord = np.array([[centroid_geom.x, centroid_geom.y]])
@@ -256,47 +281,34 @@ class CentroidConnectorGenerator:
                 node_idx = int(node_idx[0])
 
             if distance_m > max_connector_length:
-                logger.debug(
-                    f"Centroid {centroid['zone_id']} skipped: "
-                    f"{distance_m:.0f}m > max {max_connector_length:.0f}m"
-                )
+                skipped += 1
                 continue
 
             # Get nearest node
             nearest_node = nodes_gdf.iloc[node_idx]
-            nearest_node_geom = nearest_node.geometry
+            node_wgs84 = nodes_wgs84.iloc[node_idx]
 
-            # Create connector line
-            centroid_geom_proj = centroids_proj.loc[idx].geometry
+            # Create connector line in projected CRS
             connector_line_proj = LineString(
                 [
-                    (centroid_geom_proj.x, centroid_geom_proj.y),
-                    (
-                        nodes_proj.iloc[node_idx].geometry.x,
-                        nodes_proj.iloc[node_idx].geometry.y,
-                    ),
+                    (centroid_geom.x, centroid_geom.y),
+                    (nodes_proj.iloc[node_idx].geometry.x, nodes_proj.iloc[node_idx].geometry.y),
                 ]
-            )
-            connector_line = gpd.GeoSeries(
-                [connector_line_proj], crs=self._metric_crs
-            ).to_crs(centroids_gdf.crs)[0]
-
-            node_wgs84 = (
-                gpd.GeoSeries([nearest_node_geom], crs=nodes_gdf.crs)
-                .to_crs("EPSG:4326")
-                .iloc[0]
             )
 
             connectors.append(
                 {
                     "zone_id": centroid["zone_id"],
-                    "geometry": connector_line,
+                    "geometry": connector_line_proj,  # Will batch convert later
                     "length_m": distance_m,
                     "network_node_id": nearest_node.name,
-                    "network_node_lat": node_wgs84.y,
-                    "network_node_lon": node_wgs84.x,
+                    "network_node_lat": node_wgs84.geometry.y,
+                    "network_node_lon": node_wgs84.geometry.x,
                 }
             )
+
+        if skipped > 0:
+            logger.info(f"  Skipped {skipped} centroids (distance > {max_connector_length}m)")
 
         if not connectors:
             logger.warning("No connectors created. Returning empty GeoDataFrame.")
@@ -304,7 +316,9 @@ class CentroidConnectorGenerator:
                 geometry=gpd.GeoSeries([], crs=centroids_gdf.crs), crs=centroids_gdf.crs
             )
 
-        connectors_gdf = gpd.GeoDataFrame(connectors, crs=centroids_gdf.crs)
+        # Create GeoDataFrame in metric CRS, then batch convert to output CRS
+        connectors_gdf = gpd.GeoDataFrame(connectors, crs=self._metric_crs)
+        connectors_gdf = connectors_gdf.to_crs(centroids_gdf.crs)
 
         logger.info(f"Created {len(connectors_gdf)} connectors")
         logger.info(f"  Avg connector length: {connectors_gdf['length_m'].mean():.0f}m")
@@ -342,8 +356,12 @@ class CentroidConnectorGenerator:
         tree = cKDTree(station_coords)
 
         links = []
+        n_centroids = len(centroids_gdf)
+        log_interval = max(1, n_centroids // 10)
 
-        for idx, centroid in centroids_gdf.iterrows():
+        for i, (idx, centroid) in enumerate(centroids_gdf.iterrows()):
+            if (i + 1) % log_interval == 0 or i == n_centroids - 1:
+                logger.info(f"  Linking centroid {i + 1}/{n_centroids}...")
             centroid_geom = centroids_proj.loc[idx].geometry
             centroid_coord = np.array([[centroid_geom.x, centroid_geom.y]])
 
