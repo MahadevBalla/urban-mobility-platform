@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Dict
 
 import geopandas as gpd
+import numpy as np
 import osmnx as ox
 import pandas as pd
 from shapely.geometry import Polygon, box
@@ -266,14 +267,97 @@ class OSMNetworkExtractor:
                 geometry=[], crs=f"{self.config.metric_fallback_crs}"
             )
 
+    def _create_grid_tiles(self, tile_size_km: float = 5.0) -> list:
+        """
+        Create grid tiles for chunked extraction.
+
+        Args:
+            tile_size_km: Size of each tile in kilometers
+
+        Returns:
+            List of shapely Polygon tiles that cover the boundary
+        """
+        from shapely.geometry import box as shapely_box
+
+        # Get bounds in WGS84
+        minx, miny, maxx, maxy = self.boundary_polygon.bounds
+
+        # Approximate degrees per km (rough estimate at mid-latitude)
+        mid_lat = (miny + maxy) / 2
+        km_per_deg_lat = 111.0
+        km_per_deg_lon = 111.0 * np.cos(np.radians(mid_lat))
+
+        tile_size_lat = tile_size_km / km_per_deg_lat
+        tile_size_lon = tile_size_km / km_per_deg_lon
+
+        tiles = []
+        y = miny
+        while y < maxy:
+            x = minx
+            while x < maxx:
+                tile = shapely_box(x, y, x + tile_size_lon, y + tile_size_lat)
+                # Only include tiles that intersect the boundary
+                if tile.intersects(self.boundary_polygon):
+                    # Clip tile to boundary
+                    clipped = tile.intersection(self.boundary_polygon)
+                    if not clipped.is_empty and clipped.area > 0:
+                        tiles.append(clipped)
+                x += tile_size_lon
+            y += tile_size_lat
+
+        return tiles
+
+    def _calculate_area_km2(self) -> float:
+        """
+        Calculate boundary area in square kilometers.
+
+        Uses proper CRS projection for accurate area calculation.
+
+        Returns:
+            Area in km²
+        """
+        try:
+            # Create a GeoDataFrame to use geopandas CRS estimation
+            boundary_gdf = gpd.GeoDataFrame(
+                geometry=[self.boundary_polygon], crs="EPSG:4326"
+            )
+            # Estimate appropriate UTM CRS for the location
+            utm_crs = boundary_gdf.estimate_utm_crs()
+            projected = boundary_gdf.to_crs(utm_crs)
+            area_m2 = projected.geometry.iloc[0].area
+            return area_m2 / 1_000_000  # Convert to km²
+        except Exception:
+            # Fallback: rough approximation using mid-latitude
+            minx, miny, maxx, maxy = self.boundary_polygon.bounds
+            mid_lat = (miny + maxy) / 2
+            # Approximate conversion at mid-latitude
+            width_km = (maxx - minx) * 111.0 * np.cos(np.radians(mid_lat))
+            height_km = (maxy - miny) * 111.0
+            return width_km * height_km * 0.7  # 0.7 factor for non-rectangular shapes
+
     def extract_buildings(self) -> gpd.GeoDataFrame:
         """
-        Extract building footprints with attributes
+        Extract building footprints with attributes.
+
+        For large areas, automatically uses tiled extraction to avoid
+        Overpass API timeouts. Tile size and area threshold are configurable.
 
         Returns:
             GeoDataFrame with building polygons and levels
         """
         logger.info("Extracting buildings...")
+
+        # Get config parameters with sensible defaults
+        tile_size_km = getattr(self.config, 'building_tile_size_km', 5.0)
+        area_threshold_km2 = getattr(self.config, 'building_tiled_threshold_km2', 100.0)
+
+        # Calculate actual area properly
+        area_km2 = self._calculate_area_km2()
+        logger.debug(f"  Boundary area: {area_km2:.1f} km²")
+
+        if area_km2 > area_threshold_km2:
+            logger.info(f"  Large area detected ({area_km2:.0f} km²), using tiled extraction...")
+            return self._extract_buildings_tiled(tile_size_km)
 
         try:
             tags = {"building": True}
@@ -325,6 +409,91 @@ class OSMNetworkExtractor:
             return gpd.GeoDataFrame(
                 geometry=[], crs=f"{self.config.metric_fallback_crs}"
             )
+
+    def _extract_buildings_tiled(self, tile_size_km: float = 5.0) -> gpd.GeoDataFrame:
+        """
+        Extract buildings using tiled approach for large areas.
+
+        Divides the boundary into smaller tiles and extracts buildings
+        from each tile separately to avoid Overpass API timeouts.
+
+        Args:
+            tile_size_km: Size of each tile in kilometers
+
+        Returns:
+            GeoDataFrame with all buildings combined
+        """
+        import time
+
+        tiles = self._create_grid_tiles(tile_size_km)
+        logger.info(f"  Extracting buildings in {len(tiles)} tiles ({tile_size_km}km each)...")
+
+        all_buildings = []
+        tags = {"building": True}
+        failed_tiles = 0
+
+        # Get delay from config (default 0.5s)
+        request_delay = getattr(self.config, 'osm_request_delay_s', 0.5)
+
+        for i, tile in enumerate(tiles):
+            try:
+                logger.info(f"  Processing tile {i+1}/{len(tiles)}...")
+
+                # Delay between requests to avoid rate limiting
+                if i > 0 and request_delay > 0:
+                    time.sleep(request_delay)
+
+                tile_buildings = ox.features_from_polygon(tile, tags=tags)
+
+                if not tile_buildings.empty:
+                    all_buildings.append(tile_buildings)
+                    logger.debug(f"    Tile {i+1}: {len(tile_buildings)} buildings")
+
+            except Exception as e:
+                failed_tiles += 1
+                logger.warning(f"    Tile {i+1} failed: {str(e)[:50]}...")
+                continue
+
+        if failed_tiles > 0:
+            logger.warning(f"  {failed_tiles}/{len(tiles)} tiles failed to extract")
+
+        if not all_buildings:
+            logger.warning("No buildings extracted from any tile")
+            return gpd.GeoDataFrame(geometry=[], crs="EPSG:4326")
+
+        # Combine all tiles
+        buildings_gdf = pd.concat(all_buildings, ignore_index=True)
+
+        # Remove duplicates (buildings on tile boundaries)
+        if "osmid" in buildings_gdf.columns:
+            buildings_gdf = buildings_gdf.drop_duplicates(subset=["osmid"])
+
+        # Process building attributes
+        def parse_levels(val):
+            if pd.isna(val):
+                return 2
+            try:
+                return int(float(val))
+            except (ValueError, TypeError):
+                try:
+                    return int(str(val).split(",")[0].strip())
+                except Exception:
+                    return 2
+
+        buildings_gdf["levels"] = buildings_gdf.get("building:levels", 2).apply(parse_levels)
+
+        # Calculate area in metric CRS
+        try:
+            utm_crs = buildings_gdf.estimate_utm_crs()
+            buildings_projected = buildings_gdf.to_crs(utm_crs)
+        except Exception:
+            buildings_projected = buildings_gdf.to_crs("EPSG:3857")
+
+        buildings_gdf["area_m2"] = buildings_projected.geometry.area
+
+        logger.info(f"  Total buildings extracted: {len(buildings_gdf)}")
+
+        return buildings_gdf
 
     def extract_pois(self) -> gpd.GeoDataFrame:
         """
