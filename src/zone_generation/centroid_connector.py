@@ -210,14 +210,46 @@ class CentroidConnectorGenerator:
                     crs=centroids_gdf.crs,
                 )
 
-            try:
-                self.network_graph = ox.graph_from_polygon(
-                    boundary.geometry.iloc[0],
-                    network_type="drive",
-                    simplify=True,
-                )
-            except Exception as e:
-                logger.error(f"Could not create network graph: {e}")
+            boundary_polygon = boundary.geometry.iloc[0]
+            for buffer_m in [0, 200, 500, 1000]:
+                try:
+                    if buffer_m == 0:
+                        polygon = boundary_polygon
+                    else:
+                        logger.warning(
+                            f"  Retrying connector graph with {buffer_m}m buffer..."
+                        )
+                        boundary_gdf = gpd.GeoDataFrame(
+                            geometry=[boundary_polygon], crs="EPSG:4326"
+                        )
+                        try:
+                            utm_crs = boundary_gdf.estimate_utm_crs()
+                        except Exception:
+                            utm_crs = self.config.metric_fallback_crs
+                        buffered = (
+                            boundary_gdf.to_crs(utm_crs).geometry.iloc[0].buffer(buffer_m)
+                        )
+                        polygon = (
+                            gpd.GeoSeries([buffered], crs=utm_crs)
+                            .to_crs("EPSG:4326")
+                            .iloc[0]
+                        )
+                    G = ox.graph_from_polygon(
+                        polygon, network_type="drive", simplify=True
+                    )
+                    # Use largest connected component for reliable connector snapping
+                    if G.number_of_nodes() > 0:
+                        self.network_graph = ox.truncate.largest_component(G, strongly=True)
+                    else:
+                        self.network_graph = G
+                    break
+                except Exception as e:
+                    if "no graph nodes" in str(e).lower() or "found no" in str(e).lower():
+                        continue
+                    logger.error(f"Could not create network graph: {e}")
+                    break
+            else:
+                logger.error("Could not build connector graph even with buffer, skipping connectors")
                 return gpd.GeoDataFrame(
                     geometry=gpd.GeoSeries([], crs=centroids_gdf.crs),
                     crs=centroids_gdf.crs,
