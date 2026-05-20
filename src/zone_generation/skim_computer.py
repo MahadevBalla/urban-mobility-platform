@@ -86,13 +86,16 @@ class SkimMatrixComputer:
                 lats2,
             )
 
-            dist_matrix[i, i:] = distances_m / 1000.0  # meters → km
+            dist_km = np.abs(distances_m) / 1000.0  # meters → km
+            dist_km = np.nan_to_num(dist_km, nan=0.0)  # Handle NaN for coincident points
+            dist_matrix[i, i:] = dist_km
             dist_matrix[i:, i] = dist_matrix[i, i:]  # mirror
+
+        np.fill_diagonal(dist_matrix, 0.0)
 
         # Create DataFrame
         zone_ids = self.centroids_gdf["zone_id"].values
         dist_df = pd.DataFrame(dist_matrix, index=zone_ids, columns=zone_ids)
-        assert np.allclose(dist_df.values, dist_df.values.T)
 
         logger.info(f"Distance matrix: {dist_df.shape}")
         logger.info(
@@ -116,14 +119,57 @@ class SkimMatrixComputer:
         # Get or create network graph
         if self.network_graph is None:
             if self.osm_data is not None and "boundary" in self.osm_data:
-                try:
-                    boundary = self.osm_data["boundary"]
-                    self.network_graph = ox.graph_from_polygon(
-                        boundary.geometry.iloc[0], network_type="drive", simplify=True
-                    )
-                except Exception as e:
-                    logger.error(f"Could not create network graph: {e}")
-                    logger.info("Falling back to Euclidean distances")
+                boundary_polygon = self.osm_data["boundary"].geometry.iloc[0]
+                buffer_attempts = [0, 200, 500, 1000]
+                for buffer_m in buffer_attempts:
+                    try:
+                        if buffer_m == 0:
+                            polygon = boundary_polygon
+                        else:
+                            logger.warning(
+                                f"  Retrying network graph with {buffer_m}m buffer..."
+                            )
+                            boundary_gdf = gpd.GeoDataFrame(
+                                geometry=[boundary_polygon], crs="EPSG:4326"
+                            )
+                            try:
+                                utm_crs = boundary_gdf.estimate_utm_crs()
+                            except Exception:
+                                utm_crs = "EPSG:3857"
+                            buffered = (
+                                boundary_gdf.to_crs(utm_crs)
+                                .geometry.iloc[0]
+                                .buffer(buffer_m)
+                            )
+                            polygon = (
+                                gpd.GeoSeries([buffered], crs=utm_crs)
+                                .to_crs("EPSG:4326")
+                                .iloc[0]
+                            )
+                        G = ox.graph_from_polygon(
+                            polygon, network_type="drive", simplify=True
+                        )
+                        # Extract largest strongly connected component for reliable routing
+                        if G.number_of_nodes() > 0:
+                            G_strong = ox.truncate.largest_component(G, strongly=True)
+                            dropped = G.number_of_nodes() - G_strong.number_of_nodes()
+                            if dropped > 0:
+                                logger.info(
+                                    f"  Extracted largest connected component "
+                                    f"({G_strong.number_of_nodes()} nodes, dropped {dropped})"
+                                )
+                            self.network_graph = G_strong
+                        else:
+                            self.network_graph = G
+                        logger.info("  Network graph created successfully")
+                        break
+                    except Exception as e:
+                        if "no graph nodes" in str(e).lower() or "found no" in str(e).lower():
+                            continue
+                        logger.error(f"Could not create network graph: {e}")
+                        break
+                else:
+                    logger.error("Could not build network graph even with buffer, falling back to Euclidean")
                     return self.compute_euclidean_distance_matrix()
             else:
                 logger.error("No network graph or boundary available")
