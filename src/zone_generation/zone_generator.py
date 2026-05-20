@@ -203,7 +203,6 @@ class AutomatedZoneGenerator:
                     connectors_gdf=(
                         self.connectors_gdf if not self.connectors_gdf.empty else None
                     ),
-                    boundary_geom=boundary_geom,
                     generation_params={
                         "target_population": self.config.target_population,
                         "buffer_distance": self.config.default_barrier_buffer_m,
