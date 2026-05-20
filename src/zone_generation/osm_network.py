@@ -138,27 +138,60 @@ class OSMNetworkExtractor:
         """
         logger.info(f"Extracting {network_type} road network...")
 
-        try:
-            # Get the network graph
-            G = ox.graph_from_polygon(
-                self.boundary_polygon, network_type=network_type, simplify=True
-            )
+        # Try with increasingly larger buffers if the polygon is too tight
+        buffer_attempts = [0, 200, 500, 1000]
 
-            # Convert to GeoDataFrame
-            edges_gdf = ox.graph_to_gdfs(G, nodes=False, edges=True)
+        for buffer_m in buffer_attempts:
+            try:
+                if buffer_m == 0:
+                    polygon = self.boundary_polygon
+                else:
+                    logger.warning(
+                        f"  No road nodes found, retrying with {buffer_m}m buffer..."
+                    )
+                    boundary_gdf = gpd.GeoDataFrame(
+                        geometry=[self.boundary_polygon], crs="EPSG:4326"
+                    )
+                    try:
+                        utm_crs = boundary_gdf.estimate_utm_crs()
+                    except Exception:
+                        utm_crs = self.config.metric_fallback_crs
+                    buffered = (
+                        boundary_gdf.to_crs(utm_crs)
+                        .geometry.iloc[0]
+                        .buffer(buffer_m)
+                    )
+                    polygon = (
+                        gpd.GeoSeries([buffered], crs=utm_crs)
+                        .to_crs("EPSG:4326")
+                        .iloc[0]
+                    )
 
-            # Add road classification
-            edges_gdf["road_class"] = edges_gdf["highway"].apply(self._classify_road)
+                G = ox.graph_from_polygon(
+                    polygon, network_type=network_type, simplify=True
+                )
+                edges_gdf = ox.graph_to_gdfs(G, nodes=False, edges=True)
+                edges_gdf["road_class"] = edges_gdf["highway"].apply(
+                    self._classify_road
+                )
+                if buffer_m > 0:
+                    logger.info(
+                        f"  Road network extracted with {buffer_m}m buffer: "
+                        f"{len(edges_gdf)} segments"
+                    )
+                return edges_gdf
 
-            logger.debug(f"Extracted {len(edges_gdf)} road segments")
-            return edges_gdf
+            except Exception as e:
+                if "no graph nodes" in str(e).lower() or "found no" in str(e).lower():
+                    continue  # Try next buffer size
+                logger.error(f"Error extracting road network: {e}", exc_info=True)
+                break
 
-        except Exception as e:
-            logger.error(f"Error extracting road network: {e}", exc_info=True)
-            # raise RuntimeError("OSM road network extraction failed") from e
-            return gpd.GeoDataFrame(
-                geometry=[], crs=f"{self.config.metric_fallback_crs}"
-            )
+        logger.error(
+            "Could not extract road network even with buffered polygon. "
+            "Returning empty network."
+        )
+        return gpd.GeoDataFrame(geometry=[], crs=f"{self.config.metric_fallback_crs}")
 
     def extract_rail_network(self) -> gpd.GeoDataFrame:
         """
