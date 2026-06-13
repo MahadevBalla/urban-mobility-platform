@@ -1,0 +1,244 @@
+"""
+01_ingest_legacy.py — GPS ingestion and quality filtering.
+
+Reads all legacy GPS CSV files (14-col, no header), applies quality filters
+confirmed by 02_gps_data_audit.ipynb, writes pings_clean.parquet.
+
+Usage:
+    python scripts/01_ingest_legacy.py
+    python scripts/01_ingest_legacy.py --files data/raw/before_2022-10-22_* --out data/processed/pings_clean.parquet
+"""
+
+import argparse
+import sys
+from pathlib import Path
+from datetime import datetime, timezone
+
+import polars as pl
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from config import (
+    DEVIATION_MAX_S,
+    GPS_FILES,
+    GPS_JUMP_MAX_KMH,
+    LEGACY_COLS,
+    LEGACY_DROP_COLS,
+    LEGACY_DTYPES,
+    MUMBAI_BBOX,
+    PINGS_CLEAN,
+    SPEED_MAX_KMH,
+    STUDY_END,
+    STUDY_START,
+)
+
+bucket_id = 0
+bucket_count = 8
+
+def ingest_one_file(fpath: Path, study_start: str, study_end: str) -> pl.DataFrame:
+    """
+    Read one legacy GPS CSV file, apply all quality filters, return clean DataFrame.
+
+    Filter order (cheap/high-yield first, matching Section 6 funnel):
+        F1: valid timestamp
+        F2: coordinate validity + Mumbai bbox
+        F3: temporal deviation ≤ 300s
+        F4: null-out speed sentinels (>120 km/h → NULL)
+        F5: deduplicate vehicle × exact timestamp
+    """
+    lf = pl.scan_csv(
+        fpath,
+        has_header=False,
+        new_columns=LEGACY_COLS,
+        schema_overrides=LEGACY_DTYPES,
+        ignore_errors=True,
+        infer_schema_length=0,
+        null_values=["", "NULL", "null"],
+        truncate_ragged_lines=True,
+    )
+
+    study_start_ts = datetime.fromisoformat(f"{study_start}T00:00:00+00:00")
+    study_end_ts = datetime.fromisoformat(f"{study_end}T23:59:59+00:00")
+
+    lf = (
+        lf
+        # Parse GPS event timestamp (col 6)
+        .with_columns(
+            pl.col("timestamp")
+            .str.to_datetime("%Y-%m-%d %H:%M:%S%.f%#z", strict=False)
+            .alias("ts_utc")
+        )
+        .filter((pl.col("vehicle_id") % bucket_count) == bucket_id) # Optional bucketing for parallel processing (e.g. 8 buckets → 8 parallel runs with bucket_id 0-7) — reduces memory pressure and speeds up runtime by ~8x with 8 workers, with no risk of duplicate rows across buckets since filter is on vehicle_id
+        # F1: valid timestamp
+        .filter(pl.col("ts_utc").is_not_null())
+        # Study window
+        .filter(pl.col("ts_utc").is_between(study_start_ts, study_end_ts))
+        # IST conversion
+        .with_columns(
+            pl.col("ts_utc").dt.convert_time_zone("Asia/Kolkata").alias("timestamp_ist")
+        )
+        # F2: coordinate validity + bbox
+        .filter(
+            pl.col("lat").is_not_null()
+            & pl.col("lng").is_not_null()
+            & (pl.col("lat") != 0)
+            & (pl.col("lng") != 0)
+            & pl.col("lat").is_between(MUMBAI_BBOX["lat_min"], MUMBAI_BBOX["lat_max"])
+            & pl.col("lng").is_between(MUMBAI_BBOX["lng_min"], MUMBAI_BBOX["lng_max"])
+        )
+        # F3: temporal deviation
+        .filter(
+            pl.col("deviation_s").is_null()
+            | (pl.col("deviation_s").abs() <= DEVIATION_MAX_S)
+        )
+        # F4: null-out speed sentinels (>120 km/h → None)
+        # Keeps NULL speeds (no filter on NULL — GPS hardware may not report speed)
+        .with_columns(
+            pl.when(pl.col("speed") > SPEED_MAX_KMH)
+            .then(None)
+            .otherwise(pl.col("speed"))
+            .alias("speed")
+        )
+        # Drop columns not used by downstream pipeline
+        .drop(LEGACY_DROP_COLS, strict=False)
+        # Derived temporal columns
+        .with_columns(
+            pl.col("timestamp_ist").dt.date().alias("ride_date"),
+            pl.col("timestamp_ist").dt.year().cast(pl.Int16).alias("year"),
+            pl.col("timestamp_ist").dt.month().cast(pl.Int8).alias("month"),
+            pl.col("timestamp_ist").dt.hour().cast(pl.Int8).alias("hour"),
+        )
+        # F5: deduplicate same vehicle × exact GPS timestamp
+        .unique(
+            subset=["vehicle_id", "ts_utc"],
+            keep="first",
+            maintain_order=True,
+        )
+        .drop("ts_utc")
+    )
+
+    return lf.collect(engine="streaming")
+
+
+def apply_gps_jump_filter(df: pl.DataFrame) -> pl.DataFrame:
+    """
+    Remove pings where implied inter-ping speed exceeds
+    GPS_JUMP_MAX_KMH.
+
+    Applied after concatenating all files so ordering is
+    global per vehicle.
+    """
+
+    R = 6371.0  # Earth radius km
+
+    df = (
+        df.sort(["vehicle_id", "timestamp_ist"])
+        .with_columns(
+            pl.col("lat").shift(1).over("vehicle_id").alias("_lat_p"),
+            pl.col("lng").shift(1).over("vehicle_id").alias("_lng_p"),
+            pl.col("timestamp_ist").shift(1).over("vehicle_id").alias("_ts_p"),
+        )
+        .with_columns(
+            ((pl.col("lat") - pl.col("_lat_p")).radians()).alias("_dlat"),
+            ((pl.col("lng") - pl.col("_lng_p")).radians()).alias("_dlng"),
+            pl.col("lat").radians().alias("_lat"),
+            pl.col("_lat_p").radians().alias("_lat_p_rad"),
+        )
+        .with_columns(
+            (
+                2
+                * R
+                * (
+                    (
+                        (
+                            (pl.col("_dlat") / 2).sin() ** 2
+                            + pl.col("_lat_p_rad").cos()
+                            * pl.col("_lat").cos()
+                            * ((pl.col("_dlng") / 2).sin() ** 2)
+                        ).sqrt()
+                    ).arcsin()
+                )
+            ).alias("_dist_km")
+        )
+        .with_columns(
+            (
+                (pl.col("timestamp_ist") - pl.col("_ts_p")).dt.total_seconds() / 3600.0
+            ).alias("_dt_hr")
+        )
+        .with_columns(
+            pl.when(pl.col("_ts_p").is_not_null() & (pl.col("_dt_hr") > 0))
+            .then(pl.col("_dist_km") / pl.col("_dt_hr"))
+            .otherwise(None)
+            .alias("_calc_speed")
+        )
+        .filter(
+            pl.col("_calc_speed").is_null()
+            | (pl.col("_calc_speed") <= GPS_JUMP_MAX_KMH)
+        )
+        .drop(
+            [
+                "_lat_p",
+                "_lng_p",
+                "_ts_p",
+                "_dlat",
+                "_dlng",
+                "_lat",
+                "_lat_p_rad",
+                "_dist_km",
+                "_dt_hr",
+                "_calc_speed",
+            ]
+        )
+    )
+
+    return df
+
+
+def main(files: list[Path], out_path: Path, study_start: str, study_end: str):
+    frames = []
+    for f in files:
+        if not f.exists():
+            print(f"  {f.name} not found — skipping")
+            continue
+        print(f"  {f.name} ({f.stat().st_size / 1e9:.2f} GB)...", end=" ", flush=True)
+        df = ingest_one_file(f, study_start, study_end)
+        print(f"{len(df):,} rows in study window")
+        frames.append(df)
+
+    if not frames:
+        print("No files loaded — check paths")
+        return
+
+    combined = pl.concat(frames, how="diagonal_relaxed")
+    print(f"\nCombined before jump filter: {len(combined):,} rows")
+
+    combined = apply_gps_jump_filter(combined)
+    print(f"After GPS jump filter      : {len(combined):,} rows")
+
+    # Sanity stats
+    print("\nSanity check:")
+    print(
+        f"  Date range  : {combined['ride_date'].min()} → {combined['ride_date'].max()}"
+    )
+    print(f"  Vehicles    : {combined['vehicle_id'].n_unique():,}")
+    print(f"  Source dist : {combined['source'].value_counts().sort('source')}")
+    print(
+        f"  Speed null% : {100 * combined['speed'].null_count() / len(combined):.1f}%"
+    )
+
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    combined.write_parquet(out_path, compression="zstd")
+    print(f"\nWritten → {out_path}  ({out_path.stat().st_size / 1e9:.2f} GB)")
+
+
+if __name__ == "__main__":
+    ap = argparse.ArgumentParser(description="Ingest and clean legacy GPS CSV files")
+    ap.add_argument("--files", nargs="*", help="GPS file paths (overrides config.GPS_FILES)")
+    ap.add_argument("--out", default=str(PINGS_CLEAN))
+    ap.add_argument("--study_start", default=STUDY_START)
+    ap.add_argument("--study_end", default=STUDY_END)
+    args = ap.parse_args()
+
+    files = [Path(f) for f in args.files] if args.files else GPS_FILES
+    print(f"Ingesting {len(files)} GPS file(s)")
+    print(f"Study window: {args.study_start} → {args.study_end}\n")
+    main(files, Path(args.out), args.study_start, args.study_end)

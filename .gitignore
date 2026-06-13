@@ -60,6 +60,10 @@ pgadmin_data/
 # Research materials (external references) - ignore everything except populationsim
 research/*
 !research/populationsim/
+!research/cityflo/
+!research/cityflo/notebooks/*.ipynb
+research/cityflo/data/
+research/cityflo/outputs/
 
 # Documentation files (exclude all except specific allowed files)
 *.md
@@ -89,5 +93,6 @@ htmlcov/
 *.tmp
 *.temp
 *.bak
+!research/cityflo/scripts/01_ingest_legacy.py.bak
 
 *.csv
