@@ -35,9 +35,8 @@ from config import (
     PINGS_SNAPPED,
     SNAP_THRESHOLD_M,
     STOPS_FILE,
+    EARTH_R_M,
 )
-
-EARTH_R_M = 6_371_000.0
 
 
 def load_stops(stops_path: Path) -> tuple[pd.DataFrame, BallTree, np.ndarray]:
@@ -80,7 +79,9 @@ def load_stops(stops_path: Path) -> tuple[pd.DataFrame, BallTree, np.ndarray]:
 
     print(f"  Stops in BallTree: {len(stops_valid):,}")
 
-    tree = BallTree(np.radians(stops_valid[["lat", "lng"]].values), metric="haversine")
+    coords = np.radians(stops_valid[["lat", "lng"]].to_numpy(dtype=np.float64))
+    tree = BallTree(coords, metric="haversine")
+
     return stops_valid, tree, stops_valid["stop_id"].values
 
 
@@ -142,7 +143,10 @@ def snap_pings(
     n_total = n_snapped = 0
 
     for batch in reader.iter_batches(batch_size=chunk_size):
-        chunk = batch.to_pandas()
+        chunk = batch.to_pandas(
+            split_blocks=True,
+            self_destruct=True,
+        )
 
         snapped_ids, snap_dists = snap_chunk(
             chunk["lat"].values,

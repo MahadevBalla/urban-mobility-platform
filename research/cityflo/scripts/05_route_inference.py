@@ -38,14 +38,13 @@ from config import (
     ROUTE_TRIP_WINDOW_MIN,
     SEGMENTS_INFERRED,
     TRIPS_FILE,
+    # Tunable parameters
+    DEFAULT_MIN_SHARED_STOPS,
+    DEFAULT_TOP_N_CANDIDATES,
+    DEFAULT_TRIP_ASSIGN_MIN_CONF,
+    DEFAULT_TRIP_ASSIGN_MIN_OVERLAP,
+    DEFAULT_VALIDATION_RANDOM_SEED,
 )
-
-# Tunable parameters
-DEFAULT_MIN_SHARED_STOPS = 2
-DEFAULT_TOP_N_CANDIDATES = 30
-DEFAULT_TRIP_ASSIGN_MIN_CONF = 0.60
-DEFAULT_TRIP_ASSIGN_MIN_OVERLAP = 0.60
-DEFAULT_VALIDATION_RANDOM_SEED = 42
 
 # Parsing helpers
 _ROUTE_PAIR_RE = re.compile(r"(\\d+)\\s*,\\s*(\\d{6}|\\d{2}:\\d{2}:\\d{2})")
@@ -251,9 +250,15 @@ def load_templates(catalog_path: Path) -> Dict[int, dict]:
     cat = pd.read_parquet(catalog_path)
     templates: Dict[int, dict] = {}
 
-    for _, row in cat.iterrows():
-        tid = int(row["template_id"])
-        stops = [int(x) for x in json.loads(row["stop_sequence"])]
+    for row in cat.itertuples(index=False):
+        tid = int(row.template_id)
+        stops = [int(x) for x in json.loads(row.stop_sequence)]
+        n_trips = int(getattr(row, "n_trips_in_catalog", 0))
+        sched = (
+            json.loads(row.median_schedule_json)
+            if pd.notna(getattr(row, "median_schedule_json", None))
+            else []
+        )
         stop_set = frozenset(stops)
         pos_map = {sid: i for i, sid in enumerate(stops)}
 
@@ -265,10 +270,8 @@ def load_templates(catalog_path: Path) -> Dict[int, dict]:
             "n_stops": len(stops),
             "first": stops[0] if stops else None,
             "last": stops[-1] if stops else None,
-            "n_trips": int(row.get("n_trips_in_catalog", 0)),
-            "sched": json.loads(row["median_schedule_json"])
-            if pd.notna(row.get("median_schedule_json"))
-            else [],
+            "n_trips": n_trips,
+            "sched": sched,
         }
 
     return templates
@@ -388,7 +391,7 @@ def assign_trip_templates_by_inference(
     out_rows = []
 
     for _, row in trips_df.iterrows():
-        parsed = row["parsed"]
+        parsed = row.parsed
         stop_seq = [sid for sid, _ in parsed]
         if not stop_seq:
             out_rows.append(
@@ -487,13 +490,14 @@ def build_trip_template_index(
     trips_df["template_id"] = trips_df["template_id"].astype(int)
 
     trip_idx: Dict[Tuple[str, int], List[dict]] = defaultdict(list)
-    for _, row in trips_df.iterrows():
-        key = (row["trip_date"], int(row["template_id"]))
+
+    for row in trips_df.itertuples(index=False):
+        key = (row.trip_date, int(row.template_id))
         trip_idx[key].append(
             {
-                "trip_id": int(row["trip_id"]),
-                "sched_start_min": float(row["sched_start_min"]),
-                "template_assign_confidence": float(row["template_assign_confidence"]),
+                "trip_id": row.trip_id,
+                "sched_start_min": row.sched_start_min,
+                "template_assign_confidence": row.template_assign_confidence,
             }
         )
 
@@ -646,8 +650,8 @@ def validate_route_recovery(
         valid = valid.sample(sample_n, random_state=random_seed)
 
     rows = []
-    for _, row in valid.iterrows():
-        full_seq = [sid for sid, _ in row["parsed"]]
+    for row in valid.itertuples(index=False):
+        full_seq = [sid for sid, _ in row.parsed]
         obs = simulate_partial_observation(
             full_seq, keep_fraction=keep_fraction, min_keep=min_obs_stops, rng=rng
         )
@@ -661,8 +665,8 @@ def validate_route_recovery(
         if not candidate_ids:
             rows.append(
                 {
-                    "trip_id": row["trip_id"],
-                    "true_template_id": int(row["template_id"]),
+                    "trip_id": row.trip_id,
+                    "true_template_id": row.template_id,
                     "pred_template_id": pd.NA,
                     "top1_correct": False,
                     "candidate_count": 0,
@@ -681,10 +685,10 @@ def validate_route_recovery(
 
         rows.append(
             {
-                "trip_id": row["trip_id"],
-                "true_template_id": int(row["template_id"]),
+                "trip_id": row.trip_id,
+                "true_template_id": int(row.template_id),
                 "pred_template_id": pred_tid,
-                "top1_correct": pred_tid == int(row["template_id"]),
+                "top1_correct": pred_tid == int(row.template_id),
                 "candidate_count": len(candidate_ids),
                 "obs_len": len(obs),
             }
@@ -725,9 +729,10 @@ def run_inference(
     print(f"Segments to match: {len(segs):,}")
 
     results = []
+    total_segments = len(segs)
 
-    for i, row in segs.iterrows():
-        obs = row["stop_seq"]
+    for i, row in enumerate(segs.itertuples(index=False), start=1):
+        obs = row.stop_seq
         if len(obs) < min_obs_stops:
             continue
 
@@ -742,12 +747,12 @@ def run_inference(
         if candidate_count == 0:
             results.append(
                 {
-                    "vehicle_id": row["vehicle_id"],
-                    "segment_id": row["segment_id"],
-                    "seg_start_ist": row["seg_start_ist"],
-                    "seg_end_ist": row["seg_end_ist"],
-                    "seg_start_date": row["seg_start_date"],
-                    "seg_end_date": row["seg_end_date"],
+                    "vehicle_id": row.vehicle_id,
+                    "segment_id": row.segment_id,
+                    "seg_start_ist": row.seg_start_ist,
+                    "seg_end_ist": row.seg_end_ist,
+                    "seg_start_date": row.seg_start_date,
+                    "seg_end_date": row.seg_end_date,
                     "template_id": None,
                     "second_template_id": None,
                     "candidate_trip_id": None,
@@ -768,7 +773,7 @@ def run_inference(
                     "candidate_template_count": 0,
                     "n_obs_stops": len(obs),
                     "n_obs_stops_unique": len(set(obs)),
-                    "avg_snap_distance_m": row.get("avg_snap_distance_m", np.nan),
+                    "avg_snap_distance_m": getattr(row, "avg_snap_distance_m", np.nan),
                 }
             )
             continue
@@ -793,12 +798,12 @@ def run_inference(
         if best_sc["confidence"] < min_confidence:
             results.append(
                 {
-                    "vehicle_id": row["vehicle_id"],
-                    "segment_id": row["segment_id"],
-                    "seg_start_ist": row["seg_start_ist"],
-                    "seg_end_ist": row["seg_end_ist"],
-                    "seg_start_date": row["seg_start_date"],
-                    "seg_end_date": row["seg_end_date"],
+                    "vehicle_id": row.vehicle_id,
+                    "segment_id": row.segment_id,
+                    "seg_start_ist": row.seg_start_ist,
+                    "seg_end_ist": row.seg_end_ist,
+                    "seg_start_date": row.seg_start_date,
+                    "seg_end_date": row.seg_end_date,
                     "template_id": None,
                     "second_template_id": second_tid,
                     "candidate_trip_id": None,
@@ -821,7 +826,7 @@ def run_inference(
                     "candidate_template_count": candidate_count,
                     "n_obs_stops": len(obs),
                     "n_obs_stops_unique": len(set(obs)),
-                    "avg_snap_distance_m": row.get("avg_snap_distance_m", np.nan),
+                    "avg_snap_distance_m": getattr(row, "avg_snap_distance_m", np.nan),
                 }
             )
             continue
@@ -831,21 +836,21 @@ def run_inference(
         if best_sc["confidence"] >= ROUTE_HIGH_CONFIDENCE:
             trip_id, time_diff = infer_trip_id(
                 template_id=best_tid,
-                seg_start_date=row["seg_start_date"],
-                seg_end_date=row["seg_end_date"],
-                seg_start_min=float(row["seg_start_min"]),
+                seg_start_date=row.seg_start_date,
+                seg_end_date=row.seg_end_date,
+                seg_start_min=row.seg_start_min,
                 trip_index=trip_index,
                 window_min=trip_window_min,
             )
 
         results.append(
             {
-                "vehicle_id": row["vehicle_id"],
-                "segment_id": row["segment_id"],
-                "seg_start_ist": row["seg_start_ist"],
-                "seg_end_ist": row["seg_end_ist"],
-                "seg_start_date": row["seg_start_date"],
-                "seg_end_date": row["seg_end_date"],
+                "vehicle_id": row.vehicle_id,
+                "segment_id": row.segment_id,
+                "seg_start_ist": row.seg_start_ist,
+                "seg_end_ist": row.seg_end_ist,
+                "seg_start_date": row.seg_start_date,
+                "seg_end_date": row.seg_end_date,
                 "template_id": best_tid,
                 "second_template_id": second_tid,
                 "candidate_trip_id": trip_id,
@@ -868,13 +873,13 @@ def run_inference(
                 "candidate_template_count": candidate_count,
                 "n_obs_stops": len(obs),
                 "n_obs_stops_unique": len(set(obs)),
-                "avg_snap_distance_m": row.get("avg_snap_distance_m", np.nan),
+                "avg_snap_distance_m": getattr(row, "avg_snap_distance_m", np.nan),
             }
         )
 
-        if (i + 1) % 10_000 == 0:
-            pct = 100 * (i + 1) / max(len(segs), 1)
-            print(f"  [{pct:5.1f}%] {i + 1:,}/{len(segs):,}", flush=True)
+        if i % 10_000 == 0:
+            pct = 100 * i / total_segments
+            print(f"  [{pct:5.1f}%] {i:,}/{total_segments:,}", flush=True)
 
     inferred = pd.DataFrame(results)
 

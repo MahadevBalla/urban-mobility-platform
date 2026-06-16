@@ -112,12 +112,18 @@ MIN_DURATION_MIN = 5
 # Stop snapping
 # 68% of pings within 200m, 82% within 300m <- from 02_gps_data_audit.ipynb EDA
 SNAP_THRESHOLD_M = 200
+EARTH_R_M = 6_371_000.0  # for haversine distance calculations
 
 # Route inference
 ROUTE_MIN_OBS_STOPS = 4
 ROUTE_MIN_CONFIDENCE = 0.20  # minimum combined score to assign template
 ROUTE_HIGH_CONFIDENCE = 0.50  # threshold for schedule adherence use
 ROUTE_TRIP_WINDOW_MIN = 45  # max delta between seg start and scheduled trip start
+DEFAULT_MIN_SHARED_STOPS = 2  # minimum shared stops for candidate templates in route inference and OD matching
+DEFAULT_TOP_N_CANDIDATES = 15  # max candidate templates to consider in route inference and OD matching (after shared stop filter)
+DEFAULT_TRIP_ASSIGN_MIN_CONF = 0.60  # minimum confidence to assign a route template to a trip
+DEFAULT_TRIP_ASSIGN_MIN_OVERLAP = 0.60  # minimum overlap (shared stops / template stops) to assign a route template to a trip
+DEFAULT_VALIDATION_RANDOM_SEED = 42  # for reproducibility of train/val splits and random sampling in validation analyses
 
 # OD matrix
 OD_TIER1_MIN_CONF = 0.30  # route-template OD minimum confidence

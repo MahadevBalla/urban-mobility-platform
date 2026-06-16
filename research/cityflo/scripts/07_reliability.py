@@ -158,23 +158,17 @@ def _build_trip_stop_schedule(trips_path: Path) -> pd.DataFrame:
     trips_df["trip_id"] = trips_df["trip_id"].astype(int)
 
     rows: list[dict] = []
-    for _, row in trips_df.iterrows():
-        trip_id = int(row["trip_id"])
-        parsed = _parse_trip_route(row["trip_route"])
+    for row in trips_df.itertuples(index=False):
+        trip_id = row.trip_id
+        parsed = _parse_trip_route(row.trip_route)
         seen_stops: set[int] = set()
         for stop_id, arrival_min in parsed:
             if stop_id in seen_stops:
                 continue  # keep first occurrence only
             seen_stops.add(stop_id)
-            rows.append(
-                {
-                    "trip_id": trip_id,
-                    "stop_id": stop_id,
-                    "scheduled_arrival_min": arrival_min,
-                }
-            )
+            rows.append((trip_id, stop_id, arrival_min))
 
-    schedule_df = pd.DataFrame(rows)
+    schedule_df = pd.DataFrame(rows, columns=["trip_id", "stop_id", "scheduled_arrival_min"])
     if schedule_df.empty:
         return schedule_df
 
