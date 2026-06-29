@@ -187,6 +187,23 @@ STGNN_PARAMS = {
     "weight_decay": 1e-4,
 }
 
+# Policy Outputs
+MODE_SHIFT_WEIGHTS = {
+    "load": 0.40,
+    "regularity": 0.35,
+    "reliability": 0.25,
+}
+
+# CO₂ assumptions
+AVG_CAR_OCCUPANCY = 1.15  # NCRB / MoRTH India average
+BUS_EMISSION_KG_PER_KM = 0.030  # bus per passenger (~40% seat fill assumed)
+CAR_EMISSION_KG_PER_KM = 0.171  # private car, India fleet average
+
+# Mode-shift scoring
+MAX_BINS_PER_MONTH: int = 1464
+TIER1_THRESHOLD = 0.70
+TIER2_THRESHOLD = 0.50
+
 # Processed artefact paths
 PINGS_CLEAN = DATA_PROCESSED / "pings_clean.parquet"
 PINGS_SEGMENTED = DATA_PROCESSED / "pings_segmented.parquet"
