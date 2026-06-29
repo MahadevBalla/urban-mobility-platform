@@ -27,7 +27,7 @@ TABLES_DIR = OUTPUTS / "tables"
 for _d in [DATA_PROCESSED, DATA_INTERIM, FIGURES, MODELS_DIR, TABLES_DIR]:
     _d.mkdir(parents=True, exist_ok=True)
 
-# GPS raw files — 14-column legacy CSV, NO header
+# GPS raw files
 GPS_FILES = [
     DATA_RAW / "before_2022-10-22_698096e5f4994518a37a0b9c59bb9756",
     DATA_RAW / "before_2022-10-22_698096e5f4994518a37a0b9c59bb9756_part2",
@@ -37,12 +37,20 @@ GPS_FILES = [
 # Reference data
 STOPS_FILE = DATA_PROCESSED / "stops_clean.csv"
 TRIPS_FILE = DATA_PROCESSED / "trips_clean.csv"
-WEATHER_DIR = DATA_RAW / "weather"  # G001/ … G015/ subdirectories
-WARD_KML = DATA_RAW / "mumbai_wards.kml"  # if available
+WEATHER_DIR = DATA_RAW / "weather"
+WARD_KML = DATA_RAW / "mumbai_wards.kml"
 
 # Study window
 STUDY_START = "2021-09-01"
 STUDY_END = "2022-10-22"
+
+# Temporal train / validation / test split
+# train : STUDY_START  →  MODEL_TRAIN_END  (inclusive)
+# valid : MODEL_TRAIN_END < t ≤ MODEL_VALID_END
+# test  : MODEL_TEST_START  →  STUDY_END  (inclusive)
+MODEL_TRAIN_END = "2022-07-31"  # ~10 months of training data
+MODEL_VALID_END = "2022-08-31"  # August = validation
+MODEL_TEST_START = "2022-09-01"  # September–October = held-out test
 
 # GPS schema
 LEGACY_COLS = [
@@ -51,12 +59,12 @@ LEGACY_COLS = [
     "lng",  # pos  3  WGS84 longitude
     "created",  # pos  4  DB ingestion timestamp UTC  (dropped after parsing)
     "vehicle_id",  # pos  5  internal vehicle ID
-    "timestamp",  # pos  6  actual GPS event timestamp UTC  ← parsed to datetime and used for all temporal filters
+    "timestamp",  # pos  6  actual GPS event timestamp UTC
     "speed",  # pos  7  speed in km/h
     "bearing",  # pos  8  heading/bearing field; Direction of travel
     "source",  # pos  9  GPS source
     "c10",  # pos 10  ALWAYS NULL → dropped
-    "c11",  # pos 11  undocumented low-cardinality field; excluded from pipeline
+    "c11",  # pos 11  undocumented low-cardinality field; excluded
     "deviation_s",  # pos 12  GPS vs DB timestamp delta, seconds
     "c13",  # pos 13  23.1% null, undocumented → dropped
     "c14",  # pos 14  near-constant "1" → dropped
@@ -79,11 +87,9 @@ LEGACY_DTYPES = {
     "c14": pl.Utf8,
 }
 
-# Columns to drop immediately after read
 LEGACY_DROP_COLS = ["created", "c10", "c11", "c13", "c14", "bearing"]
 
 # GPS quality filters
-# Tight Mumbai metropolitan bbox
 MUMBAI_BBOX = {
     "lat_min": 18.8894,
     "lat_max": 19.3274,
@@ -91,39 +97,29 @@ MUMBAI_BBOX = {
     "lng_max": 73.1165,
 }
 MUMBAI_BUFFER_DEG = 0.15
-
-# Speed: null-out anything > 120 km/h before ANY numeric filter
-# Sentinels observed during EDA: 602, 699.999, 800, 1000, 1200
 SPEED_MAX_KMH = 120
-
-# GPS jump filter: same threshold as sentinel — inter-ping computed speed > 120
 GPS_JUMP_MAX_KMH = 120
-
-# Temporal deviation: GPS event time vs DB ingestion time
-# |deviation| > 300s removes only 0.09% of rows
 DEVIATION_MAX_S = 300
 
 # Trip segmentation
-# 20-min gap threshold: only 0.1% of transitions exceed this
 GAP_THRESHOLD_MIN = 20
 MIN_PINGS_PER_SEG = 5
 MIN_DURATION_MIN = 5
 
 # Stop snapping
-# 68% of pings within 200m, 82% within 300m <- from 02_gps_data_audit.ipynb EDA
 SNAP_THRESHOLD_M = 200
-EARTH_R_M = 6_371_000.0  # for haversine distance calculations
+EARTH_R_M = 6_371_000.0  # metres; used for haversine distance calculations
 
 # Route inference
 ROUTE_MIN_OBS_STOPS = 4
-ROUTE_MIN_CONFIDENCE = 0.20  # minimum combined score to assign template
-ROUTE_HIGH_CONFIDENCE = 0.50  # threshold for schedule adherence use
-ROUTE_TRIP_WINDOW_MIN = 45  # max delta between seg start and scheduled trip start
-DEFAULT_MIN_SHARED_STOPS = 2  # minimum shared stops for candidate templates in route inference and OD matching
-DEFAULT_TOP_N_CANDIDATES = 15  # max candidate templates to consider in route inference and OD matching (after shared stop filter)
-DEFAULT_TRIP_ASSIGN_MIN_CONF = 0.60  # minimum confidence to assign a route template to a trip
-DEFAULT_TRIP_ASSIGN_MIN_OVERLAP = 0.60  # minimum overlap (shared stops / template stops) to assign a route template to a trip
-DEFAULT_VALIDATION_RANDOM_SEED = 42  # for reproducibility of train/val splits and random sampling in validation analyses
+ROUTE_MIN_CONFIDENCE = 0.20
+ROUTE_HIGH_CONFIDENCE = 0.50
+ROUTE_TRIP_WINDOW_MIN = 45
+DEFAULT_MIN_SHARED_STOPS = 2
+DEFAULT_TOP_N_CANDIDATES = 15
+DEFAULT_TRIP_ASSIGN_MIN_CONF = 0.60
+DEFAULT_TRIP_ASSIGN_MIN_OVERLAP = 0.60
+DEFAULT_VALIDATION_RANDOM_SEED = 42
 
 # OD matrix
 OD_TIER1_MIN_CONF = 0.30  # route-template OD minimum confidence
@@ -138,7 +134,7 @@ LATE_THRESHOLD_MIN = 5
 EARLY_THRESHOLD_MIN = -2
 BUNCHING_PCT = 0.25  # headway < 25% of mean = bunching
 
-# Weather (Open-Meteo 10km grid)
+# Weather (Open-Meteo 10 km grid)
 WEATHER_IDW_K = 4  # k nearest grid points for interpolation
 WEATHER_IDW_POWER = 2  # inverse-distance weighting exponent
 WEATHER_JOIN_TOL_MIN = 60  # temporal join tolerance (minutes)
@@ -163,7 +159,7 @@ WEATHER_TRANSPORT_VARS = [
 # H3
 H3_RESOLUTION = 8
 
-# Models
+# Model hyper-parameters
 XGB_PARAMS = {
     "n_estimators": 500,
     "max_depth": 6,
@@ -174,7 +170,7 @@ XGB_PARAMS = {
     "reg_alpha": 0.1,
     "reg_lambda": 1.0,
     "objective": "reg:squarederror",
-    "tree_method": "hist",  # fast on CPU and GPU
+    "tree_method": "hist",
     "device": "cuda",  # switch to "cpu" if no GPU
     "random_state": 42,
 }
@@ -182,8 +178,8 @@ XGB_PARAMS = {
 STGNN_PARAMS = {
     "hidden_dim": 64,
     "n_layers": 2,
-    "seq_len": 12,  # 12 × 30min = 6h lookback
-    "pred_horizon": 4,  # predict next 4 × 30min
+    "seq_len": 12,  # 12 × 30 min = 6 h lookback
+    "pred_horizon": 4,  # predict next 4 × 30 min
     "epochs": 100,
     "batch_size": 64,
     "lr": 1e-3,
@@ -191,7 +187,7 @@ STGNN_PARAMS = {
     "weight_decay": 1e-4,
 }
 
-# Processed artefact paths (outputs of each pipeline script)
+# Processed artefact paths
 PINGS_CLEAN = DATA_PROCESSED / "pings_clean.parquet"
 PINGS_SEGMENTED = DATA_PROCESSED / "pings_segmented.parquet"
 PINGS_SNAPPED = DATA_PROCESSED / "pings_snapped.parquet"
@@ -214,3 +210,8 @@ CO2_SAVINGS = DATA_PROCESSED / "co2_savings.parquet"
 SERVICE_GAPS = DATA_PROCESSED / "service_gaps.parquet"
 SERVICE_SUPPLY = DATA_PROCESSED / "service_supply.parquet"
 SERVICE_FREQUENCY = DATA_PROCESSED / "service_frequency.parquet"
+
+# Model prediction output paths
+NB_PREDICTIONS = TABLES_DIR / "nb_predictions.parquet"
+XGB_PREDICTIONS = TABLES_DIR / "xgboost_predictions.parquet"
+STGNN_PREDICTIONS = TABLES_DIR / "stgnn_predictions.parquet"

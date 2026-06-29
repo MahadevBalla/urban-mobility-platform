@@ -19,23 +19,6 @@ B. Schedule adherence:
     cover Sep-2021 to Oct-2022, adherence should be interpreted relative to representative
     operational schedules rather than verified historical timetables.
 
-METHODOLOGY NOTE
-----------------
-schedule adherence is computed against the archived per-stop scheduled arrival
-from trips_clean.csv, keyed on (candidate_trip_id, stop_id).  This is stronger than the
-previous approach of: matched_trip_sched_start + template median stop offset
-because it uses archived trip-level stop schedules directly rather than
-approximating intra-trip stop spacing from route-level median offsets.
-
-The improvement is conditional on candidate_trip_id assignment quality.
-An additional limitation is that trips_clean.csv represents a schedule archive
-covering Dec-2025 to Jun-2026, whereas GPS observations span Sep-2021 to
-Oct-2022. Therefore adherence metrics should be interpreted as deviation from
-representative operational schedules rather than confirmed historical schedules.
-Assignments are only made when match_confidence >= ROUTE_HIGH_CONFIDENCE and
-the temporal gap to the nearest scheduled departure is within ROUTE_TRIP_WINDOW_MIN,
-so the population entering adherence analysis is already the high-confidence subset.
-
 Input :
     pings_snapped.parquet
     segments_inferred.parquet
@@ -201,286 +184,289 @@ def compute_reliability(
         f"  {trip_stop_schedule_df['stop_id'].nunique():,} unique stops)"
     )
 
-    con = duckdb.connect()
+    con = None
+    try:
+        con = duckdb.connect()
 
-    con.execute(f"""
-        CREATE TABLE snapped AS
-        SELECT *
-        FROM read_parquet('{snapped_path}')
-        WHERE snapped_stop_id != -1
-    """)
-    con.execute(
-        f"CREATE TABLE inferred AS SELECT * FROM read_parquet('{inferred_path}')"
-    )
-    # route_catalog is only needed for headway; not used in adherence anymore.
-    con.execute(f"CREATE TABLE catalog AS SELECT * FROM read_parquet('{catalog_path}')")
+        con.execute(f"""
+            CREATE TABLE snapped AS
+            SELECT *
+            FROM read_parquet('{snapped_path}')
+            WHERE snapped_stop_id != -1
+        """)
+        con.execute(
+            f"CREATE TABLE inferred AS SELECT * FROM read_parquet('{inferred_path}')"
+        )
+        # route_catalog is only needed for headway; not used in adherence anymore.
+        con.execute(f"CREATE TABLE catalog AS SELECT * FROM read_parquet('{catalog_path}')")
 
-    # Register the Python-built schedule table into DuckDB.
-    con.register("trip_stop_schedule_df", trip_stop_schedule_df)
-    con.execute("""
-        CREATE TABLE trip_stop_schedule AS
-        SELECT * FROM trip_stop_schedule_df
-    """)
+        # Register the Python-built schedule table into DuckDB.
+        con.register("trip_stop_schedule_df", trip_stop_schedule_df)
+        con.execute("""
+            CREATE TABLE trip_stop_schedule AS
+            SELECT * FROM trip_stop_schedule_df
+        """)
 
-    # A. True stop arrivals from raw pings
-    # Collapse contiguous same-stop dwell pings into one stop-arrival event.
-    con.execute("""
-        CREATE TABLE stop_arrivals AS
-        WITH ordered AS (
+        # A. True stop arrivals from raw pings
+        # Collapse contiguous same-stop dwell pings into one stop-arrival event.
+        con.execute("""
+            CREATE TABLE stop_arrivals AS
+            WITH ordered AS (
+                SELECT
+                    snapped_stop_id,
+                    vehicle_id,
+                    ride_date,
+                    segment_id,
+                    timestamp_ist,
+                    CASE
+                        WHEN LAG(snapped_stop_id) OVER (
+                            PARTITION BY vehicle_id, ride_date, segment_id
+                            ORDER BY timestamp_ist
+                        ) = snapped_stop_id
+                        THEN 0
+                        ELSE 1
+                    END AS is_new_visit
+                FROM snapped
+            ),
+            visit_groups AS (
+                SELECT
+                    *,
+                    SUM(is_new_visit) OVER (
+                        PARTITION BY vehicle_id, ride_date, segment_id
+                        ORDER BY timestamp_ist
+                        ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
+                    ) AS visit_group
+                FROM ordered
+            )
             SELECT
-                snapped_stop_id,
+                snapped_stop_id AS stop_id,
                 vehicle_id,
                 ride_date,
                 segment_id,
-                timestamp_ist,
-                CASE
-                    WHEN LAG(snapped_stop_id) OVER (
-                        PARTITION BY vehicle_id, ride_date, segment_id
-                        ORDER BY timestamp_ist
-                    ) = snapped_stop_id
-                    THEN 0
-                    ELSE 1
-                END AS is_new_visit
-            FROM snapped
-        ),
-        visit_groups AS (
+                visit_group,
+                MIN(timestamp_ist) AS arrival_time
+            FROM visit_groups
+            GROUP BY
+                vehicle_id,
+                ride_date,
+                segment_id,
+                snapped_stop_id,
+                visit_group
+        """)
+
+        # Build stop visits from arrival events, then compute headway from arrivals.
+        con.execute("""
+            CREATE TABLE stop_visits AS
             SELECT
-                *,
-                SUM(is_new_visit) OVER (
-                    PARTITION BY vehicle_id, ride_date, segment_id
-                    ORDER BY timestamp_ist
-                    ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
-                ) AS visit_group
-            FROM ordered
-        )
-        SELECT
-            snapped_stop_id AS stop_id,
-            vehicle_id,
-            ride_date,
-            segment_id,
-            visit_group,
-            MIN(timestamp_ist) AS arrival_time
-        FROM visit_groups
-        GROUP BY
-            vehicle_id,
-            ride_date,
-            segment_id,
-            snapped_stop_id,
-            visit_group
-    """)
-
-    # Build stop visits from arrival events, then compute headway from arrivals.
-    con.execute("""
-        CREATE TABLE stop_visits AS
-        SELECT
-            stop_id,
-            vehicle_id,
-            ride_date,
-            segment_id,
-            arrival_time,
-            (
-                EPOCH(arrival_time)
-                - EPOCH(
-                    LAG(arrival_time) OVER (
-                        PARTITION BY stop_id, ride_date
-                        ORDER BY arrival_time
+                stop_id,
+                vehicle_id,
+                ride_date,
+                segment_id,
+                arrival_time,
+                (
+                    EPOCH(arrival_time)
+                    - EPOCH(
+                        LAG(arrival_time) OVER (
+                            PARTITION BY stop_id, ride_date
+                            ORDER BY arrival_time
+                        )
                     )
-                )
-            ) / 60.0 AS headway_min,
-            CASE
-                WHEN DAYOFWEEK(ride_date) IN (0, 6) THEN 'weekend'
-                ELSE 'weekday'
-            END AS day_type,
-            CASE
-                WHEN HOUR(arrival_time) >= 6  AND HOUR(arrival_time) < 10 THEN 'AM_peak'
-                WHEN HOUR(arrival_time) >= 17 AND HOUR(arrival_time) < 21 THEN 'PM_peak'
-                ELSE 'off_peak'
-            END AS period,
-            MONTH(ride_date) AS month_num,
-            CASE WHEN MONTH(ride_date) IN (6,7,8,9) THEN 1 ELSE 0 END AS is_monsoon
-        FROM stop_arrivals
-    """)
-
-    # Compute valid headways and stratum-level mean headway.
-    con.execute(f"""
-        CREATE TEMP TABLE headway_base AS
-        SELECT
-            stop_id,
-            vehicle_id,
-            ride_date,
-            segment_id,
-            arrival_time,
-            headway_min,
-            day_type,
-            period,
-            month_num,
-            is_monsoon
-        FROM stop_visits
-        WHERE headway_min IS NOT NULL
-          AND headway_min > 0
-          AND headway_min < {HEADWAY_MAX_MIN}
-    """)
-
-    con.execute("""
-        CREATE TEMP TABLE headway_group_mean AS
-        SELECT
-            stop_id,
-            day_type,
-            period,
-            month_num,
-            is_monsoon,
-            AVG(headway_min) AS group_mean_headway
-        FROM headway_base
-        GROUP BY stop_id, day_type, period, month_num, is_monsoon
-    """)
-
-    con.execute(f"""
-        CREATE TABLE headway_stats AS
-        SELECT
-            hb.stop_id,
-            hb.day_type,
-            hb.period,
-            hb.month_num,
-            hb.is_monsoon,
-            COUNT(*) AS n_obs,
-            AVG(hb.headway_min)                                    AS mean_headway_min,
-            STDDEV(hb.headway_min)                                 AS std_headway_min,
-            MEDIAN(hb.headway_min)                                 AS median_headway_min,
-            PERCENTILE_CONT(0.85) WITHIN GROUP (ORDER BY hb.headway_min)
-                                                                   AS p85_headway_min,
-            STDDEV(hb.headway_min) / NULLIF(AVG(hb.headway_min), 0)
-                                                                   AS headway_cv,
-            1.0 - STDDEV(hb.headway_min) / NULLIF(AVG(hb.headway_min), 0)
-                                                                   AS headway_reliability,
-            SUM(
+                ) / 60.0 AS headway_min,
                 CASE
-                    WHEN hb.headway_min < {BUNCHING_PCT} * hgm.group_mean_headway
-                    THEN 1 ELSE 0
-                END
-            )                                                      AS bunching_events
-        FROM headway_base hb
-        JOIN headway_group_mean hgm
-          ON hb.stop_id    = hgm.stop_id
-         AND hb.day_type   = hgm.day_type
-         AND hb.period     = hgm.period
-         AND hb.month_num  = hgm.month_num
-         AND hb.is_monsoon = hgm.is_monsoon
-        GROUP BY
-            hb.stop_id,
-            hb.day_type,
-            hb.period,
-            hb.month_num,
-            hb.is_monsoon
-        HAVING COUNT(*) >= 10
-    """)
+                    WHEN DAYOFWEEK(ride_date) IN (0, 6) THEN 'weekend'
+                    ELSE 'weekday'
+                END AS day_type,
+                CASE
+                    WHEN HOUR(arrival_time) >= 6  AND HOUR(arrival_time) < 10 THEN 'AM_peak'
+                    WHEN HOUR(arrival_time) >= 17 AND HOUR(arrival_time) < 21 THEN 'PM_peak'
+                    ELSE 'off_peak'
+                END AS period,
+                MONTH(ride_date) AS month_num,
+                CASE WHEN MONTH(ride_date) IN (6,7,8,9) THEN 1 ELSE 0 END AS is_monsoon
+            FROM stop_arrivals
+        """)
 
-    # B. Schedule adherence: exact trip-stop schedule
-    # Join stop_arrivals → inferred (for candidate_trip_id) → trip_stop_schedule
-    # (for the archived scheduled arrival of that stop on that trip).
-    # No template offsets; no trip start time reconstruction.
-    # The |delay| < 90-minute guard retains the same outlier filter as before.
-    con.execute(f"""
-        CREATE TABLE schedule_adherence AS
-        SELECT
-            sa.stop_id,
-            sa.vehicle_id,
-            sa.ride_date,
-            sa.segment_id,
-            inf.template_id,
-            inf.candidate_trip_id,
-            inf.match_confidence,
-            sa.arrival_time                                          AS actual_arrival,
-            tss.scheduled_arrival_min,
-            HOUR(sa.arrival_time) * 60.0
-                + MINUTE(sa.arrival_time)
-                + SECOND(sa.arrival_time) / 60.0                   AS actual_min_ist,
-            (
+        # Compute valid headways and stratum-level mean headway.
+        con.execute(f"""
+            CREATE TEMP TABLE headway_base AS
+            SELECT
+                stop_id,
+                vehicle_id,
+                ride_date,
+                segment_id,
+                arrival_time,
+                headway_min,
+                day_type,
+                period,
+                month_num,
+                is_monsoon
+            FROM stop_visits
+            WHERE headway_min IS NOT NULL
+            AND headway_min > 0
+            AND headway_min < {HEADWAY_MAX_MIN}
+        """)
+
+        con.execute("""
+            CREATE TEMP TABLE headway_group_mean AS
+            SELECT
+                stop_id,
+                day_type,
+                period,
+                month_num,
+                is_monsoon,
+                AVG(headway_min) AS group_mean_headway
+            FROM headway_base
+            GROUP BY stop_id, day_type, period, month_num, is_monsoon
+        """)
+
+        con.execute(f"""
+            CREATE TABLE headway_stats AS
+            SELECT
+                hb.stop_id,
+                hb.day_type,
+                hb.period,
+                hb.month_num,
+                hb.is_monsoon,
+                COUNT(*) AS n_obs,
+                AVG(hb.headway_min)                                    AS mean_headway_min,
+                STDDEV(hb.headway_min)                                 AS std_headway_min,
+                MEDIAN(hb.headway_min)                                 AS median_headway_min,
+                PERCENTILE_CONT(0.85) WITHIN GROUP (ORDER BY hb.headway_min)
+                                                                    AS p85_headway_min,
+                STDDEV(hb.headway_min) / NULLIF(AVG(hb.headway_min), 0)
+                                                                    AS headway_cv,
+                1.0 - STDDEV(hb.headway_min) / NULLIF(AVG(hb.headway_min), 0)
+                                                                    AS headway_reliability,
+                SUM(
+                    CASE
+                        WHEN hb.headway_min < {BUNCHING_PCT} * hgm.group_mean_headway
+                        THEN 1 ELSE 0
+                    END
+                )                                                      AS bunching_events
+            FROM headway_base hb
+            JOIN headway_group_mean hgm
+            ON hb.stop_id    = hgm.stop_id
+            AND hb.day_type   = hgm.day_type
+            AND hb.period     = hgm.period
+            AND hb.month_num  = hgm.month_num
+            AND hb.is_monsoon = hgm.is_monsoon
+            GROUP BY
+                hb.stop_id,
+                hb.day_type,
+                hb.period,
+                hb.month_num,
+                hb.is_monsoon
+            HAVING COUNT(*) >= 10
+        """)
+
+        # B. Schedule adherence: exact trip-stop schedule
+        # Join stop_arrivals → inferred (for candidate_trip_id) → trip_stop_schedule
+        # (for the archived scheduled arrival of that stop on that trip).
+        # No template offsets; no trip start time reconstruction.
+        # The |delay| < 90-minute guard retains the same outlier filter as before.
+        con.execute(f"""
+            CREATE TABLE schedule_adherence AS
+            SELECT
+                sa.stop_id,
+                sa.vehicle_id,
+                sa.ride_date,
+                sa.segment_id,
+                inf.template_id,
+                inf.candidate_trip_id,
+                inf.match_confidence,
+                sa.arrival_time                                          AS actual_arrival,
+                tss.scheduled_arrival_min,
                 HOUR(sa.arrival_time) * 60.0
-                + MINUTE(sa.arrival_time)
-                + SECOND(sa.arrival_time) / 60.0
-            ) - tss.scheduled_arrival_min                           AS delay_min,
-            MONTH(sa.ride_date)                                      AS month_num,
-            CASE WHEN MONTH(sa.ride_date) IN (6,7,8,9) THEN 1 ELSE 0 END
-                                                                     AS is_monsoon,
-            CASE
-                WHEN DAYOFWEEK(sa.ride_date) IN (0, 6) THEN 'weekend'
-                ELSE 'weekday'
-            END                                                      AS day_type,
-            CASE
-                WHEN HOUR(sa.arrival_time) >= 6  AND HOUR(sa.arrival_time) < 10 THEN 'AM_peak'
-                WHEN HOUR(sa.arrival_time) >= 17 AND HOUR(sa.arrival_time) < 21 THEN 'PM_peak'
-                ELSE 'off_peak'
-            END                                                      AS period
-        FROM stop_arrivals sa
-        JOIN inferred inf
-          ON sa.vehicle_id = inf.vehicle_id
-         AND sa.ride_date  = inf.ride_date
-         AND sa.segment_id = inf.segment_id
-        JOIN trip_stop_schedule tss
-          ON inf.candidate_trip_id = tss.trip_id
-         AND sa.stop_id            = tss.stop_id
-        WHERE inf.candidate_trip_id IS NOT NULL
-          AND inf.match_confidence  >= {ROUTE_HIGH_CONFIDENCE}
-          AND ABS(
-                  (
-                      HOUR(sa.arrival_time) * 60.0
-                      + MINUTE(sa.arrival_time)
-                      + SECOND(sa.arrival_time) / 60.0
-                  ) - tss.scheduled_arrival_min
-              ) < 90
-    """)
-
-    con.execute(f"""
-        CREATE TABLE schedule_adherence_stats AS
-        SELECT
-            stop_id,
-            day_type,
-            period,
-            month_num,
-            is_monsoon,
-            COUNT(*)                                                AS n_obs,
-            AVG(delay_min)                                         AS mean_delay_min,
-            STDDEV(delay_min)                                      AS std_delay_min,
-            MEDIAN(delay_min)                                      AS median_delay_min,
-            AVG(
+                    + MINUTE(sa.arrival_time)
+                    + SECOND(sa.arrival_time) / 60.0                   AS actual_min_ist,
+                (
+                    HOUR(sa.arrival_time) * 60.0
+                    + MINUTE(sa.arrival_time)
+                    + SECOND(sa.arrival_time) / 60.0
+                ) - tss.scheduled_arrival_min                           AS delay_min,
+                MONTH(sa.ride_date)                                      AS month_num,
+                CASE WHEN MONTH(sa.ride_date) IN (6,7,8,9) THEN 1 ELSE 0 END
+                                                                        AS is_monsoon,
                 CASE
-                    WHEN ABS(delay_min) <= {ON_TIME_WINDOW_MIN} THEN 1.0
-                    ELSE 0.0
-                END
-            )                                                      AS on_time_pct,
-            AVG(
+                    WHEN DAYOFWEEK(sa.ride_date) IN (0, 6) THEN 'weekend'
+                    ELSE 'weekday'
+                END                                                      AS day_type,
                 CASE
-                    WHEN delay_min > {LATE_THRESHOLD_MIN} THEN 1.0
-                    ELSE 0.0
-                END
-            )                                                      AS late_pct,
-            AVG(
-                CASE
-                    WHEN delay_min < {EARLY_THRESHOLD_MIN} THEN 1.0
-                    ELSE 0.0
-                END
-            )                                                      AS early_pct
-        FROM schedule_adherence
-        GROUP BY stop_id, day_type, period, month_num, is_monsoon
-    """)
+                    WHEN HOUR(sa.arrival_time) >= 6  AND HOUR(sa.arrival_time) < 10 THEN 'AM_peak'
+                    WHEN HOUR(sa.arrival_time) >= 17 AND HOUR(sa.arrival_time) < 21 THEN 'PM_peak'
+                    ELSE 'off_peak'
+                END                                                      AS period
+            FROM stop_arrivals sa
+            JOIN inferred inf
+            ON sa.vehicle_id = inf.vehicle_id
+            AND sa.ride_date  = inf.ride_date
+            AND sa.segment_id = inf.segment_id
+            JOIN trip_stop_schedule tss
+            ON inf.candidate_trip_id = tss.trip_id
+            AND sa.stop_id            = tss.stop_id
+            WHERE inf.candidate_trip_id IS NOT NULL
+            AND inf.match_confidence  >= {ROUTE_HIGH_CONFIDENCE}
+            AND ABS(
+                    (
+                        HOUR(sa.arrival_time) * 60.0
+                        + MINUTE(sa.arrival_time)
+                        + SECOND(sa.arrival_time) / 60.0
+                    ) - tss.scheduled_arrival_min
+                ) < 90
+        """)
 
-    # Write outputs
-    for tbl, fpath in [
-        ("headway_stats", HEADWAY_STATS),
-        ("schedule_adherence_stats", SCHED_ADHERENCE),
-        ("stop_visits", STOP_VISITS),
-    ]:
-        con.execute(f"COPY {tbl} TO '{fpath}' (FORMAT PARQUET, COMPRESSION 'zstd')")
+        con.execute(f"""
+            CREATE TABLE schedule_adherence_stats AS
+            SELECT
+                stop_id,
+                day_type,
+                period,
+                month_num,
+                is_monsoon,
+                COUNT(*)                                                AS n_obs,
+                AVG(delay_min)                                         AS mean_delay_min,
+                STDDEV(delay_min)                                      AS std_delay_min,
+                MEDIAN(delay_min)                                      AS median_delay_min,
+                AVG(
+                    CASE
+                        WHEN ABS(delay_min) <= {ON_TIME_WINDOW_MIN} THEN 1.0
+                        ELSE 0.0
+                    END
+                )                                                      AS on_time_pct,
+                AVG(
+                    CASE
+                        WHEN delay_min > {LATE_THRESHOLD_MIN} THEN 1.0
+                        ELSE 0.0
+                    END
+                )                                                      AS late_pct,
+                AVG(
+                    CASE
+                        WHEN delay_min < {EARLY_THRESHOLD_MIN} THEN 1.0
+                        ELSE 0.0
+                    END
+                )                                                      AS early_pct
+            FROM schedule_adherence
+            GROUP BY stop_id, day_type, period, month_num, is_monsoon
+        """)
 
-    n_hw = con.execute("SELECT COUNT(*) FROM headway_stats").fetchone()[0]
-    n_adh = con.execute("SELECT COUNT(*) FROM schedule_adherence").fetchone()[0]
-    n_sa = con.execute("SELECT COUNT(*) FROM schedule_adherence_stats").fetchone()[0]
+        # Write outputs
+        for tbl, fpath in [
+            ("headway_stats", HEADWAY_STATS),
+            ("schedule_adherence_stats", SCHED_ADHERENCE),
+            ("stop_visits", STOP_VISITS),
+        ]:
+            con.execute(f"COPY {tbl} TO '{fpath}' (FORMAT PARQUET, COMPRESSION 'zstd')")
 
-    print(f"Headway stats rows             : {n_hw:,}")
-    print(f"Schedule adherence obs         : {n_adh:,}")
-    print(f"Schedule adherence stat rows   : {n_sa:,}")
+        n_hw = con.execute("SELECT COUNT(*) FROM headway_stats").fetchone()[0]
+        n_adh = con.execute("SELECT COUNT(*) FROM schedule_adherence").fetchone()[0]
+        n_sa = con.execute("SELECT COUNT(*) FROM schedule_adherence_stats").fetchone()[0]
 
-    con.close()
+        print(f"Headway stats rows             : {n_hw:,}")
+        print(f"Schedule adherence obs         : {n_adh:,}")
+        print(f"Schedule adherence stat rows   : {n_sa:,}")
+    finally:
+        if con is not None:
+            con.close()
 
 
 # CLI

@@ -541,8 +541,9 @@ def infer_trip_id(
 
 # Segment extraction
 def _column_exists(parquet_path: Path, col: str) -> bool:
-    con = duckdb.connect()
+    con = None
     try:
+        con = duckdb.connect()
         cols = (
             con.execute(f"DESCRIBE SELECT * FROM read_parquet('{parquet_path}')")
             .df()["column_name"]
@@ -550,14 +551,16 @@ def _column_exists(parquet_path: Path, col: str) -> bool:
         )
         return col in cols
     finally:
-        con.close()
+        if con is not None:
+            con.close()
 
 
 def extract_segment_sequences(snapped_path: Path, min_obs_stops: int) -> pd.DataFrame:
     has_snap_dist = _column_exists(snapped_path, "snap_distance_m")
 
-    con = duckdb.connect()
+    con = None
     try:
+        con = duckdb.connect()
         select_snap = ", snap_distance_m" if has_snap_dist else ""
         agg_snap = (
             ", AVG(snap_distance_m) AS avg_snap_distance_m"
@@ -594,7 +597,8 @@ def extract_segment_sequences(snapped_path: Path, min_obs_stops: int) -> pd.Data
             HAVING COUNT(DISTINCT snapped_stop_id) >= {min_obs_stops}
         """).df()
     finally:
-        con.close()
+        if con is not None:
+            con.close()
 
     segs["stop_seq"] = segs["stop_seq_raw"].apply(
         lambda x: dedup_consecutive([int(v) for v in x])
