@@ -4,7 +4,7 @@ This document covers the pipeline architecture, per-script design decisions, con
 
 ## Pipeline Overview
 
-The pipeline takes raw GPS pings and reference schedule data and produces a model-ready feature table alongside OD matrices, reliability statistics, and ward-level aggregations.
+The pipeline takes raw GPS pings and reference schedule data and produces a model-ready feature table alongside OD matrices, reliability statistics, ward-level aggregations, model predictions, evaluation artefacts, and policy-facing outputs.
 
 ```md
 Raw GPS CSVs (14-col, no header)
@@ -40,15 +40,29 @@ Raw GPS CSVs (14-col, no header)
         ▼ 09_feature_engineering
   features_master.parquet
         │
-        ▼ 10_ward_aggregation
-  ward_od.parquet
+        ├───────────────────────┬──────────────────────────────┐
+        │                       │                              │
+        ▼ 10_ward_aggregation   ▼ 11_model_nb                  ▼ 12_model_xgboost
+  ward_od.parquet              nb_predictions.parquet        xgboost_predictions.parquet
+                               nb_metrics.csv                xgboost_metrics.csv
         │
-        ├─────────────────────┐
-        │                     │
-        ▼ 11_model_nb         ▼ 12_model_xgboost
+        └───────────────────────┬──────────────────────────────┘
+                                │
+                                ▼ 13_model_stgnn
+                        stgnn_predictions.parquet
+                        stgnn_metrics.csv
+                                │
+                                ▼ 14_analysis_reporting
+                        figures/, model_comparison.csv,
+                        network_summary.json
+                                │
+                                ▼ 15_policy_outputs
+                        mode_shift_scores.parquet
+                        co2_savings.parquet
+                        service_gaps.parquet
 ```
 
-Scripts 02 and 03–05 can run in parallel once `pings_clean.parquet` is ready. Everything else is sequential.
+Scripts 02 and 03–05 can run after `pings_clean.parquet` is ready. Scripts 06 and 07 can then run independently. The model scripts 11, 12, and 13 can also run independently once `features_master.parquet` exists.
 
 All parameters are centralised in `scripts/config.py`. Scripts import from config rather than hardcoding any threshold.
 
@@ -56,172 +70,175 @@ All parameters are centralised in `scripts/config.py`. Scripts import from confi
 
 ### 01 — GPS Ingestion (three scripts)
 
-Ingestion is split across three scripts to allow SLURM parallelism on the HPC. The full 17 GB GPS dataset is partitioned by `vehicle_id % bucket_count` so each job processes a non-overlapping subset of vehicles.
+Ingestion is split across three scripts to allow SLURM parallelism on the HPC. The full GPS dataset is partitioned by `vehicle_id % bucket_count` so each job processes a non-overlapping subset of vehicles.
 
 **01_1_ingest_legacy.py** reads one GPS file for one bucket, applies all quality filters in order (timestamp validity → study window → IST conversion → coordinate validity + bbox → deviation filter → speed sentinel null-out → column drops → temporal derived columns), and writes intermediate parquet files. Deduplication and the GPS jump filter are deferred because both require the full sorted vehicle history across all input files.
 
-**01_2_finalize_pings.py** reads all intermediate parquets for one bucket, deduplicates on `(vehicle_id, ts_utc)`, then applies the GPS jump filter. The jump filter computes inter-ping haversine speed using a Polars expression chain (no numpy roundtrip) and removes pings where the implied speed exceeds `GPS_JUMP_MAX_KMH`. The haversine is computed fully within the Polars lazy graph so intermediate arrays are never materialised in Python.
+**01_2_finalize_pings.py** reads all intermediate parquets for one bucket, deduplicates on `(vehicle_id, ts_utc)`, then applies the GPS jump filter. The jump filter computes inter-ping haversine speed using a Polars expression chain and removes pings where the implied speed exceeds `GPS_JUMP_MAX_KMH`.
 
-**01_3_merge_buckets.py** concatenates finalized bucket parquets into `pings_clean.parquet` using `scan_parquet` → `sink_parquet` so the merge never loads the full dataset into memory.
+**01_3_merge_buckets.py** concatenates finalised bucket parquets into `pings_clean.parquet` using `scan_parquet` → `sink_parquet` so the merge does not require loading the full dataset into memory.
 
 ### 02 — Route Catalog
 
 Reads `trips_clean.csv` and extracts the set of unique route templates. A template is defined by its ordered stop sequence — multiple `trip_id` rows sharing the same stop order belong to the same template regardless of scheduled times or dates.
 
-For each template, the catalog stores the median scheduled arrival time per stop, computed using `statistics.median` across all runs of that template. Median is used rather than mean because outlier runs (shortened trips, deadheads) are common in transit schedule exports and would skew mean arrival times.
-
-The output `route_catalog.json` is a human-readable copy of the catalog for debugging and manual inspection. The parquet is used by all downstream scripts.
+For each template, the catalog stores the median scheduled arrival time per stop across all runs of that template. The output `route_catalog.json` is a human-readable copy of the catalog for debugging and manual inspection, while the parquet is used downstream.
 
 ### 03 — Trip Segmentation
 
-Assigns a `segment_id` to each ping within a vehicle trajectory. A new segment begins when the inter-ping gap exceeds `GAP_THRESHOLD_MIN` (20 minutes). Segmentation is partitioned by `vehicle_id` only, not by `(vehicle_id, ride_date)` — vehicle trajectories are continuous physical paths that should not be split at midnight.
+Assigns a `segment_id` to each ping within a vehicle trajectory. A new segment begins when the inter-ping gap exceeds `GAP_THRESHOLD_MIN`. Segmentation is partitioned by `vehicle_id` only, not by date, so trajectories are not artificially split at midnight.
 
-`segment_id` restarts at 0 for each vehicle and is not globally unique. Downstream code uses `(vehicle_id, segment_id)` as the segment key.
-
-After segmentation, segments with fewer than `MIN_PINGS_PER_SEG` (5) pings or shorter than `MIN_DURATION_MIN` (5 minutes) are removed. These micro-segments represent brief GPS activity that does not correspond to service runs.
-
-The implementation uses DuckDB window functions (`SUM(is_new::INTEGER) OVER (PARTITION BY vehicle_id ORDER BY timestamp_ist)`) which avoids materialising per-vehicle Python DataFrames.
+After segmentation, segments with fewer than `MIN_PINGS_PER_SEG` pings or shorter than `MIN_DURATION_MIN` minutes are removed. These short fragments usually reflect incomplete GPS activity rather than service runs.
 
 ### 04 — Stop Snapping
 
-Snaps each GPS ping to the nearest bus stop using a BallTree with Haversine metric. Pings within `SNAP_THRESHOLD_M` (300 m) receive a `snapped_stop_id`; pings beyond the threshold receive `snapped_stop_id = -1` and are retained for completeness. Downstream scripts filter on `snapped_stop_id != -1` where stop-level data is required.
+Snaps each GPS ping to the nearest bus stop using a BallTree with Haversine metric. Pings within `SNAP_THRESHOLD_M` metres receive a `snapped_stop_id`; pings beyond the threshold receive `snapped_stop_id = -1` and are retained for completeness.
 
-Pings with null or non-finite coordinates are short-circuited before the BallTree query and assigned `snapped_stop_id = -1` directly. The BallTree is built from `stops_clean.csv` after excluding stops with invalid coordinates or coordinates outside the Mumbai bbox buffer.
-
-Processing streams through PyArrow `iter_batches` at 2M rows per chunk to keep memory bounded.
-
-This is a global snap — the nearest stop across the entire catalog, not constrained to a specific route's stops. Route-constrained validation happens in script 05 through the template matching logic.
+Pings with null or non-finite coordinates are short-circuited before the BallTree query and assigned `-1` directly. This stage is a global nearest-stop snap, not yet route-constrained.
 
 ### 05 — Route Inference
 
-Matches each GPS segment's observed stop sequence against the 641 route templates to assign a `template_id` and, for high-confidence matches, a `candidate_trip_id`.
+Matches each GPS segment's observed stop sequence against the route catalog to assign a `template_id` and, for high-confidence matches, a `candidate_trip_id`.
 
-**Candidate generation.** For each segment, an inverted index (`stop_id → {template_ids}`) limits the matching space to templates that share at least two stops with the observed sequence. This typically reduces candidates from 641 to ~5–30 per segment.
+Candidate generation uses an inverted index (`stop_id → template_ids`) to avoid scoring all templates for every segment. Candidates are ranked lexicographically using overlap, order, direction, endpoint, and coverage metrics, with the `match_margin` field storing the gap between the top two matches.
 
-**Scoring.** Each candidate is scored on six metrics and ranked lexicographically:
-
-| Metric | Definition |
-| --- | --- |
-| `overlap_score` | `\|obs ∩ template\| / \|obs\|` — precision |
-| `order_score` | LCS length ÷ observed length |
-| `direction_score` | Monotonicity ratio of matched template positions |
-| `endpoint_score` | Whether observed first/last stops fall near template terminals |
-| `coverage_score` | `\|obs ∩ template\| / \|template\|` — recall |
-| `confidence` | `min(overlap_score, order_score, max(0, direction_score))` |
-
-Ranking uses lexicographic order on `(overlap_score, order_score, direction_score, endpoint_score, coverage_score, -template_len_penalty)` with no weighted averaging. The `match_margin` column records the confidence gap between the best and second-best candidate — low margin indicates an ambiguous match.
-
-LCS-based order scoring is used over a simple subsequence check because it handles partial observations: a segment that started GPS recording mid-route still scores correctly as long as the observed stops appear in the right relative order.
-
-**Trip ID assignment.** For segments where `match_confidence ≥ ROUTE_HIGH_CONFIDENCE` (0.50), the script searches `trips_clean.csv` for the closest scheduled run of the matched template on the segment's date. The search compares the segment's start time (minutes from midnight IST) against each candidate trip's first-stop scheduled time, accounting for midnight rollover. A match is assigned if the closest trip falls within `ROUTE_TRIP_WINDOW_MIN` (45 minutes).
-
-**Validation.** The `--run_validation` flag enables a leave-some-out accuracy check: for a sample of trips in `trips_clean.csv`, 40% of stops are randomly dropped to simulate partial GPS observation, and the algorithm attempts to recover the correct template. This produces a top-1 accuracy metric that characterises matching performance independently of the GPS data.
+For segments where `match_confidence ≥ ROUTE_HIGH_CONFIDENCE`, the script then searches `trips_clean.csv` for the closest scheduled run of the matched template on the segment date. The optional `--run_validation` mode performs a leave-some-out check by dropping stops from known schedule patterns and testing whether the correct template is recovered.
 
 ### 06 — OD Matrix
 
 Constructs origin-destination pairs at the vehicle-run level from matched segments. All output counts represent vehicle runs, not individual passengers.
 
-**Tier 1** (route-template OD): for segments where `match_confidence ≥ OD_TIER1_MIN_CONF` (0.30), origin and destination are the terminal stops of the matched route template — not the first/last GPS-snapped stop. This reduces truncation bias from partial GPS coverage at trip start or end.
+**Tier 1 OD** is used for segments with `match_confidence ≥ OD_TIER1_MIN_CONF`, where origin and destination are the terminal stops of the matched route template. **Tier 2 OD** falls back to the first and last snapped stop for unmatched or lower-confidence segments.
 
-**Tier 2** (first/last-snap OD): for unmatched segments, origin = first snapped stop chronologically, destination = last snapped stop. This is noisier but provides coverage for unmatched segments.
-
-The 30-minute time bin is computed via epoch arithmetic (`(epoch(ts)::BIGINT / 1800) * 1800`), which avoids timezone handling edge cases in `DATE_TRUNC`.
-
-Quality filters (`ping_count ≥ OD_MIN_PINGS`, `trip_dur_min ≥ OD_MIN_DURATION_MIN`) are applied after the group-by aggregation using a CTE — not in a WHERE clause on window functions, which is invalid SQL.
-
-`od_agg` joins stop metadata (name, category, coordinates) and computes trip distance using the equirectangular approximation. `service_supply` and `service_frequency` are derived tables showing estimated headways per OD pair.
+The final `od_agg.parquet` enriches OD pairs with stop metadata, coordinates, `trip_distance_km`, temporal fields, and segment-level summary measures. The script also writes `service_supply.parquet` and `service_frequency.parquet` as derived supply-side tables.
 
 ### 07 — Reliability
 
-**Headway statistics.** Raw pings at a stop are collapsed into discrete stop-arrival events before headway computation. Contiguous pings from the same vehicle at the same stop are grouped into one arrival event using a LAG-based visit boundary detection. Headways are then computed as time differences between consecutive arrivals at each stop on each day.
+This script produces two families of service quality metrics.
 
-Bunching is computed by joining against a pre-computed per-stratum mean headway (in a separate CTE), then flagging arrivals where `headway < BUNCHING_PCT × stratum_mean`. This avoids the invalid SQL pattern of referencing a window function result inside a grouped aggregate.
+**Headway statistics** collapse contiguous pings from the same vehicle at the same stop into a single stop-arrival event, then compute headway distributions by stop, month, day type, monsoon flag, and period. It outputs metrics including mean headway, headway CV, a bounded headway reliability score, and bunching counts.
 
-**Schedule adherence.** For segments with an assigned `candidate_trip_id` and `match_confidence ≥ ROUTE_HIGH_CONFIDENCE` (0.50), the scheduled arrival time for each snapped stop is looked up directly from `trips_clean.csv` using `(trip_id, stop_id)` as the join key — not from the template's median schedule. This provides trip-specific scheduled times rather than an averaged reference.
-
-Delay is `actual_arrival_min_ist - scheduled_arrival_min_ist`. Positive = late; negative = early. Observations with `|delay| ≥ 90 minutes` are excluded as likely trip_id misassignments.
-
-`trips_clean.csv` contains schedules from December 2025–July 2026 while GPS observations are from September 2021–October 2022. Schedule adherence metrics therefore reflect deviation from representative operational schedules, not historically verified timetables.
+**Schedule adherence** compares actual stop arrivals against scheduled stop times for high-confidence route matches with assigned `candidate_trip_id`. Delay is computed in minutes, and observations with extremely large absolute delay are excluded as likely trip-ID mismatches.
 
 ### 08 — Weather Consolidation
 
-Loads all half-month CSV files per grid point, merges the three hourly variable groups on the `time` column, and concatenates across all 15 grid points into `weather_grid_master.parquet`.
+Loads all half-month weather CSVs per grid point, merges hourly variable groups on `time`, and concatenates all 15 grid points into a master grid-level parquet.
 
-Stop-level weather is interpolated from the 15 grid points using inverse-distance weighting (IDW): for each stop, the k=4 nearest grid points are identified, weights are computed as `1/distance²`, and each weather variable is interpolated as the weighted mean of the k values.
-
-After interpolation, derived features are added: rolling precipitation sums (3h, 6h, 24h), heat index (Steadman approximation, applied where T > 27°C and RH > 40%), WMO weather code severity binning, soil saturation flags, and a strong-wind flag (gusts > 40 km/h).
+Stop-level weather is interpolated from the weather grid using inverse-distance weighting with the `WEATHER_IDW_K` nearest grid points and exponent `WEATHER_IDW_POWER`. Derived transport-facing weather features are then added, including rolling precipitation totals, `log_precip`, rain flags, heat stress, weather severity, soil saturation indicators, and strong-wind flags.
 
 ### 09 — Feature Engineering
 
-Assembles the model-ready feature table from OD, reliability, weather, and H3 spatial assignments.
+Assembles the model-ready feature table from OD, reliability, weather, and spatial features.
 
-DuckDB handles the OD × reliability join and all lag/rolling window features. Lag features (`lag_1`, `lag_2`, `lag_48`, `lag_336` bins) and rolling windows (48-bin mean and std) are computed by window functions over `(origin_stop_id, dest_stop_id)` ordered by `time_bin_30min`. These look strictly backward — LAG references only past observations in the time-sorted sequence.
+The script keeps all OD-level fields from `od_agg.parquet` via `od.*`, then adds temporal features (`hour`, `minute_of_hour`, `dow`, `day_of_year`, cyclical encodings, weekend, monsoon-season indicators, and `is_peak`). Reliability fields from script 07 are joined at the origin stop level, and weather is joined with `merge_asof` using the nearest hourly stop-level weather observation within `WEATHER_JOIN_TOL_MIN` minutes.
 
-The weather join uses `pandas.merge_asof` with a 60-minute tolerance, matching each 30-minute OD bin to the nearest hourly weather observation at the origin stop.
+Lag and rolling statistics are computed in DuckDB over `(origin_stop_id, dest_stop_id)` ordered by `time_bin_30min`. Spatially, the script assigns `origin_h3` and `dest_h3`, and computes `dist_cbd_km` as the Haversine distance from the origin stop to Nariman Point.
 
-H3 cell assignment (resolution 8) is applied to origin and destination stop coordinates. Null coordinates receive `None` rather than raising.
-
-The `split` column (`"train"` / `"test"`) is assigned based on `MODEL_TRAIN_END`.
+A deliberate design choice in the current version is that train/validation/test split logic is not embedded in this script. The feature table is modelling-agnostic, and split boundaries are applied later inside the model scripts.
 
 ### 10 — Ward Aggregation
 
-Assigns each stop to a Mumbai ward via point-in-polygon join against the ward KML boundaries using GeoPandas. Stops that fall outside all ward polygons are assigned to the nearest ward centroid using a BallTree fallback. The `stop_ward_map.csv` output records each stop's ward assignment and the method used (polygon or centroid).
+Assigns each stop to a Mumbai ward using a point-in-polygon join against the ward KML boundaries. Stops that fall outside all ward polygons are assigned to the nearest ward centroid as a fallback.
 
-Ward-level OD is aggregated from `od_agg.parquet` by summing `trip_count` across all OD pairs where origin and destination stop fall within the respective wards.
+Ward-level OD is then aggregated from `od_agg.parquet` by summing `trip_count` across all OD pairs whose origin and destination stops belong to the corresponding wards.
 
 ### 11 — Negative Binomial Model
 
-Uses `statsmodels.NegativeBinomial` directly (not `GLM` with NB family) so that the dispersion parameter `alpha` is estimated jointly with the regression coefficients rather than fixed.
+Fits a count-regression baseline using `statsmodels.NegativeBinomial`. The model uses a temporal train/validation/test split defined in `config.py`, and evaluates forecast quality on held-out data using MAE, RMSE, sMAPE, R², and Pearson correlation.
 
-MAPE is computed only over non-zero `trip_count` observations since MAPE is undefined at zero.
+This script serves as the interpretable count-model baseline against which the more flexible machine learning models are compared.
 
 ### 12 — XGBoost Model
 
-Uses `TimeSeriesSplit` for cross-validation, respecting temporal ordering across all folds. The final model trains on `split == "train"` and evaluates on `split == "test"`.
+Trains a gradient-boosted tree regressor using the `XGB_PARAMS` configuration block. The script uses strict temporal splits and stores prediction tables, model artefacts, metrics, and SHAP-based interpretability outputs.
 
-SHAP values are computed from a sample of the test set using `TreeExplainer`.
+Compared with the Negative Binomial baseline, this model is intended to capture nonlinear interactions between temporal, weather, reliability, and spatial features.
+
+### 13 — ST-GNN Model
+
+Trains a spatio-temporal graph neural network for demand forecasting on the H3 graph.
+
+The graph is built from active `origin_h3` cells, with edges between cells sharing a k-ring=1 neighbourhood. Edge weights use a Gaussian kernel of Haversine distance between H3 centroids, followed by symmetric degree normalisation.
+
+On the temporal side, the model forms sequences of length `seq_len` over the full time index, then splits sequences by target timestamp into train, validation, and test. The architecture combines two GCN layers for spatial message passing with multi-head self-attention over the time axis, and is trained with Huber loss plus early stopping.
+
+### 14 — Analysis and Reporting
+
+Generates post-pipeline visualisations and summary tables from the processed data and available model outputs.
+
+This script produces EDA dashboards, vehicle trajectory maps, OD heatmaps, origin/destination H3 choropleths, peak-vs-offpeak spatial flow maps, per-model evaluation figures, `model_comparison.csv`, and `network_summary.json`. It auto-detects which prediction files exist and only generates dashboards for those models.
+
+### 15 — Policy Outputs
+
+Transforms modelling and operations outputs into policy-facing summary artefacts.
+
+The script writes `mode_shift_scores.parquet`, `co2_savings.parquet`, and `service_gaps.parquet`, using configuration-based assumptions such as `MODE_SHIFT_WEIGHTS`, average car occupancy, and per-km emissions factors. This stage is meant to bridge the technical forecasting pipeline with planning or sustainability-oriented downstream use.
+
+### Supporting scripts
+
+**`weather_data_gen.py`** is a utility script for generating weather downloads. It is not part of the main processing chain but supports the raw weather data preparation workflow.
+
+**`eda.py`** is an auxiliary analysis script and should be treated as exploratory support code rather than a required production pipeline stage.
+
+## SLURM Workflow
+
+The `research/cityflo/slurm/` directory contains one `.slurm` script for each numbered pipeline stage from 01 through 15, plus `run_pipeline.sh` for orchestration.
+
+The ingestion stage is parallelised with SLURM arrays for bucketed processing. Downstream stages are mostly single-job submissions with resource requests tailored to each script. `run_pipeline.sh` encodes the dependency chain, so it is the safest way to submit the full pipeline on an HPC cluster.
 
 ## Configuration Reference
 
-All parameters are defined in `scripts/config.py`. The table below documents each parameter's value and the EDA finding that justifies it.
+All parameters are defined in `scripts/config.py`. The table below documents the main parameters currently used by the pipeline.
 
-| Parameter | Value | Justification |
+| Parameter | Value | Use |
 | --- | --- | --- |
-| `STUDY_START` | `"2021-09-01"` | First date in the `before_2022-10-22` GPS files |
-| `STUDY_END` | `"2022-10-22"` | Last date in the `before_2022-10-22` GPS files |
-| `SPEED_MAX_KMH` | 120 | Confirmed by project supervisor; sentinel cluster confirmed at 602+ in EDA |
-| `GPS_JUMP_MAX_KMH` | 120 | Same threshold; catches teleportation errors the reported speed field misses |
-| `DEVIATION_MAX_S` | 300 | Removes 0.12% of rows; p99 of deviation distribution is well below this |
-| `MUMBAI_BBOX` | lat [18.8894, 19.3274], lng [72.7692, 73.1165] | Tight bbox from EDA spatial distribution of valid pings |
-| `MUMBAI_BUFFER_DEG` | 0.15 | Added to bbox when loading stops for BallTree |
-| `GAP_THRESHOLD_MIN` | 20 | 0.1% of inter-ping transitions exceed this; bimodal gap distribution |
-| `MIN_PINGS_PER_SEG` | 5 | Minimum below which a segment cannot reliably produce a stop sequence |
-| `MIN_DURATION_MIN` | 5 | Filters GPS noise and idle-engine events |
-| `SNAP_THRESHOLD_M` | 300 | 82% ping snap rate at 300 m; CDF plateaus beyond this |
-| `ROUTE_MIN_OBS_STOPS` | 4 | With 641 templates, ≥4 confirmed stops substantially reduces ambiguous matches |
-| `ROUTE_MIN_CONFIDENCE` | 0.20 | Below this, no template is assigned |
-| `ROUTE_HIGH_CONFIDENCE` | 0.50 | Required for trip_id assignment and schedule adherence |
-| `ROUTE_TRIP_WINDOW_MIN` | 45 | Max gap between segment start time and nearest scheduled trip departure |
-| `OD_TIER1_MIN_CONF` | 0.30 | Minimum confidence for route-template OD assignment |
-| `OD_MIN_DURATION_MIN` | 2 | Filters segments too short to represent a service run |
-| `OD_MIN_PINGS` | 3 | Minimum pings for a segment to produce an OD pair |
-| `HEADWAY_MAX_MIN` | 120 | Excludes overnight service gaps from headway statistics |
-| `ON_TIME_WINDOW_MIN` | 3 | ±3 minutes on-time window (standard transit operations definition) |
-| `LATE_THRESHOLD_MIN` | 5 | Delay > 5 minutes = late |
-| `EARLY_THRESHOLD_MIN` | -2 | Delay < -2 minutes = early |
-| `BUNCHING_PCT` | 0.25 | Headway < 25% of stratum mean = bunching event |
-| `WEATHER_IDW_K` | 4 | Number of nearest grid points for IDW interpolation |
-| `WEATHER_IDW_POWER` | 2 | IDW distance weighting exponent |
-| `H3_RESOLUTION` | 8 | H3 resolution 8 gives ~460 m² cells, appropriate for stop density |
-| `MODEL_TRAIN_END` | `"2022-07-31"` | Train/test split boundary |
-| `MODEL_TEST_START` | `"2022-08-01"` | First date of held-out test period |
+| `STUDY_START` | `"2021-09-01"` | Start of GPS study window |
+| `STUDY_END` | `"2022-10-22"` | End of GPS study window |
+| `MODEL_TRAIN_END` | `"2022-07-31"` | Inclusive end of training period |
+| `MODEL_VALID_END` | `"2022-08-31"` | Inclusive end of validation period |
+| `MODEL_TEST_START` | `"2022-09-01"` | Start of held-out test period |
+| `SPEED_MAX_KMH` | 120 | Speed sentinel / sanity threshold |
+| `GPS_JUMP_MAX_KMH` | 120 | Maximum implied speed between consecutive pings |
+| `DEVIATION_MAX_S` | 300 | GPS vs DB timestamp deviation cap |
+| `MUMBAI_BUFFER_DEG` | 0.15 | Buffer applied when loading reference stops |
+| `GAP_THRESHOLD_MIN` | 20 | New-segment threshold |
+| `MIN_PINGS_PER_SEG` | 5 | Minimum pings required for a valid segment |
+| `MIN_DURATION_MIN` | 5 | Minimum duration for a valid segment |
+| `SNAP_THRESHOLD_M` | 200 | Maximum stop-snap radius |
+| `ROUTE_MIN_OBS_STOPS` | 4 | Minimum observed stops for route matching |
+| `ROUTE_MIN_CONFIDENCE` | 0.20 | Minimum confidence to assign a template |
+| `ROUTE_HIGH_CONFIDENCE` | 0.50 | High-confidence threshold for trip ID assignment |
+| `ROUTE_TRIP_WINDOW_MIN` | 45 | Maximum gap from observed start to scheduled departure |
+| `OD_TIER1_MIN_CONF` | 0.30 | Minimum confidence for Tier 1 route-template OD |
+| `OD_TIME_BIN_MINUTES` | 30 | OD aggregation bin width |
+| `OD_MIN_DURATION_MIN` | 2 | Minimum OD segment duration |
+| `OD_MIN_PINGS` | 3 | Minimum pings for an OD segment |
+| `HEADWAY_MAX_MIN` | 120 | Maximum headway retained for reliability stats |
+| `ON_TIME_WINDOW_MIN` | 3 | On-time threshold |
+| `LATE_THRESHOLD_MIN` | 5 | Late threshold |
+| `EARLY_THRESHOLD_MIN` | -2 | Early threshold |
+| `BUNCHING_PCT` | 0.25 | Bunching threshold as fraction of mean headway |
+| `WEATHER_IDW_K` | 4 | Number of nearest grid points for interpolation |
+| `WEATHER_IDW_POWER` | 2 | IDW distance exponent |
+| `WEATHER_JOIN_TOL_MIN` | 60 | Feature-weather join tolerance in minutes |
+| `H3_RESOLUTION` | 8 | H3 resolution used for spatial aggregation |
+| `XGB_PARAMS` | dict | XGBoost hyper-parameters |
+| `STGNN_PARAMS` | dict | ST-GNN hyper-parameters |
+| `MODE_SHIFT_WEIGHTS` | dict | Weights for policy mode-shift scoring |
+| `AVG_CAR_OCCUPANCY` | 1.15 | Assumption for private car replacement |
+| `BUS_EMISSION_KG_PER_KM` | 0.030 | Bus passenger-km emissions assumption |
+| `CAR_EMISSION_KG_PER_KM` | 0.171 | Car passenger-km emissions assumption |
+| `TIER1_THRESHOLD` | 0.70 | Higher policy scoring threshold |
+| `TIER2_THRESHOLD` | 0.50 | Lower policy scoring threshold |
 
 ## Methodological Limitations
 
-**Vehicle demand vs passenger demand.** The pipeline measures vehicle-run activity, not passenger boardings or alightings. OD `trip_count` values represent vehicle runs between stop pairs, not ridership. This distinction applies throughout — the load factor proxy, frequency estimates, and all derived metrics are vehicle-level.
+**Vehicle demand vs passenger demand.** The pipeline measures vehicle-run activity, not passenger boardings or alightings. OD `trip_count` values represent vehicle trips between stop pairs, not ridership.
 
-**Coverage scope.** Cityflo serves a specific commuter segment in Mumbai. Results are not representative of Mumbai's overall travel demand without external modal share scaling.
+**Coverage scope.** Cityflo serves a specific commuter segment in Mumbai. Results should not be interpreted as representative of all Mumbai travel demand without external scaling or validation.
 
-**Destination inference.** For Tier 2 OD, destination is inferred from the last snapped stop before a gap, not from a confirmed alighting event. For Tier 1 OD, destination is the route terminal from the matched template. Both are proxies.
+**Destination inference remains proxy-based.** For Tier 2 OD, the destination is the last snapped stop before the segment ends. For Tier 1 OD, the destination is the matched template terminal. Neither directly observes passenger alighting.
 
-**Schedule adherence mismatch.** `trips_clean.csv` covers December 2025–July 2026; GPS observations are from September 2021–October 2022. Schedule adherence reflects deviation from representative rather than historically confirmed timetables.
+**Schedule adherence is based on current reference schedules.** The schedule reference file used by the pipeline is not from the same period as the historical GPS observations, so adherence metrics should be interpreted as deviation from representative schedules rather than as exact historical timetable adherence.
+
+**Feature engineering and modelling are intentionally separated.** The current feature table is model-ready but split-agnostic. This is cleaner for experimentation, but it means leakage-sensitive aggregate features must be computed carefully inside model scripts if introduced later.

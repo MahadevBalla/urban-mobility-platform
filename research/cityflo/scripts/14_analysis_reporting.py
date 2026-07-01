@@ -771,7 +771,7 @@ def main() -> None:
     )
 
     # EDA figures
-    print("\nnGenerating EDA figures ...")
+    print("\nGenerating EDA figures ...")
     eda_demand_dashboard(features,           FIGURES / "eda_demand_dashboard.png")
     vehicle_trajectory_map(pings, hex_gdf,  FIGURES / "vehicle_trajectories.png")
     od_matrix_heatmap(od,                   FIGURES / "od_matrix_heatmap.png")
@@ -780,12 +780,12 @@ def main() -> None:
     od_peak_vs_offpeak(od, hex_gdf,         FIGURES / "od_peak_vs_offpeak.png")
 
     # Tables
-    print("\nnSaving tables ...")
+    print("\nSaving tables ...")
     hex_demand_summary(features, TABLES_DIR / "hex_demand_summary.csv")
     save_network_summary(features, od, TABLES_DIR / "network_summary.json")
 
     # Model evaluation
-    print("\nnGenerating model prediction dashboards ...")
+    print("\nGenerating model prediction dashboards ...")
     model_prediction_dashboard(FIGURES, TABLES_DIR)
 
     print("\n14_analysis_reporting.py complete.")

@@ -1,6 +1,6 @@
 # Cityflo Mobility Analysis
 
-GPS-based travel demand pipeline for Cityflo's Mumbai bus network. Processes legacy vehicle location pings into OD matrices, service reliability metrics, and model-ready travel demand features.
+GPS-based travel demand pipeline for Cityflo's Mumbai bus network. Processes legacy vehicle location pings into OD matrices, service reliability metrics, and model-ready travel demand features — then trains and evaluates three forecasting models.
 
 **Study window:** September 2021 – October 2022  
 **Data:** ~165M GPS pings, 6,115 stops, 135,125 scheduled trips, 15-point weather grid
@@ -20,10 +20,10 @@ research/cityflo/
 │   └── interim/        intermediate bucket parquets
 ├── notebooks/          EDA and preprocessing notebooks
 ├── outputs/
-│   ├── figures/        model plots and SHAP summaries
-│   ├── models/         saved model files
-│   └── tables/         predictions and evaluation metrics
-├── scripts/            pipeline scripts (01–12) and config.py
+│   ├── figures/        model plots, EDA dashboards, spatial maps
+│   ├── models/         saved model files and metadata JSON
+│   └── tables/         predictions, evaluation metrics, network summary
+├── scripts/            pipeline scripts (01–15) and config.py
 ├── slurm/              SLURM job scripts for HPC execution
 └── req.txt             Python dependencies
 ```
@@ -101,20 +101,22 @@ jupyter notebook notebooks/01_reference_data_audit.ipynb
 jupyter notebook notebooks/02_gps_data_audit.ipynb
 ```
 
-The pipeline scripts then run in the following order. Scripts 02 and 03–05 are independent and can run in parallel once `pings_clean.parquet` is available.
+The pipeline scripts then run in the following order. Scripts 06 and 07 are independent once `segments_inferred.parquet` is available and can run in parallel.
 
 ```bash
 # Route catalog (fast, no GPS dependency — run first)
 python scripts/02_route_catalog.py
 
-# GPS ingestion (single-machine)
+# GPS ingestion (single-machine, all data in one bucket)
 python scripts/01_1_ingest_legacy.py --bucket_id 0 --bucket_count 1
 python scripts/01_2_finalize_pings.py --bucket_id 0
 python scripts/01_3_merge_buckets.py
 
-# Or on HPC (8 parallel buckets):
-# for i in $(seq 0 7); do sbatch slurm/01_ingest_bucket.sh $i 8; done
-# sbatch slurm/01_merge.sh
+# Or on HPC (8 parallel buckets via SLURM):
+# sbatch --array=0-7 slurm/01_1_ingest_legacy.slurm
+# sbatch --dependency=afterok:... --array=0-7 slurm/01_2_finalize_pings.slurm
+# sbatch --dependency=afterok:... slurm/01_3_merge_buckets.slurm
+# (see slurm/run_pipeline.sh for the full dependency chain)
 
 # Core pipeline
 python scripts/03_trip_segmentation.py
@@ -129,15 +131,36 @@ python scripts/08_weather_consolidate.py
 python scripts/09_feature_engineering.py
 python scripts/10_ward_aggregation.py
 
-# Models
+# Models (can run independently once features_master.parquet exists)
 python scripts/11_model_nb.py
 python scripts/12_model_xgboost.py
+python scripts/13_model_stgnn.py
+
+# Post-modelling analysis and policy outputs
+python scripts/14_analysis_reporting.py
+python scripts/15_policy_outputs.py
 ```
 
 To validate route inference accuracy before running on GPS data:
 
 ```bash
 python scripts/05_route_inference.py --run_validation
+```
+
+## HPC / SLURM Execution
+
+The `slurm/` directory contains `.slurm` job scripts for every pipeline stage. [`slurm/run_pipeline.sh`](./slurm/run_pipeline.sh) is an orchestration script that submits all jobs in dependency order — it is the recommended entry point on an HPC cluster.
+
+```bash
+# Submit the full pipeline
+bash slurm/run_pipeline.sh
+```
+
+Individual scripts can also be submitted standalone:
+
+```bash
+sbatch slurm/09_feature_engineering.slurm
+sbatch slurm/13_model_stgnn.slurm
 ```
 
 All parameters are in `scripts/config.py`. Changing a parameter requires re-running from the first script that reads it — the methodology doc has the dependency chain.
