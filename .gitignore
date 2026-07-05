@@ -88,6 +88,7 @@ test_outputs/
 *.coverage
 htmlcov/
 .pytest_cache/
+.dryrun*
 
 # Temporary files
 *.tmp
