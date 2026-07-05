@@ -4,9 +4,9 @@
 Models trip_count as count data using statsmodels GLM with NegativeBinomial
 family — the standard formulation in transportation demand papers.
 
-NB appropriateness is verified empirically via the variance/mean dispersion
-ratio before fitting. Persistence and historical-mean baselines are provided
-for benchmarking.
+NB appropriateness is verified empirically using the training-fold dispersion.
+The Negative Binomial dispersion parameter (α) is specified using a
+method-of-moments estimate computed from the training data.
 
 Input : features_master.parquet
 Output: outputs/models/nb_model.pkl
@@ -303,15 +303,19 @@ def run_nb(features_path: Path) -> None:
     print("\nFitting GLM — NegativeBinomial family ...")
     X_train = sm.add_constant(train[FEATURE_COLS].astype(float), has_constant="add")
     y_train = train[TARGET].astype(int)
+    mu = y_train.mean()
+    var = y_train.var()
+    alpha = max((var - mu) / (mu**2), 1e-8)
 
     model = sm.GLM(
         y_train,
         X_train,
-        family=sm.families.NegativeBinomial(),
+        family=sm.families.NegativeBinomial(alpha=alpha),
     ).fit(maxiter=200)
 
     # GLM-NB fit statistics
     print("\n  GLM-NB fit statistics")
+    print(f"    alpha      : {alpha:.4f}")
     print(f"    AIC        : {model.aic:.2f}")
     print(f"    BIC        : {model.bic_llf:.2f}")
     print(f"    Log-lik    : {model.llf:.2f}")
@@ -386,6 +390,7 @@ def run_nb(features_path: Path) -> None:
         "features": FEATURE_COLS,
         "overdispersion": disp,
         "fit_stats": {
+            "alpha": float(alpha),
             "aic": model.aic,
             "bic": model.bic_llf,
             "log_lik": model.llf,
