@@ -255,12 +255,22 @@ def run_nb(features_path: Path) -> None:
 
     # Drop rows with missing required columns
     required = FEATURE_COLS + [TARGET]
+    print("\nMissing values (train):")
+    print(train[required].isna().sum().sort_values(ascending=False))
+    print("\nMissing percentage (train):")
+    print((train[required].isna().mean() * 100).sort_values(ascending=False))
     train = train.dropna(subset=required)
     valid = valid.dropna(subset=required)
     test = test.dropna(subset=required)
     print(
         f"\nAfter dropna  train : {len(train):,}  valid : {len(valid):,}  test : {len(test):,}"
     )
+    if len(train) == 0:
+        raise RuntimeError(
+            "No training rows remain after feature filtering. "
+            "Likely cause: headway/schedule features unavailable because "
+            "no trip assignments were produced in the sampled data."
+        )
 
     # Overdispersion check
     disp = check_overdispersion(train[TARGET])

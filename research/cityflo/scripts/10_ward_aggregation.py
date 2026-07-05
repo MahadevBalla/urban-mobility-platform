@@ -16,9 +16,16 @@ import numpy as np
 import pandas as pd
 import fiona
 import geopandas as gpd
+import warnings
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from config import DATA_PROCESSED, OD_AGG, STOPS_FILE, WARD_KML, WARD_OD
+
+warnings.filterwarnings(
+    "ignore",
+    message=".*parsed incompletely.*",
+    category=RuntimeWarning,
+)
 
 WARD_CENTROIDS = [
     ("A", 18.923, 72.825),

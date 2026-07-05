@@ -14,6 +14,7 @@ Output: features_master.parquet
 
 from __future__ import annotations
 
+import shutil
 import sys
 from pathlib import Path
 
@@ -21,6 +22,8 @@ import duckdb
 import h3
 import numpy as np
 import pandas as pd
+import pyarrow as pa
+import pyarrow.parquet as pq
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from config import (
@@ -35,10 +38,8 @@ from config import (
     WEATHER_STOPS,
 )
 
-# Intermediate file written between the DuckDB stage and the pandas weather join
-_BASE_LAGGED = FEATURES_MASTER.parent / "_base_lagged.parquet"
-
 EARTH_R_KM = EARTH_R_M / 1000.0
+
 
 def _haversine_km_vec(
     lats: np.ndarray,
@@ -69,6 +70,60 @@ def assign_h3_cells(lats: pd.Series, lngs: pd.Series, resolution: int) -> pd.Ser
     )
 
 
+def _weather_value_columns(
+    con: duckdb.DuckDBPyConnection, weather_path: Path
+) -> list[str]:
+    """All weather columns except the join keys (time, stop_id)."""
+    cols = (
+        con.execute(f"DESCRIBE SELECT * FROM read_parquet('{weather_path}')")
+        .df()["column_name"]
+        .tolist()
+    )
+    return [c for c in cols if c not in ("time", "stop_id")]
+
+
+def _assert_weather_is_hourly(
+    con: duckdb.DuckDBPyConnection, weather_path: Path
+) -> None:
+    """
+    Guard the floor/ceil-only join shortcut: it is only correct if every
+    weather timestamp falls exactly on the hour. If 08_weather_consolidate.py
+    is ever changed to emit sub-hourly or irregular timestamps, this fails
+    loudly instead of silently producing wrong "nearest" matches.
+    """
+    n_offgrid = con.execute(f"""
+        SELECT COUNT(*)
+        FROM read_parquet('{weather_path}')
+        WHERE time != DATE_TRUNC('hour', time)
+    """).fetchone()[0]
+    if n_offgrid > 0:
+        raise AssertionError(
+            f"weather_stop_hourly.parquet has {n_offgrid:,} timestamp(s) not "
+            "aligned to the hour. The nearest-hour weather join in this script "
+            "assumes an exact hourly grid — fix the upstream grid or "
+            "rewrite the join before proceeding."
+        )
+
+
+def _build_nearest_weather_join_sql(value_cols: list[str]) -> str:
+    """
+    Generates the SELECT list that, for each weather value column, picks
+    whichever of the floor-hour / ceiling-hour candidate rows is nearer
+    (and non-null), per the tie-break and tolerance logic described in
+    the module docstring.
+    """
+    picks = []
+    for col in value_cols:
+        picks.append(
+            f"CASE\n"
+            f"    WHEN chosen.side = 'floor' THEN w_floor.{col}\n"
+            f"    WHEN chosen.side = 'ceil'  THEN w_ceil.{col}\n"
+            f"    ELSE NULL\n"
+            f"END AS {col}"
+        )
+    return ",\n                ".join(picks)
+
+
 def build_features(
     od_path: Path,
     headway_path: Path,
@@ -77,20 +132,23 @@ def build_features(
     out_path: Path,
 ) -> None:
     """Assemble model-ready feature table."""
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    duckdb_tmp_dir = out_path.parent / "_duckdb_tmp"
 
-    # Stage 1 — temporal features + reliability join (DuckDB)
-    # Stage 2 — lag / rolling features
-    # All od.* columns flow through untouched (coords, names, distances,
-    # period, month, monsoon flag, weekday, trip_count, avg_duration, …).
     con = None
     try:
         con = duckdb.connect()
         con.execute(f"CREATE TABLE od    AS SELECT * FROM read_parquet('{od_path}')")
-        con.execute(
-            f"CREATE TABLE hw    AS SELECT * FROM read_parquet('{headway_path}')"
-        )
+        con.execute(f"CREATE TABLE hw AS SELECT * FROM read_parquet('{headway_path}')")
         con.execute(f"CREATE TABLE sched AS SELECT * FROM read_parquet('{sched_path}')")
 
+        # Let DuckDB spill to disk instead of OOM-ing if the real (much
+        # larger than dry-run) OD table plus weather join exceeds RAM.
+        con.execute(f"PRAGMA temp_directory='{duckdb_tmp_dir}'")
+
+        _assert_weather_is_hourly(con, weather_path)
+
+        # Stage 1 — temporal features + reliability join
         con.execute("""
             CREATE TABLE base AS
             SELECT
@@ -163,6 +221,14 @@ def build_features(
                                              THEN 'weekend' ELSE 'weekday' END
         """)
 
+        print(con.execute("""
+        SELECT
+            COUNT(*) total_rows,
+            COUNT(origin_headway_reliability) hw_matches,
+            COUNT(mean_delay_min) sched_matches
+        FROM base
+        """).df())
+
         # Stage 2 — lag / rolling features (strictly backward-looking)
         # Named WINDOW clause avoids repeating the PARTITION/ORDER spec.
         # ROWS BETWEEN N PRECEDING AND 1 PRECEDING guarantees no look-ahead.
@@ -189,85 +255,122 @@ def build_features(
             )
         """)
 
-        # Materialise before switching to pandas for the weather join
-        con.execute(
-            f"COPY base_lagged TO '{_BASE_LAGGED}' (FORMAT PARQUET, COMPRESSION 'zstd')"
-        )
+        # Stage 3 — nearest-hour weather join, entirely in DuckDB.
+        # Script 08 already engineers all derived columns (precip_3h/6h/24h,
+        # log_precip, is_raining, heat_index, weather_severity, …); this
+        # just joins them — no re-derivation.
+        print("Joining weather (nearest hour, DuckDB-native)...")
+        weather_value_cols = _weather_value_columns(con, weather_path)
+
+        con.execute(f"""
+            CREATE TABLE weather AS
+            SELECT
+                stop_id AS origin_stop_id,
+                time    AS wx_time,
+                * EXCLUDE (stop_id, time)
+            FROM read_parquet('{weather_path}')
+            WHERE stop_id IN (SELECT DISTINCT origin_stop_id FROM base_lagged)
+        """)
+
+        # For each base row, the only two weather timestamps that can
+        # ever fall within a 60-minute tolerance of a 30-minute-aligned
+        # bin are the floor-hour and ceiling-hour (grid spacing = 60 min,
+        # guaranteed by the _assert_weather_is_hourly check above).
+        con.execute("""
+            CREATE TABLE base_with_candidates AS
+            SELECT
+                base_lagged.*,
+                DATE_TRUNC('hour', time_bin_30min) AS floor_hour,
+                CASE
+                    WHEN time_bin_30min = DATE_TRUNC('hour', time_bin_30min)
+                    THEN DATE_TRUNC('hour', time_bin_30min)
+                    ELSE DATE_TRUNC('hour', time_bin_30min) + INTERVAL 1 HOUR
+                END AS ceil_hour
+            FROM base_lagged
+        """)
+
+        select_list = _build_nearest_weather_join_sql(weather_value_cols)
+
+        con.execute(f"""
+            CREATE TABLE merged AS
+            SELECT
+                b.* EXCLUDE (floor_hour, ceil_hour),
+                {select_list}
+            FROM base_with_candidates b
+            LEFT JOIN weather w_floor
+                ON b.origin_stop_id = w_floor.origin_stop_id
+               AND b.floor_hour     = w_floor.wx_time
+            LEFT JOIN weather w_ceil
+                ON b.origin_stop_id = w_ceil.origin_stop_id
+               AND b.ceil_hour      = w_ceil.wx_time
+            CROSS JOIN LATERAL (
+                SELECT CASE
+                    WHEN w_floor.wx_time IS NOT NULL AND w_ceil.wx_time IS NOT NULL THEN
+                        CASE
+                            WHEN (EPOCH(b.time_bin_30min) - EPOCH(b.floor_hour))
+                                 <= (EPOCH(b.ceil_hour) - EPOCH(b.time_bin_30min))
+                            THEN 'floor' ELSE 'ceil'
+                        END
+                    WHEN w_floor.wx_time IS NOT NULL THEN 'floor'
+                    WHEN w_ceil.wx_time  IS NOT NULL THEN 'ceil'
+                    ELSE NULL
+                END AS side
+            ) chosen
+        """)
+
+        n_rows = con.execute("SELECT COUNT(*) FROM merged").fetchone()[0]
+        print(f"  Rows after weather join : {n_rows:,}")
+
+        # Stage 4 — spatial features. H3 assignment needs row-wise Python, so pull the joined table into memory.
+        print("Fetching joined result for H3 / CBD-distance features...")
+        merged_table = con.execute("SELECT * FROM merged").to_arrow_table()
+        merged_df = merged_table.to_pandas()
     finally:
         if con is not None:
             con.close()
+        # DuckDB's temp_directory spill files are not cleaned up automatically
+        # on connection close — remove them so repeated runs don't silently
+        # accumulate disk usage.
+        shutil.rmtree(duckdb_tmp_dir, ignore_errors=True)
 
-    # Stage 3 — weather join (pandas merge_asof, 60-min tolerance)
-    # Script 08 already engineers all derived columns (precip_3h/6h/24h,
-    # log_precip, is_raining, heat_index, weather_severity, …); 09 just
-    # joins them — no re-derivation.
-    try:
-        print("Loading base + weather …")
-        base_df = pd.read_parquet(_BASE_LAGGED)
-        weather_df = pd.read_parquet(weather_path)
+    print("Assigning H3 cells …")
+    merged_df["origin_h3"] = assign_h3_cells(
+        merged_df["origin_lat"], merged_df["origin_lng"], H3_RESOLUTION
+    )
+    merged_df["dest_h3"] = assign_h3_cells(
+        merged_df["dest_lat"], merged_df["dest_lng"], H3_RESOLUTION
+    )
 
-        base_df["time_bin_30min"] = pd.to_datetime(base_df["time_bin_30min"], utc=True)
-        weather_df["time"] = pd.to_datetime(weather_df["time"], utc=True)
+    print("Computing dist_cbd_km …")
+    valid = merged_df["origin_lat"].notna() & merged_df["origin_lng"].notna()
+    dist = np.full(len(merged_df), np.nan)
+    dist[valid.values] = _haversine_km_vec(
+        merged_df.loc[valid, "origin_lat"].values,
+        merged_df.loc[valid, "origin_lng"].values,
+        CBD_LAT,
+        CBD_LNG,
+    )
+    merged_df["dist_cbd_km"] = dist
 
-        # Filter weather to origin stops only (reduces RAM before the join)
-        origin_ids = base_df["origin_stop_id"].unique()
-        weather_sub = weather_df[weather_df["stop_id"].isin(origin_ids)].rename(
-            columns={"stop_id": "origin_stop_id", "time": "wx_time"}
-        )
+    # Stage 5 — write output via pyarrow directly (explicit control over
+    # the parquet writer rather than going through pandas' wrapper).
+    out_table = pa.Table.from_pandas(merged_df, preserve_index=False)
+    pq.write_table(out_table, out_path, compression="zstd")
 
-        # merge_asof requires both sides sorted by [by-key, on-key]
-        base_df = base_df.sort_values(["origin_stop_id", "time_bin_30min"])
-        weather_sub = weather_sub.sort_values(["origin_stop_id", "wx_time"])
-
-        merged = pd.merge_asof(
-            base_df,
-            weather_sub,
-            left_on="time_bin_30min",
-            right_on="wx_time",
-            by="origin_stop_id",
-            tolerance=pd.Timedelta("60min"),
-            direction="nearest",
-        )
-        print(f"  Rows after weather join : {len(merged):,}")
-
-        # Stage 4 — spatial features
-        print("Assigning H3 cells …")
-        merged["origin_h3"] = assign_h3_cells(
-            merged["origin_lat"], merged["origin_lng"], H3_RESOLUTION
-        )
-        merged["dest_h3"] = assign_h3_cells(
-            merged["dest_lat"], merged["dest_lng"], H3_RESOLUTION
-        )
-
-        print("Computing dist_cbd_km …")
-        valid = merged["origin_lat"].notna() & merged["origin_lng"].notna()
-        dist = np.full(len(merged), np.nan)
-        dist[valid.values] = _haversine_km_vec(
-            merged.loc[valid, "origin_lat"].values,
-            merged.loc[valid, "origin_lng"].values,
-            CBD_LAT,
-            CBD_LNG,
-        )
-        merged["dist_cbd_km"] = dist
-
-        # Stage 5 — write output
-        out_path.parent.mkdir(parents=True, exist_ok=True)
-        merged.to_parquet(out_path, compression="zstd", index=False)
-
-        print(f"\nFeatures master  →  {out_path}")
-        print(f"  Rows : {len(merged):,}")
-        print(f"  Cols : {len(merged.columns)}")
-        if "precipitation" in merged.columns and merged["precipitation"].notna().any():
-            cov = merged["precipitation"].notna().mean() * 100
-            print(f"  Weather coverage     : {cov:.1f} %")
-        print(
-            f"  dist_cbd_km range    : {merged['dist_cbd_km'].min():.1f} – {merged['dist_cbd_km'].max():.1f} km"
-        )
-        print(f"  H3 hexes (origin)    : {merged['origin_h3'].nunique():,}")
-        print(f"  H3 resolution        : {H3_RESOLUTION}")
-
-    finally:
-        _BASE_LAGGED.unlink(missing_ok=True)
+    print(f"\nFeatures master  →  {out_path}")
+    print(f"  Rows : {len(merged_df):,}")
+    print(f"  Cols : {len(merged_df.columns)}")
+    if (
+        "precipitation" in merged_df.columns
+        and merged_df["precipitation"].notna().any()
+    ):
+        cov = merged_df["precipitation"].notna().mean() * 100
+        print(f"  Weather coverage     : {cov:.1f} %")
+    print(
+        f"  dist_cbd_km range    : {merged_df['dist_cbd_km'].min():.1f} – {merged_df['dist_cbd_km'].max():.1f} km"
+    )
+    print(f"  H3 hexes (origin)    : {merged_df['origin_h3'].nunique():,}")
+    print(f"  H3 resolution        : {H3_RESOLUTION}")
 
 
 if __name__ == "__main__":
