@@ -110,7 +110,7 @@ def build_od_matrix(
             CREATE TABLE tier1_base AS
             SELECT
                 i.vehicle_id,
-                i.ride_date::DATE           AS ride_date,
+                i.seg_start_date::DATE           AS ride_date,
                 i.segment_id,
                 i.template_id,
                 i.candidate_trip_id,
@@ -129,14 +129,14 @@ def build_od_matrix(
                     WHEN HOUR(MIN(s.timestamp_ist)) >= 17 AND HOUR(MIN(s.timestamp_ist)) < 21 THEN 'PM_peak'
                     ELSE 'off_peak'
                 END                         AS period,
-                DAYOFWEEK(i.ride_date)      AS dow,
-                MONTH(i.ride_date)          AS month_num,
-                CASE WHEN MONTH(i.ride_date) IN (6,7,8,9) THEN 1 ELSE 0 END AS is_monsoon,
+                DAYOFWEEK(i.seg_start_date::DATE)      AS dow,
+                MONTH(i.seg_start_date::DATE)          AS month_num,
+                CASE WHEN MONTH(i.seg_start_date::DATE) IN (6,7,8,9) THEN 1 ELSE 0 END AS is_monsoon,
                 'route_template'            AS od_method
             FROM inferred i
             JOIN catalog c  ON i.template_id = c.template_id
             JOIN snapped s  ON i.vehicle_id  = s.vehicle_id
-                        AND i.ride_date   = s.ride_date
+                        AND i.seg_start_date   = s.ride_date
                         AND i.segment_id  = s.segment_id
             WHERE i.template_id IS NOT NULL
             AND i.match_confidence >= {OD_TIER1_MIN_CONF}
@@ -144,7 +144,7 @@ def build_od_matrix(
             AND c.last_stop_id IS NOT NULL
             AND c.first_stop_id != c.last_stop_id
             GROUP BY
-                i.vehicle_id, i.ride_date, i.segment_id,
+                i.vehicle_id, i.seg_start_date, i.segment_id,
                 i.template_id, i.candidate_trip_id, i.match_confidence,
                 c.first_stop_id, c.last_stop_id
         """)
@@ -188,7 +188,7 @@ def build_od_matrix(
             FROM snapped s
             LEFT JOIN inferred i
                 ON s.vehicle_id = i.vehicle_id
-            AND s.ride_date  = i.ride_date
+            AND s.ride_date  = i.seg_start_date
             AND s.segment_id = i.segment_id
             WHERE (i.template_id IS NULL OR i.match_confidence < {OD_TIER1_MIN_CONF})
             GROUP BY s.vehicle_id, s.ride_date, s.segment_id

@@ -9,11 +9,12 @@ Import in every script:
     from config import GPS_FILES, STUDY_START, STUDY_END, SNAP_THRESHOLD_M, ...
 """
 
+import os
 from pathlib import Path
 import polars as pl
 
 # Repository root
-ROOT = Path(__file__).resolve().parent.parent
+ROOT = Path(os.environ.get("CITYFLO_ROOT", Path(__file__).resolve().parent.parent))
 
 # Directory layout
 DATA_RAW = ROOT / "data" / "raw"
@@ -37,7 +38,7 @@ GPS_FILES = [
 # Reference data
 STOPS_FILE = DATA_PROCESSED / "stops_clean.csv"
 TRIPS_FILE = DATA_PROCESSED / "trips_clean.csv"
-WEATHER_DIR = DATA_RAW / "weather"
+WEATHER_DIR = DATA_RAW / "WeatherData" / "mumbai_openmeteo_10km_grid_data"
 WARD_KML = DATA_RAW / "mumbai_wards.kml"
 
 # Study window
@@ -120,6 +121,7 @@ DEFAULT_TOP_N_CANDIDATES = 15
 DEFAULT_TRIP_ASSIGN_MIN_CONF = 0.60
 DEFAULT_TRIP_ASSIGN_MIN_OVERLAP = 0.60
 DEFAULT_VALIDATION_RANDOM_SEED = 42
+ROUTE_MAX_TRIP_RESIDUAL_MIN = 8.0
 
 # OD matrix
 OD_TIER1_MIN_CONF = 0.30  # route-template OD minimum confidence
@@ -158,6 +160,10 @@ WEATHER_TRANSPORT_VARS = [
 
 # H3
 H3_RESOLUTION = 8
+
+# Mumbai Central Business District (Nariman Point)
+CBD_LAT = 18.9256
+CBD_LNG = 72.8243
 
 # Model hyper-parameters
 XGB_PARAMS = {

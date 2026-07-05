@@ -1,7 +1,30 @@
 """
 05_route_inference.py
 
-Matches each GPS trip segment to a scheduled route template.
+Matches each GPS trip segment to a scheduled route template (Stage 1),
+then to a specific scheduled trip instance on that template (Stage 2).
+
+Stage 1: candidate templates are generated via an inverted stop->template
+index (pruned by minimum shared-stop count), then ranked by LCSS
+(Longest Common Subsequence Similarity) over the ordered stop-id
+sequences, following Vlachos, Gunopulos & Kollios (2002). LCSS is used
+because it is order-aware and tolerant of missing/extra stops, which
+matches the failure modes of snapped GPS sequences (missed pings, snap
+failures). Other overlap/coverage/direction/endpoint scores are kept as
+diagnostics and tie-breakers only.
+
+Stage 2: the candidate trip on the matched template is selected using
+the residual between observed and scheduled stop arrival times, after
+removing a per-trip constant offset (delay/earliness) estimated from
+the shared stops. This follows standard AVL schedule-adherence matching
+practice, and avoids penalizing a trip that is running consistently
+early/late but otherwise matches the timetable shape. Falls back to a
+start-time-only comparison when too few timestamped stops are shared.
+
+Known limitation: this remains a two-stage discrete pipeline rather
+than a joint probabilistic model (e.g. HMM/Viterbi map matching). Given
+the candidate set sizes here (tens of templates, <=40 stops), that is
+not a practical concern.
 
 Input:
     pings_snapped.parquet
@@ -38,16 +61,17 @@ from config import (
     ROUTE_TRIP_WINDOW_MIN,
     SEGMENTS_INFERRED,
     TRIPS_FILE,
-    # Tunable parameters
     DEFAULT_MIN_SHARED_STOPS,
     DEFAULT_TOP_N_CANDIDATES,
     DEFAULT_TRIP_ASSIGN_MIN_CONF,
     DEFAULT_TRIP_ASSIGN_MIN_OVERLAP,
     DEFAULT_VALIDATION_RANDOM_SEED,
+    ROUTE_MAX_TRIP_RESIDUAL_MIN,
 )
 
 # Parsing helpers
-_ROUTE_PAIR_RE = re.compile(r"(\\d+)\\s*,\\s*(\\d{6}|\\d{2}:\\d{2}:\\d{2})")
+_ROUTE_PAIR_RE = re.compile(r"(\d+)\s*,\s*(\d{6}|\d{2}:\d{2}:\d{2})")
+
 
 def parse_trip_route(route_str: str) -> List[Tuple[int, str]]:
     if pd.isna(route_str):
@@ -106,12 +130,21 @@ def parse_ts_to_minutes(ts: str) -> float:
 
 
 def ts_to_date_str(ts: str) -> str:
-    s = str(ts)
-    if "T" in s:
-        return s.split("T")[0]
-    if " " in s:
-        return s.split(" ")[0]
-    return s[:10]
+    """Normalize any timestamp/date string to YYYY-MM-DD.
+
+    Used for both segment timestamps and trip_date so the (date,
+    template_id) lookup key is consistent on both sides of the join.
+    """
+    s = str(ts).strip()
+    if not s or s.lower() in ("nan", "nat", "none"):
+        return ""
+    if re.match(r"^\d{4}-\d{2}-\d{2}", s):
+        return s[:10]
+    try:
+        parsed = pd.to_datetime(s, dayfirst=True, errors="raise")
+        return parsed.strftime("%Y-%m-%d")
+    except Exception:
+        return s[:10]
 
 
 # Sequence helpers
@@ -136,21 +169,30 @@ def unique_in_order(seq: List[int]) -> List[int]:
 
 
 def lcs_length(a: List[int], b: List[int]) -> int:
+    """Standard O(mn) dynamic-programming LCS length.
+
+    Simple, correct, and easy to verify.  For the sequence lengths
+    encountered here (typically 10-40 stops) this is more than fast
+    enough and eliminates any risk of bit‑parallel bugs.
+    """
     m, n = len(a), len(b)
     if m == 0 or n == 0:
         return 0
-    dp = [0] * (n + 1)
+
+    prev = [0] * (n + 1)
+    curr = [0] * (n + 1)
+
     for i in range(1, m + 1):
-        prev = 0
         ai = a[i - 1]
         for j in range(1, n + 1):
-            cur = dp[j]
             if ai == b[j - 1]:
-                dp[j] = prev + 1
+                curr[j] = prev[j - 1] + 1
             else:
-                dp[j] = max(dp[j], dp[j - 1])
-            prev = cur
-    return dp[n]
+                curr[j] = max(prev[j], curr[j - 1])
+        # Swap rows
+        prev, curr = curr, prev
+
+    return prev[n]
 
 
 def matched_template_positions(
@@ -160,22 +202,13 @@ def matched_template_positions(
 
 
 def monotonicity_ratio(observed: List[int], tmpl_pos_map: Dict[int, int]) -> float:
-    """
-    More robust than forward_steps / meaningful_steps.
-
-    Score = length of longest non-decreasing subsequence of matched template positions
-            divided by number of matched positions.
-
-    Examples:
-    - [0,1,2,3] -> 1.0
-    - [0,1,0,1,0,1] -> 4/6 or lower depending on subsequence, not falsely near-perfect
-    - too few matches -> 0.5
-    """
+    """Diagnostic only: fraction of matched stops in a non-decreasing
+    template-position order (longest non-decreasing subsequence)."""
     pos = matched_template_positions(observed, tmpl_pos_map)
     if len(pos) < 2:
         return 0.5
 
-    tails = []
+    tails: List[int] = []
     for x in pos:
         lo, hi = 0, len(tails)
         while lo < hi:
@@ -189,19 +222,14 @@ def monotonicity_ratio(observed: List[int], tmpl_pos_map: Dict[int, int]) -> flo
         else:
             tails[lo] = x
 
-    lnds_len = len(tails)
-    return float(lnds_len / len(pos))
+    return float(len(tails) / len(pos))
 
 
 def endpoint_proximity_score(
     observed: List[int], tmpl_stops: List[int], tmpl_pos_map: Dict[int, int]
 ) -> float:
-    """
-    Diagnostic/tie-breaker only.
-
-    Rewards observed endpoints appearing near the template ends,
-    instead of giving full credit merely because both exist.
-    """
+    """Diagnostic only: how close observed start/end stops are to the
+    template's own start/end."""
     if not observed or not tmpl_stops:
         return 0.0
 
@@ -210,29 +238,22 @@ def endpoint_proximity_score(
         return 0.0
 
     scores = []
-
     first_obs = observed[0]
     if first_obs in tmpl_pos_map:
         p = tmpl_pos_map[first_obs]
-        start_score = 1.0 - (p / max(n - 1, 1))
-        scores.append(start_score)
+        scores.append(1.0 - (p / max(n - 1, 1)))
 
     last_obs = observed[-1]
     if last_obs in tmpl_pos_map:
         p = tmpl_pos_map[last_obs]
-        end_score = 1.0 - ((n - 1 - p) / max(n - 1, 1))
-        scores.append(end_score)
+        scores.append(1.0 - ((n - 1 - p) / max(n - 1, 1)))
 
-    if not scores:
-        return 0.0
-    return float(np.mean(scores))
+    return float(np.mean(scores)) if scores else 0.0
 
 
 def score_margin_from_rank_keys(best_key: Tuple, second_key: Tuple) -> float:
-    """
-    Simple scalar ambiguity summary derived from core lexicographic dimensions.
-    Uses first three main components only, all in [0,1].
-    """
+    """Scalar ambiguity summary from the rank_key components
+    (LCSS similarity, coverage, negative length penalty)."""
     if second_key is None:
         return 1.0
     return round(
@@ -259,14 +280,11 @@ def load_templates(catalog_path: Path) -> Dict[int, dict]:
             if pd.notna(getattr(row, "median_schedule_json", None))
             else []
         )
-        stop_set = frozenset(stops)
-        pos_map = {sid: i for i, sid in enumerate(stops)}
-
         templates[tid] = {
             "template_id": tid,
             "stops": stops,
-            "stop_set": stop_set,
-            "pos_map": pos_map,
+            "stop_set": frozenset(stops),
+            "pos_map": {sid: i for i, sid in enumerate(stops)},
             "n_stops": len(stops),
             "first": stops[0] if stops else None,
             "last": stops[-1] if stops else None,
@@ -292,9 +310,7 @@ def generate_candidate_templates(
     min_shared_stops: int = DEFAULT_MIN_SHARED_STOPS,
     top_n: int = DEFAULT_TOP_N_CANDIDATES,
 ) -> Tuple[List[int], Dict[int, int]]:
-    """
-    Candidate generation with overlap-count pruning.
-    """
+    """Inverted-index candidate generation, pruned by shared-stop count."""
     obs_unique = unique_in_order(observed)
     if not obs_unique:
         return [], {}
@@ -317,9 +333,12 @@ def generate_candidate_templates(
 
 
 def compute_match_score(observed: List[int], tmpl: dict) -> dict:
-    """
-    Core thesis-defensible metrics.
-    Ranking uses lexicographic order, not arbitrary averaging.
+    """LCSS similarity (Vlachos, Gunopulos & Kollios, 2002) over ordered
+    stop-id sequences, normalized by the longer of the two sequences so
+    a short observation cannot trivially score 1.0 against a much
+    longer template. This is `confidence` / the primary rank key.
+    Overlap / coverage / jaccard / direction / endpoint are diagnostics
+    and secondary tie-breakers only.
     """
     obs_dedup = dedup_consecutive(observed)
     obs_unique = unique_in_order(obs_dedup)
@@ -333,6 +352,8 @@ def compute_match_score(observed: List[int], tmpl: dict) -> dict:
     jaccard = n_match / len(obs_set | tpl_set) if (obs_set | tpl_set) else 0.0
 
     lcs_len = lcs_length(obs_unique, tmpl["stops"])
+    denom = max(len(obs_unique), len(tmpl["stops"]))
+    lcss_similarity = (lcs_len / denom) if denom else 0.0
     order_score_val = lcs_len / len(obs_unique) if obs_unique else 0.0
 
     dir_score = monotonicity_ratio(obs_dedup, tmpl["pos_map"])
@@ -344,18 +365,9 @@ def compute_match_score(observed: List[int], tmpl: dict) -> dict:
     )
 
     rank_key = (
-        round(float(overlap_score), 6),
-        round(float(order_score_val), 6),
-        round(float(dir_score), 6),
-        round(float(end_score), 6),
+        round(float(lcss_similarity), 6),
         round(float(coverage_score), 6),
         -round(float(template_len_penalty), 6),
-    )
-
-    confidence = min(
-        overlap_score,
-        order_score_val,
-        max(0.0, dir_score),
     )
 
     return {
@@ -367,14 +379,15 @@ def compute_match_score(observed: List[int], tmpl: dict) -> dict:
         "direction_score": round(float(dir_score), 4),
         "endpoint_score": round(float(end_score), 4),
         "lcs_len": int(lcs_len),
+        "lcss_similarity": round(float(lcss_similarity), 4),
         "is_subseq": bool(is_full_subseq),
         "template_len_penalty": round(float(template_len_penalty), 4),
         "rank_key": rank_key,
-        "confidence": round(float(confidence), 4),
+        "confidence": round(float(lcss_similarity), 4),
     }
 
 
-# Trip indexing
+# Trip -> template assignment (for building the trip index)
 def assign_trip_templates_by_inference(
     trips_df: pd.DataFrame,
     templates: Dict[int, dict],
@@ -384,10 +397,8 @@ def assign_trip_templates_by_inference(
     min_confidence: float = DEFAULT_TRIP_ASSIGN_MIN_CONF,
     min_overlap: float = DEFAULT_TRIP_ASSIGN_MIN_OVERLAP,
 ) -> pd.DataFrame:
-    """
-    Robustly attach template_id to trips_clean rows.
-    This replaces dangerous exact tuple(route) -> template assumptions.
-    """
+    """Attach template_id to trips_clean rows using the same LCSS
+    scorer used for segment matching."""
     out_rows = []
 
     for _, row in trips_df.iterrows():
@@ -406,10 +417,7 @@ def assign_trip_templates_by_inference(
             continue
 
         candidate_ids, raw_counts = generate_candidate_templates(
-            stop_seq,
-            stop_to_templates,
-            min_shared_stops=min_shared_stops,
-            top_n=top_n,
+            stop_seq, stop_to_templates, min_shared_stops=min_shared_stops, top_n=top_n
         )
 
         if not candidate_ids:
@@ -424,11 +432,10 @@ def assign_trip_templates_by_inference(
             )
             continue
 
-        scored = []
-        for tid in candidate_ids:
-            sc = compute_match_score(stop_seq, templates[tid])
-            scored.append((tid, sc, raw_counts.get(tid, 0)))
-
+        scored = [
+            (tid, compute_match_score(stop_seq, templates[tid]), raw_counts.get(tid, 0))
+            for tid in candidate_ids
+        ]
         scored.sort(key=lambda x: (x[1]["rank_key"], x[2]), reverse=True)
         best_tid, best_sc, _ = scored[0]
 
@@ -452,8 +459,7 @@ def assign_trip_templates_by_inference(
             }
         )
 
-    out = pd.DataFrame(out_rows)
-    return out
+    return pd.DataFrame(out_rows)
 
 
 def build_trip_template_index(
@@ -471,9 +477,9 @@ def build_trip_template_index(
             "triproute": "trip_route",
         }
     )
-    trips_df["trip_date"] = trips_df["trip_date"].astype(str).str[:10]
-    trips_df["parsed"] = trips_df["trip_route"].apply(parse_trip_route)
 
+    trips_df["trip_date"] = trips_df["trip_date"].astype(str).apply(ts_to_date_str)
+    trips_df["parsed"] = trips_df["trip_route"].apply(parse_trip_route)
     trips_df["sched_start_min"] = trips_df["parsed"].apply(
         lambda route: time_str_to_minutes(route[0][1]) if route else np.nan
     )
@@ -490,13 +496,14 @@ def build_trip_template_index(
     trips_df["template_id"] = trips_df["template_id"].astype(int)
 
     trip_idx: Dict[Tuple[str, int], List[dict]] = defaultdict(list)
-
     for row in trips_df.itertuples(index=False):
         key = (row.trip_date, int(row.template_id))
+        sched_stop_min = {sid: time_str_to_minutes(t) for sid, t in row.parsed}
         trip_idx[key].append(
             {
                 "trip_id": row.trip_id,
                 "sched_start_min": row.sched_start_min,
+                "sched_stop_min": sched_stop_min,
                 "template_assign_confidence": row.template_assign_confidence,
             }
         )
@@ -504,6 +511,7 @@ def build_trip_template_index(
     for key in trip_idx:
         trip_idx[key] = sorted(trip_idx[key], key=lambda x: x["sched_start_min"])
 
+    print(f"  Trip index keys (date,template): {len(trip_idx):,}")
     return trips_df, trip_idx
 
 
@@ -512,31 +520,92 @@ def infer_trip_id(
     seg_start_date: str,
     seg_end_date: str,
     seg_start_min: float,
+    stop_time_map: Dict[int, float],
     trip_index: Dict[Tuple[str, int], List[dict]],
     window_min: int,
+    min_shared_timed_stops: int = 2,
+    max_residual_min: float = ROUTE_MAX_TRIP_RESIDUAL_MIN,
 ) -> Tuple[Optional[int], Optional[float]]:
+    """Select the scheduled trip instance on `template_id`.
+
+    For each candidate trip, estimate a constant offset delta (median
+    signed difference between observed and scheduled stop times over
+    shared stops) representing the trip's overall delay/earliness, then
+    score the trip by the residual dispersion AFTER removing delta. A
+    bus running consistently late still matches its own timetable shape
+    well and should not be penalized for the offset itself.
+
+    If two trips have identical residuals (rare, but possible), the one
+    with the smaller absolute offset |delta| is preferred as a deterministic
+    tie-breaker favoring the candidate requiring the least temporal adjustment.
+    Falls back to a start-time-only comparison when fewer than
+    `min_shared_timed_stops` stops are shared.
+
+    Acceptance requires the residual to be within both `window_min`
+    (day-level sanity bound) and `max_residual_min` (tighter bound
+    applied only to the timing-residual path, since it is the stronger
+    signal).
+    """
     candidate_dates = [seg_start_date]
     if seg_end_date != seg_start_date:
         candidate_dates.append(seg_end_date)
 
+    def wrapped_diff(a: float, b: float) -> float:
+        return min(abs(a - b), abs((a + 1440) - b), abs(a - (b + 1440)))
+
+    def wrapped_signed_diff(obs: float, sched: float) -> float:
+        options = [obs - sched, obs - sched + 1440, obs - sched - 1440]
+        return min(options, key=abs)
+
+    # We store a tuple (residual, |delta|) to break ties.
     best_trip_id = None
-    best_diff = float("inf")
+    best_score = (float("inf"), float("inf"))
+    best_is_timing = False
 
     for dt in candidate_dates:
-        for trip in trip_index.get((dt, template_id), []):
-            diff = abs(seg_start_min - trip["sched_start_min"])
-            diff = min(
-                diff,
-                abs((seg_start_min + 1440) - trip["sched_start_min"]),
-                abs(seg_start_min - (trip["sched_start_min"] + 1440)),
-            )
-            if diff < best_diff:
-                best_diff = diff
-                best_trip_id = trip["trip_id"]
+        candidates = trip_index.get((dt, template_id), [])
+        for trip in candidates:
+            sched_stop_min = trip.get("sched_stop_min", {})
+            shared_stops = set(stop_time_map) & set(sched_stop_min)
 
-    if best_trip_id is None or best_diff > window_min:
+            if len(shared_stops) >= min_shared_timed_stops:
+                signed_diffs = [
+                    wrapped_signed_diff(stop_time_map[sid], sched_stop_min[sid])
+                    for sid in shared_stops
+                ]
+                delta = float(np.median(signed_diffs))
+                residual = float(np.mean([abs(d - delta) for d in signed_diffs]))
+                is_timing = True
+                score = (residual, abs(delta))
+            else:
+                residual = wrapped_diff(seg_start_min, trip["sched_start_min"])
+                is_timing = False
+                score = (residual, abs(residual))
+
+            # Compare: prefer timing-based matches, then smaller (residual, |delta|)
+            if best_trip_id is None:
+                better = True
+            elif is_timing and not best_is_timing:
+                better = True
+            elif not is_timing and best_is_timing:
+                better = False
+            else:
+                better = score < best_score
+
+            if better:
+                best_trip_id = trip["trip_id"]
+                best_score = score
+                best_is_timing = is_timing
+
+    if best_trip_id is None:
         return None, None
-    return int(best_trip_id), round(float(best_diff), 2)
+
+    best_residual = best_score[0]
+    bound = max_residual_min if best_is_timing else window_min
+    if best_residual > bound:
+        return None, None
+
+    return int(best_trip_id), round(float(best_residual), 2)
 
 
 # Segment extraction
@@ -571,11 +640,7 @@ def extract_segment_sequences(snapped_path: Path, min_obs_stops: int) -> pd.Data
         con.execute(f"""
             CREATE TABLE snapped AS
             SELECT
-                vehicle_id,
-                segment_id,
-                ride_date,
-                snapped_stop_id,
-                timestamp_ist
+                vehicle_id, segment_id, ride_date, snapped_stop_id, timestamp_ist
                 {select_snap}
             FROM read_parquet('{snapped_path}')
             WHERE snapped_stop_id != -1
@@ -589,6 +654,7 @@ def extract_segment_sequences(snapped_path: Path, min_obs_stops: int) -> pd.Data
                 MIN(timestamp_ist)::VARCHAR AS seg_start_ist,
                 MAX(timestamp_ist)::VARCHAR AS seg_end_ist,
                 LIST(snapped_stop_id ORDER BY timestamp_ist) AS stop_seq_raw,
+                LIST(timestamp_ist ORDER BY timestamp_ist)::VARCHAR[] AS stop_ts_raw,
                 COUNT(*) AS n_obs_pings,
                 COUNT(DISTINCT snapped_stop_id) AS n_obs_stops_unique
                 {agg_snap}
@@ -606,6 +672,18 @@ def extract_segment_sequences(snapped_path: Path, min_obs_stops: int) -> pd.Data
     segs["n_obs_stops"] = segs["stop_seq"].apply(len)
     segs = segs[segs["n_obs_stops"] >= min_obs_stops].copy()
 
+    def _build_stop_time_map(stop_ids_raw, ts_raw) -> dict:
+        m: Dict[int, float] = {}
+        for sid, ts in zip(stop_ids_raw, ts_raw):
+            sid = int(sid)
+            if sid not in m:
+                m[sid] = parse_ts_to_minutes(ts)
+        return m
+
+    segs["stop_time_map"] = segs.apply(
+        lambda r: _build_stop_time_map(r["stop_seq_raw"], r["stop_ts_raw"]), axis=1
+    )
+
     segs["seg_start_min"] = segs["seg_start_ist"].apply(parse_ts_to_minutes)
     segs["seg_start_date"] = segs["seg_start_ist"].apply(ts_to_date_str)
     segs["seg_end_date"] = segs["seg_end_ist"].apply(ts_to_date_str)
@@ -619,7 +697,15 @@ def simulate_partial_observation(
     keep_fraction: float = 0.6,
     min_keep: int = 3,
     rng: Optional[random.Random] = None,
+    corrupt_prob: float = 0.0,
 ) -> List[int]:
+    """Simulate a partial observation of a full stop sequence.
+
+    With probability `corrupt_prob`, applies a contiguous-block, prefix,
+    or suffix removal (closer to real GPS dropout patterns) instead of
+    independently-random deletion. Default corrupt_prob=0.0 reproduces
+    plain random deletion.
+    """
     if rng is None:
         rng = random.Random(DEFAULT_VALIDATION_RANDOM_SEED)
 
@@ -627,11 +713,22 @@ def simulate_partial_observation(
     if len(seq) <= min_keep:
         return seq[:]
 
+    if corrupt_prob > 0.0 and rng.random() < corrupt_prob:
+        mode = rng.choice(["prefix", "suffix", "block"])
+        n = len(seq)
+        keep_n = max(min_keep, int(math.ceil(n * keep_fraction)))
+        if mode == "prefix":
+            return seq[:keep_n]
+        if mode == "suffix":
+            return seq[n - keep_n :]
+        max_start = max(0, n - keep_n)
+        start = rng.randint(0, max_start)
+        return seq[start : start + keep_n]
+
     idxs = list(range(len(seq)))
     keep_n = max(min_keep, int(math.ceil(len(seq) * keep_fraction)))
     chosen = sorted(rng.sample(idxs, min(keep_n, len(idxs))))
-    sampled = [seq[i] for i in chosen]
-    return dedup_consecutive(sampled)
+    return dedup_consecutive([seq[i] for i in chosen])
 
 
 def validate_route_recovery(
@@ -643,6 +740,7 @@ def validate_route_recovery(
     min_obs_stops: int = 3,
     top_n: int = DEFAULT_TOP_N_CANDIDATES,
     random_seed: int = DEFAULT_VALIDATION_RANDOM_SEED,
+    corrupt_prob: float = 0.0,
 ) -> pd.DataFrame:
     rng = random.Random(random_seed)
 
@@ -657,7 +755,11 @@ def validate_route_recovery(
     for row in valid.itertuples(index=False):
         full_seq = [sid for sid, _ in row.parsed]
         obs = simulate_partial_observation(
-            full_seq, keep_fraction=keep_fraction, min_keep=min_obs_stops, rng=rng
+            full_seq,
+            keep_fraction=keep_fraction,
+            min_keep=min_obs_stops,
+            rng=rng,
+            corrupt_prob=corrupt_prob,
         )
         candidate_ids, raw_counts = generate_candidate_templates(
             obs,
@@ -679,11 +781,10 @@ def validate_route_recovery(
             )
             continue
 
-        scored = []
-        for tid in candidate_ids:
-            sc = compute_match_score(obs, templates[tid])
-            scored.append((tid, sc, raw_counts.get(tid, 0)))
-
+        scored = [
+            (tid, compute_match_score(obs, templates[tid]), raw_counts.get(tid, 0))
+            for tid in candidate_ids
+        ]
         scored.sort(key=lambda x: (x[1]["rank_key"], x[2]), reverse=True)
         pred_tid = int(scored[0][0])
 
@@ -698,8 +799,7 @@ def validate_route_recovery(
             }
         )
 
-    res = pd.DataFrame(rows)
-    return res
+    return pd.DataFrame(rows)
 
 
 # Main inference
@@ -782,18 +882,16 @@ def run_inference(
             )
             continue
 
-        scored = []
-        for tid in candidate_ids:
-            sc = compute_match_score(obs, templates[tid])
-            scored.append((tid, sc, raw_counts.get(tid, 0)))
-
+        scored = [
+            (tid, compute_match_score(obs, templates[tid]), raw_counts.get(tid, 0))
+            for tid in candidate_ids
+        ]
         scored.sort(key=lambda x: (x[1]["rank_key"], x[2]), reverse=True)
 
         best_tid, best_sc, _ = scored[0]
-        if len(scored) > 1:
-            second_tid, second_sc, _ = scored[1]
-        else:
-            second_tid, second_sc = None, None
+        second_tid, second_sc = (
+            (scored[1][0], scored[1][1]) if len(scored) > 1 else (None, None)
+        )
 
         margin = score_margin_from_rank_keys(
             best_sc["rank_key"], second_sc["rank_key"] if second_sc else None
@@ -826,7 +924,7 @@ def run_inference(
                     "match_lcs_len": int(best_sc["lcs_len"]),
                     "match_is_subseq": bool(best_sc["is_subseq"]),
                     "match_rank_key": json.dumps(best_sc["rank_key"]),
-                    "match_method": "below_threshold_lexicographic",
+                    "match_method": "below_threshold_lcss",
                     "candidate_template_count": candidate_count,
                     "n_obs_stops": len(obs),
                     "n_obs_stops_unique": len(set(obs)),
@@ -843,6 +941,7 @@ def run_inference(
                 seg_start_date=row.seg_start_date,
                 seg_end_date=row.seg_end_date,
                 seg_start_min=row.seg_start_min,
+                stop_time_map=row.stop_time_map,
                 trip_index=trip_index,
                 window_min=trip_window_min,
             )
@@ -873,7 +972,7 @@ def run_inference(
                 "match_lcs_len": int(best_sc["lcs_len"]),
                 "match_is_subseq": bool(best_sc["is_subseq"]),
                 "match_rank_key": json.dumps(best_sc["rank_key"]),
-                "match_method": "lexicographic_overlap_order_direction",
+                "match_method": "lcss_similarity",
                 "candidate_template_count": candidate_count,
                 "n_obs_stops": len(obs),
                 "n_obs_stops_unique": len(set(obs)),
@@ -892,15 +991,35 @@ def run_inference(
 
     print("\nRoute inference results:")
     print(f"  Segments processed       : {len(inferred):,}")
-    print(f"  Template matched         : {len(matched):,} ({100 * len(matched) / max(len(inferred), 1):.1f}%)")
-    print(f"  trip_id assigned         : {len(with_trip):,} ({100 * len(with_trip) / max(len(inferred), 1):.1f}%)")
+    print(
+        f"  Template matched         : {len(matched):,} ({100 * len(matched) / max(len(inferred), 1):.1f}%)"
+    )
+    print(
+        f"  trip_id assigned         : {len(with_trip):,} ({100 * len(with_trip) / max(len(inferred), 1):.1f}%)"
+    )
 
     if len(matched):
         print(f"  Mean confidence          : {matched['match_confidence'].mean():.3f}")
         print(f"  Mean margin              : {matched['match_margin'].mean():.3f}")
-        print(f"  High-conf (>={ROUTE_HIGH_CONFIDENCE:.2f}) : {(matched['match_confidence'] >= ROUTE_HIGH_CONFIDENCE).sum():,}")
+        print(
+            f"  High-conf (>={ROUTE_HIGH_CONFIDENCE:.2f}) : {(matched['match_confidence'] >= ROUTE_HIGH_CONFIDENCE).sum():,}"
+        )
         print(f"  Full subsequence matches : {matched['match_is_subseq'].sum():,}")
-        print(f"  Mean candidate templates : {matched['candidate_template_count'].mean():.2f}")
+        print(
+            f"  Mean candidate templates : {matched['candidate_template_count'].mean():.2f}"
+        )
+
+        high_conf_mask = matched["match_confidence"] >= ROUTE_HIGH_CONFIDENCE
+        n_high_conf = int(high_conf_mask.sum())
+        n_high_conf_with_trip = int(
+            matched.loc[high_conf_mask, "candidate_trip_id"].notna().sum()
+        )
+        if n_high_conf > 0:
+            print(
+                f"  Of high-conf segments, trip_id resolved for: "
+                f"{n_high_conf_with_trip:,}/{n_high_conf:,} "
+                f"({100 * n_high_conf_with_trip / n_high_conf:.1f}%)"
+            )
 
     out_path.parent.mkdir(parents=True, exist_ok=True)
     inferred.to_parquet(out_path, index=False, compression="zstd")
@@ -924,20 +1043,21 @@ if __name__ == "__main__":
     ap.add_argument("--run_validation", action="store_true")
     ap.add_argument("--validation_sample_n", type=int, default=2000)
     ap.add_argument("--validation_keep_fraction", type=float, default=0.6)
+    ap.add_argument("--validation_corrupt_prob", type=float, default=0.0)
     args = ap.parse_args()
 
-    templates = load_templates(Path(args.catalog))
-    stop_to_templates = build_stop_to_templates_index(templates)
-
-    trips_df, _ = build_trip_template_index(
-        trips_path=Path(args.trips),
-        templates=templates,
-        stop_to_templates=stop_to_templates,
-        min_shared_stops=DEFAULT_MIN_SHARED_STOPS,
-        top_n=args.top_n_candidates,
-    )
 
     if args.run_validation:
+        templates = load_templates(Path(args.catalog))
+        stop_to_templates = build_stop_to_templates_index(templates)
+
+        trips_df, _ = build_trip_template_index(
+            trips_path=Path(args.trips),
+            templates=templates,
+            stop_to_templates=stop_to_templates,
+            min_shared_stops=DEFAULT_MIN_SHARED_STOPS,
+            top_n=args.top_n_candidates,
+        )
         val = validate_route_recovery(
             trips_df=trips_df,
             templates=templates,
@@ -946,6 +1066,7 @@ if __name__ == "__main__":
             keep_fraction=args.validation_keep_fraction,
             min_obs_stops=max(3, args.min_obs_stops),
             top_n=args.top_n_candidates,
+            corrupt_prob=args.validation_corrupt_prob,
         )
         if len(val):
             print("\nValidation summary:")

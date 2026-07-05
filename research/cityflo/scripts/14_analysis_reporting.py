@@ -61,10 +61,9 @@ from config import (
     STGNN_PREDICTIONS,
     TABLES_DIR,
     XGB_PREDICTIONS,
+    CBD_LAT,
+    CBD_LNG,
 )
-
-CBD_LAT = 18.9256
-CBD_LNG = 72.8242
 
 plt.rcParams.update(
     {

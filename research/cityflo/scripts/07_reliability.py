@@ -399,7 +399,7 @@ def compute_reliability(
             FROM stop_arrivals sa
             JOIN inferred inf
             ON sa.vehicle_id = inf.vehicle_id
-            AND sa.ride_date  = inf.ride_date
+            AND sa.ride_date  = inf.seg_start_date
             AND sa.segment_id = inf.segment_id
             JOIN trip_stop_schedule tss
             ON inf.candidate_trip_id = tss.trip_id
