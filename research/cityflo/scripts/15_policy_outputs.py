@@ -4,9 +4,9 @@
 Computes three TDM policy output tables from the pipeline's processed data.
 
 1.  Mode-shift scores  (per OD corridor, per month)
-    MSS = MODE_SHIFT_WEIGHTS["load"] × load_factor_proxy
-        + MODE_SHIFT_WEIGHTS["reliability"] × headway_reliability
-        + MODE_SHIFT_WEIGHTS["regularity"] × service_regularity
+    MSS = MODE_SHIFT_WEIGHTS["load"] * load_factor_proxy
+        + MODE_SHIFT_WEIGHTS["reliability"] * headway_reliability
+        + MODE_SHIFT_WEIGHTS["regularity"] * service_regularity
 
     load_factor_proxy :
         service_supply.avg_runs_per_active_bin
@@ -19,10 +19,10 @@ Computes three TDM policy output tables from the pipeline's processed data.
         active_time_bins / MAX_BINS_PER_MONTH
         Fraction of possible 30-min bins where the corridor was observed.
         This is the proxy for captive-rider ratio as documented in the report.
-        MAX_BINS_PER_MONTH = 1464  (30.5 d × 48 bins/d).
+        MAX_BINS_PER_MONTH = 1464  (30.5 d * 48 bins/d).
 
     headway_reliability :
-        From headway_stats.parquet, averaged over all day_type × period strata
+        From headway_stats.parquet, averaged over all day_type * period strata
         per (origin_stop, month_num).  Already in [0,1]; clipped to guard
         against pathological negative values at heavily-bunched stops.
 
@@ -31,14 +31,13 @@ Computes three TDM policy output tables from the pipeline's processed data.
                         < 0.50 → Tier3_review
 
 2.  CO2 savings  (per OD corridor, per month)
-    CO2_saved_kg = total_runs × trip_distance_km × (CAR_EF − BUS_EF)
-    cars_replaced = total_runs / AVG_CAR_OCCUPANCY
+    CO2_saved_kg = total_runs * trip_distance_km * CAR_DISPLACEMENT_FACTOR * (CAR_EF - BUS_EF)
+    cars_displaced = total_runs * CAR_DISPLACEMENT_FACTOR
 
-    IMPORTANT: total_runs is vehicle-trips, not passenger-trips.
-    Passenger-level calculations require occupancy data unavailable from GPS.
-    Emission factors: IPCC AR6 road-transport averages.
-        CAR_EF  = 0.171 kg CO₂/km  (private car, India fleet average)
-        BUS_EF  = 0.030 kg CO₂/km  (bus per passenger, assuming ~40% seat fill)
+    IMPORTANT:  total_runs counts vehicle runs, not passenger trips.
+                Passenger-level emissions cannot be estimated because occupancy data is
+                unavailable. CAR_DISPLACEMENT_FACTOR specifies the assumed number of
+                private-car trips displaced by each observed bus run (default = 1.0).
 
 3.  Service gaps  (OD pairs not directly served or 1-transfer reachable)
     Reads route_catalog.parquet (stop_sequence stored as JSON string;
@@ -71,9 +70,9 @@ import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from config import (
-    AVG_CAR_OCCUPANCY,
     BUS_EMISSION_KG_PER_KM,
     CAR_EMISSION_KG_PER_KM,
+    CAR_DISPLACEMENT_FACTOR,
     CO2_SAVINGS,
     HEADWAY_STATS,
     MAX_BINS_PER_MONTH,
@@ -194,13 +193,13 @@ def compute_co2_savings(
     out_path: Path,
 ) -> pd.DataFrame:
     """
-    Estimate CO2 savings (kg/month) and cars replaced per OD corridor.
+    Estimate CO2 savings (kg/month) and cars displaced per OD corridor.
 
     Uses service_supply for trip counts (consistent with mode-shift function)
     and od_agg for corridor metadata (stop names, distance).
 
-    CO2_saved_kg = total_runs × trip_distance_km × (CAR_EF − BUS_EF)
-    cars_replaced = total_runs / AVG_CAR_OCCUPANCY
+    CO2_saved_kg = total_runs * trip_distance_km * CAR_DISPLACEMENT_FACTOR * (CAR_EF - BUS_EF)
+    cars_displaced = total_runs * CAR_DISPLACEMENT_FACTOR
 
     Caveat: total_runs counts vehicle-trips.  Passenger-level savings require
     occupancy data unavailable from GPS pings alone.
@@ -240,10 +239,13 @@ def compute_co2_savings(
 
     emission_delta = CAR_EMISSION_KG_PER_KM - BUS_EMISSION_KG_PER_KM  # 0.141
     monthly["co2_saved_kg"] = (
-        monthly["total_runs"] * monthly["trip_distance_km"].fillna(0) * emission_delta
+        monthly["total_runs"]
+        * monthly["trip_distance_km"].fillna(0)
+        * CAR_DISPLACEMENT_FACTOR
+        * emission_delta
     ).clip(lower=0)
 
-    monthly["cars_replaced"] = (monthly["total_runs"] / AVG_CAR_OCCUPANCY).round(1)
+    monthly["cars_displaced"] = (monthly["total_runs"] * CAR_DISPLACEMENT_FACTOR).round(1)
 
     out_cols = [
         "origin_stop_id",
@@ -254,7 +256,7 @@ def compute_co2_savings(
         "trip_distance_km",
         "total_runs",
         "co2_saved_kg",
-        "cars_replaced",
+        "cars_displaced",
     ]
     result = monthly[[c for c in out_cols if c in monthly.columns]].copy()
 
@@ -262,10 +264,10 @@ def compute_co2_savings(
     result.to_parquet(out_path, index=False, compression="zstd")
 
     total_co2 = result["co2_saved_kg"].sum()
-    total_cars = result["cars_replaced"].sum()
+    total_cars = result["cars_displaced"].sum()
     print(
         f"CO2 savings : {total_co2 / 1_000:.1f} t CO₂  |  "
-        f"Cars replaced : {total_cars:,.0f}"
+        f"Cars displaced : {total_cars:,.0f}"
     )
     return result
 

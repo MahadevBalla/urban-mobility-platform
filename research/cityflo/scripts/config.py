@@ -208,9 +208,9 @@ MODE_SHIFT_WEIGHTS = {
 }
 
 # CO₂ assumptions
-AVG_CAR_OCCUPANCY = 1.15  # NCRB / MoRTH India average
 BUS_EMISSION_KG_PER_KM = 0.030  # bus per passenger (~40% seat fill assumed)
 CAR_EMISSION_KG_PER_KM = 0.171  # private car, India fleet average
+CAR_DISPLACEMENT_FACTOR = 1  # assumes one private-car trip displaced per bus run
 
 # Mode-shift scoring
 MAX_BINS_PER_MONTH: int = 1464
