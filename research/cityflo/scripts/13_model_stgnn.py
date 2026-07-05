@@ -60,9 +60,9 @@ from config import (
     MODELS_DIR,
     STGNN_PARAMS,
     TABLES_DIR,
+    RANDOM_SEED,
 )
 
-RANDOM_SEED = 42
 TARGET_COL = "trip_count"
 
 # Feature sets
@@ -92,6 +92,7 @@ WEATHER_FEATURES: list[str] = [
     "relative_humidity_2m",
     "wind_speed_10m",
 ]
+
 
 # Shared helpers
 def temporal_split(
@@ -154,6 +155,7 @@ def evaluate(
         "Pearson_r": r,
     }
 
+
 # Geometry helper
 def _haversine_km_vec(
     lat1: float,
@@ -169,10 +171,11 @@ def _haversine_km_vec(
     a = np.sin(dphi / 2) ** 2 + np.cos(phi1) * np.cos(phi2) * np.sin(dlam / 2) ** 2
     return 2 * r * np.arcsin(np.sqrt(a))
 
+
 # Graph construction
 def build_h3_graph(hex_list: list[str]) -> torch.Tensor:
     """
-    Build L_tilde = D_tilde^(-1/2) A_tilde D_tilde^(-1/2),  A_tilde = A + I.
+    Build L_tilde = D_tilde^(-1/2) a_tilde D_tilde^(-1/2),  a_tilde = A + I.
     Edge weights: Gaussian kernel of centroid Haversine distance.
     Returns dense (N, N) float32 tensor.
     """
@@ -199,15 +202,16 @@ def build_h3_graph(hex_list: list[str]) -> torch.Tensor:
     if rows:
         A[rows, cols] = torch.tensor(weights, dtype=torch.float32)
 
-    A_tilde = A + torch.eye(N, dtype=torch.float32)
+    a_tilde = A + torch.eye(N, dtype=torch.float32)
 
-    degree = A_tilde.sum(1)
+    degree = a_tilde.sum(1)
     degree = torch.clamp(degree, min=1e-12)
 
     d_inv_sqrt = degree.pow(-0.5)
     D = torch.diag(d_inv_sqrt)
 
-    return D @ A_tilde @ D
+    return D @ a_tilde @ D
+
 
 # Data helpers
 def build_pivot(df: pd.DataFrame, col: str, hex_list: list[str]) -> np.ndarray:
@@ -231,17 +235,17 @@ def make_sequences_with_timestamps(
     Slide a window of length seq_len over the ENTIRE time axis.
     Each sequence is tagged with the TARGET timestamp (the step being predicted).
 
-    X : (T, N, F)  ->  Xs: (T-seq_len, seq_len, N, F)
+    X : (T, N, F)  ->  xs: (T-seq_len, seq_len, N, F)
     y : (T, N)     ->  ys: (T-seq_len, N)
-    returns (Xs, ys, target_timestamps)
+    returns (xs, ys, target_timestamps)
     """
-    Xs, ys, ttimes = [], [], []
+    xs, ys, ttimes = [], [], []
     for t in range(seq_len, len(X)):
-        Xs.append(X[t - seq_len : t])
+        xs.append(X[t - seq_len : t])
         ys.append(y[t])
         ttimes.append(time_index[t])
     return (
-        np.array(Xs, dtype=np.float32),
+        np.array(xs, dtype=np.float32),
         np.array(ys, dtype=np.float32),
         pd.DatetimeIndex(ttimes),
     )
@@ -304,9 +308,20 @@ def _batch_predict(
             preds.append(model(X[b : b + batch_size].to(device), L).cpu().numpy())
     return np.concatenate(preds, axis=0)
 
+
+# Helper for safe period info (like in 11/12)
+def _period_info(fold: pd.DataFrame) -> dict:
+    if fold.empty:
+        return {"start": None, "end": None, "n_rows": 0}
+    return {
+        "start": str(fold["time_bin_30min"].min().date()),
+        "end": str(fold["time_bin_30min"].max().date()),
+        "n_rows": len(fold),
+    }
+
+
 # Main
 def train_stgnn(features_path: Path) -> None:
-    np.random.seed(RANDOM_SEED)
     torch.manual_seed(RANDOM_SEED)
     if torch.cuda.is_available():
         torch.cuda.manual_seed_all(RANDOM_SEED)
@@ -328,11 +343,22 @@ def train_stgnn(features_path: Path) -> None:
     valid_end = pd.Timestamp(MODEL_VALID_END, tz="UTC")
     test_start = pd.Timestamp(MODEL_TEST_START, tz="UTC")
 
-    train, valid, test = temporal_split(df, train_end, valid_end, test_start)
-    for name, fold in [("train", train), ("valid", valid), ("test", test)]:
-        lo = fold["time_bin_30min"].min().date()
-        hi = fold["time_bin_30min"].max().date()
-        print(f"  {name:<6}: {len(fold):>10,} rows  ({lo} - {hi})")
+    # Initial temporal split (before dropna) for printing
+    init_train, init_valid, init_test = temporal_split(
+        df, train_end, valid_end, test_start
+    )
+    print("Temporal split sizes (before dropna):")
+    for name, fold in [
+        ("train", init_train),
+        ("valid", init_valid),
+        ("test", init_test),
+    ]:
+        if fold.empty:
+            print(f"  {name:<6}:         0 rows  (EMPTY)")
+        else:
+            lo = fold["time_bin_30min"].min().date()
+            hi = fold["time_bin_30min"].max().date()
+            print(f"  {name:<6}: {len(fold):>10,} rows  ({lo} - {hi})")
 
     # Feature filtering & NaN drop on the FULL dataframe
     all_feat_cols = TEMPORAL_FEATURES + WEATHER_FEATURES
@@ -347,60 +373,85 @@ def train_stgnn(features_path: Path) -> None:
     df = df.dropna(subset=required)
     print(f"  Rows after dropna: {len(df):,}  (dropped {n_before - len(df):,})")
 
-    # Re-derive clean per-fold references after NaN drop (metadata only)
-    train = df[df["time_bin_30min"] <= train_end]
-    valid = df[(df["time_bin_30min"] > train_end) & (df["time_bin_30min"] <= valid_end)]
-    test = df[df["time_bin_30min"] >= test_start]
+    if len(df) == 0:
+        raise RuntimeError("No data left after dropna.")
+
+    # Re-derive clean per-fold references for metadata (these may be empty)
+    train = df[df["time_bin_30min"] <= train_end].copy()
+    valid = df[
+        (df["time_bin_30min"] > train_end) & (df["time_bin_30min"] <= valid_end)
+    ].copy()
+    test = df[df["time_bin_30min"] >= test_start].copy()
 
     # Build H3 graph
     hex_list = sorted(df["origin_h3"].dropna().unique())
     N = len(hex_list)
+    if N == 0:
+        raise RuntimeError("No valid H3 hexes found in data.")
     print(f"\nH3 hexes: {N}  |  Building adjacency graph ...")
-    L_norm = build_h3_graph(hex_list)
+    l_norm = build_h3_graph(hex_list)
 
     # Pivot ENTIRE dataset once, make sequences once
     print("Building global pivot tensors ...")
     feature_arrays = [build_pivot(df, c, hex_list) for c in feat_cols]
-    X_all = np.stack(feature_arrays, axis=-1)  # (T, N, F)
+    x_all = np.stack(feature_arrays, axis=-1)  # (T, N, F)
     y_all = build_pivot(df, TARGET_COL, hex_list)  # (T, N)
-    F_dim = X_all.shape[-1]
+    f_dim = x_all.shape[-1]
 
     time_index = df.groupby("time_bin_30min").size().sort_index().index
-    assert len(time_index) == X_all.shape[0], (
-        f"time_index length {len(time_index)} != X_all.shape[0] {X_all.shape[0]}"
+    assert len(time_index) == x_all.shape[0], (
+        f"time_index length {len(time_index)} != x_all.shape[0] {x_all.shape[0]}"
     )
 
     seq_len = STGNN_PARAMS["seq_len"]
-    Xs, ys, target_times = make_sequences_with_timestamps(
-        X_all, y_all, time_index, seq_len
+    xs, ys, target_times = make_sequences_with_timestamps(
+        x_all, y_all, time_index, seq_len
     )
-    print(f"  Total sequences: {len(Xs):,}  (first target: {target_times[0].date()})")
+
+    if len(target_times) == 0:
+        raise RuntimeError(
+            "No sequences generated. "
+            "Sequence length exceeds available temporal history."
+        )
+
+    print(f"  Total sequences: {len(xs):,}  (first target: {target_times[0].date()})")
 
     # Split sequences by target timestamp
     tr_mask = target_times <= train_end
     va_mask = (target_times > train_end) & (target_times <= valid_end)
     te_mask = target_times >= test_start
 
-    X_tr = torch.FloatTensor(Xs[tr_mask])
+    x_tr = torch.FloatTensor(xs[tr_mask])
     y_tr = torch.FloatTensor(ys[tr_mask])
-    X_va = torch.FloatTensor(Xs[va_mask])
+    x_va = torch.FloatTensor(xs[va_mask])
     y_va = torch.FloatTensor(ys[va_mask])
-    X_te = torch.FloatTensor(Xs[te_mask])
+    x_te = torch.FloatTensor(xs[te_mask])
     y_te = torch.FloatTensor(ys[te_mask])
     target_times_va = target_times[va_mask]
     target_times_te = target_times[te_mask]
-    print(f"  Sequences  train={len(X_tr):,}  valid={len(X_va):,}  test={len(X_te):,}")
+    print(f"  Sequences  train={len(x_tr):,}  valid={len(x_va):,}  test={len(x_te):,}")
+
+    # Safety checks before training
+    if len(x_tr) == 0:
+        raise RuntimeError(
+            "No training sequences. Check MODEL_TRAIN_END or data availability."
+        )
+    if len(x_va) == 0:
+        raise RuntimeError(
+            "No validation sequences. Early stopping cannot work. "
+            "Extend MODEL_VALID_END or use a smaller seq_len."
+        )
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"  Device: {device}")
-    L_norm = L_norm.to(device)
+    l_norm = l_norm.to(device)
 
-    n_heads = 4  # must divide hidden_dim evenly
+    n_heads = STGNN_PARAMS["n_heads"]
     assert STGNN_PARAMS["hidden_dim"] % n_heads == 0, (
         "hidden_dim must be divisible by n_heads"
     )
     model = STGNN(
-        in_feat=F_dim,
+        in_feat=f_dim,
         hidden=STGNN_PARAMS["hidden_dim"],
         n_heads=n_heads,
         dropout=STGNN_PARAMS["dropout"],
@@ -418,7 +469,7 @@ def train_stgnn(features_path: Path) -> None:
 
     epochs = STGNN_PARAMS["epochs"]
     batch_size = STGNN_PARAMS["batch_size"]
-    patience = 15
+    patience = STGNN_PARAMS["patience"]
 
     best_val_loss = float("inf")
     best_state = None
@@ -430,11 +481,11 @@ def train_stgnn(features_path: Path) -> None:
     for epoch in range(epochs):
         model.train()
         ep_losses = []
-        for b in range(0, len(X_tr), batch_size):
-            xb = X_tr[b : b + batch_size].to(device)
+        for b in range(0, len(x_tr), batch_size):
+            xb = x_tr[b : b + batch_size].to(device)
             yb = y_tr[b : b + batch_size].to(device)
             opt.zero_grad()
-            loss = crit(model(xb, L_norm), yb)
+            loss = crit(model(xb, l_norm), yb)
             loss.backward()
             nn.utils.clip_grad_norm_(model.parameters(), 1.0)
             opt.step()
@@ -444,7 +495,7 @@ def train_stgnn(features_path: Path) -> None:
 
         model.eval()
         with torch.no_grad():
-            vl = crit(model(X_va.to(device), L_norm), y_va.to(device)).item()
+            vl = crit(model(x_va.to(device), l_norm), y_va.to(device)).item()
 
         train_losses.append(ep_loss)
         val_losses.append(vl)
@@ -480,11 +531,15 @@ def train_stgnn(features_path: Path) -> None:
     all_metrics: list[dict] = []
     prediction_frames: list[pd.DataFrame] = []
 
-    for split_name, X_split, y_split, t_times in [
-        ("validation", X_va, y_va, target_times_va),
-        ("test", X_te, y_te, target_times_te),
+    for split_name, x_split, y_split, t_times in [
+        ("validation", x_va, y_va, target_times_va),
+        ("test", x_te, y_te, target_times_te),
     ]:
-        y_pred_arr = _batch_predict(model, X_split, L_norm, batch_size, device)
+        if len(x_split) == 0:
+            print(f"  {split_name}: empty — skipping evaluation")
+            continue
+
+        y_pred_arr = _batch_predict(model, x_split, l_norm, batch_size, device)
         y_true_flat = y_split.numpy().flatten()
         y_pred_flat = y_pred_arr.flatten()
 
@@ -502,23 +557,32 @@ def train_stgnn(features_path: Path) -> None:
         )
         prediction_frames.append(pf)
 
-    # Save artefacts
+    # Save model
     pt_path = MODELS_DIR / "stgnn_model.pt"
     torch.save(model.state_dict(), pt_path)
+    print(f"\n  Model saved → {pt_path}")
 
-    pred_path = TABLES_DIR / "stgnn_predictions.parquet"
-    pd.concat(prediction_frames, ignore_index=True).to_parquet(
-        pred_path, index=False, compression="zstd"
-    )
+    # Save predictions (guard against empty)
+    if prediction_frames:
+        predictions = pd.concat(prediction_frames, ignore_index=True)
+        pred_path = TABLES_DIR / "stgnn_predictions.parquet"
+        predictions.to_parquet(pred_path, index=False, compression="zstd")
+        print(f"  Predictions → {pred_path}")
+    else:
+        pred_path = None
+        print("  No predictions to save (both validation and test empty).")
 
+    # Save metrics
     metrics_path = TABLES_DIR / "stgnn_metrics.csv"
     pd.DataFrame(all_metrics).to_csv(metrics_path, index=False)
+    print(f"  Metrics     → {metrics_path}")
 
+    # Metadata with safe periods
     meta = {
         "model": "ST-GNN",
         "random_seed": RANDOM_SEED,
         "architecture": {
-            "in_feat": F_dim,
+            "in_feat": f_dim,
             "hidden_dim": STGNN_PARAMS["hidden_dim"],
             "n_heads": n_heads,
             "dropout": STGNN_PARAMS["dropout"],
@@ -538,21 +602,9 @@ def train_stgnn(features_path: Path) -> None:
             "h3_resolution": H3_RESOLUTION,
             "n_hexes": N,
         },
-        "train_period": {
-            "start": str(train["time_bin_30min"].min().date()),
-            "end": str(train["time_bin_30min"].max().date()),
-            "n_rows": int(len(train)),
-        },
-        "validation_period": {
-            "start": str(valid["time_bin_30min"].min().date()),
-            "end": str(valid["time_bin_30min"].max().date()),
-            "n_rows": int(len(valid)),
-        },
-        "test_period": {
-            "start": str(test["time_bin_30min"].min().date()),
-            "end": str(test["time_bin_30min"].max().date()),
-            "n_rows": int(len(test)),
-        },
+        "train_period": _period_info(train),
+        "validation_period": _period_info(valid),
+        "test_period": _period_info(test),
         "n_sequences": {
             "train": int(tr_mask.sum()),
             "valid": int(va_mask.sum()),
@@ -565,57 +617,68 @@ def train_stgnn(features_path: Path) -> None:
     meta_path = MODELS_DIR / "stgnn_metadata.json"
     with open(meta_path, "w") as fh:
         json.dump(meta, fh, indent=2)
+    print(f"  Metadata    → {meta_path}")
 
-    # Figures
-    test_metrics = next(m for m in all_metrics if m["split"] == "test")
-    test_preds = prediction_frames[-1]
-    y_true_test = test_preds["y_true"].values
-    y_pred_test = test_preds["stgnn_pred"].values
+    # Figures (skip if no test predictions)
+    test_metrics = next((m for m in all_metrics if m["split"] == "test"), None)
+    if prediction_frames and test_metrics is not None:
+        test_preds = prediction_frames[-1]
+        y_true_test = test_preds["y_true"].values
+        y_pred_test = test_preds["stgnn_pred"].values
 
-    fig, axes = plt.subplots(1, 2, figsize=(14, 5))
+        if len(y_true_test) > 0:
+            _, axes = plt.subplots(1, 2, figsize=(14, 5))
 
-    axes[0].plot(train_losses, label="Train")
-    axes[0].plot(val_losses, label="Validation")
-    axes[0].axvline(
-        best_epoch - 1,
-        color="grey",
-        linestyle="--",
-        linewidth=0.8,
-        label=f"Best epoch {best_epoch}",
-    )
-    axes[0].set(title="ST-GNN Training Curve", xlabel="Epoch", ylabel="Huber Loss")
-    axes[0].legend()
+            axes[0].plot(train_losses, label="Train")
+            axes[0].plot(val_losses, label="Validation")
+            axes[0].axvline(
+                best_epoch - 1,
+                color="grey",
+                linestyle="--",
+                linewidth=0.8,
+                label=f"Best epoch {best_epoch}",
+            )
+            axes[0].set(
+                title="ST-GNN Training Curve", xlabel="Epoch", ylabel="Huber Loss"
+            )
+            axes[0].legend()
 
-    idx_sample = np.random.choice(
-        len(y_true_test), min(2_000, len(y_true_test)), replace=False
-    )
-    axes[1].scatter(y_true_test[idx_sample], y_pred_test[idx_sample], alpha=0.3, s=6)
-    lims = [float(y_true_test.min()), float(y_true_test.max())]
-    axes[1].plot(lims, lims, "r--", linewidth=1.5)
-    axes[1].set(
-        title=f"ST-GNN: Actual vs Predicted (R2={test_metrics['R2']:.3f})",
-        xlabel="Actual trip count",
-        ylabel="Predicted trip count",
-    )
+            rng = np.random.default_rng(RANDOM_SEED)
+            idx_sample = rng.choice(len(y_true_test), min(2000, len(y_true_test)), replace=False)
+            axes[1].scatter(
+                y_true_test[idx_sample], y_pred_test[idx_sample], alpha=0.3, s=6
+            )
+            lims = [float(y_true_test.min()), float(y_true_test.max())]
+            axes[1].plot(lims, lims, "r--", linewidth=1.5)
+            axes[1].set(
+                title=f"ST-GNN: Actual vs Predicted (R2={test_metrics['R2']:.3f})",
+                xlabel="Actual trip count",
+                ylabel="Predicted trip count",
+            )
 
-    plt.suptitle(
-        f"ST-GNN Results -- Cityflo Travel Demand\n"
-        f"Test R2={test_metrics['R2']:.3f}  "
-        f"MAE={test_metrics['MAE']:.3f}  "
-        f"sMAPE={test_metrics['sMAPE']:.1f}%",
-        fontsize=12,
-        fontweight="bold",
-    )
-    plt.tight_layout()
-    plt.savefig(FIGURES / "stgnn_results.png", dpi=150, bbox_inches="tight")
-    plt.close()
+            plt.suptitle(
+                f"ST-GNN Results -- Cityflo Travel Demand\n"
+                f"Test R2={test_metrics['R2']:.3f}  "
+                f"MAE={test_metrics['MAE']:.3f}  "
+                f"sMAPE={test_metrics['sMAPE']:.1f}%",
+                fontsize=12,
+                fontweight="bold",
+            )
+            plt.tight_layout()
+            plt.savefig(FIGURES / "stgnn_results.png", dpi=150, bbox_inches="tight")
+            plt.close()
+            print(f"  Figure      → {FIGURES / 'stgnn_results.png'}")
+        else:
+            print("  Test predictions empty; skipping figure.")
+    else:
+        print("  No test metrics available; skipping figure.")
 
-    print(f"\nModel       -> {pt_path}")
-    print(f"Predictions -> {pred_path}")
-    print(f"Metrics     -> {metrics_path}")
-    print(f"Metadata    -> {meta_path}")
-    print(f"Figure      -> {FIGURES / 'stgnn_results.png'}")
     print("\nST-GNN complete.")
+    if pred_path:
+        print(f"  Predictions → {pred_path}")
+    print(f"  Metrics → {metrics_path}")
+    print(f"  Metadata → {meta_path}")
+    print(f"  Model Checkpoint → {pt_path}")
 
 
 if __name__ == "__main__":

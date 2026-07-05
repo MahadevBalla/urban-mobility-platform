@@ -39,42 +39,46 @@ from config import (
     MODEL_VALID_END,
     TABLES_DIR,
     XGB_PARAMS,
+    RANDOM_SEED,
 )
 
-RANDOM_SEED = 42
-EARLY_STOPPING_ROUNDS = 30
-VAL_FRACTION = 0.15  # fraction of train rows used for early-stopping val
-SHAP_SAMPLE_N = 5_000
-CV_N_SPLITS = 5
-
 # Feature columns and target
-FEATURE_COLS: list[str] = [
+_REQUIRED_FEATS: list[str] = [
     # Temporal — cyclical
     "hour_sin",
     "hour_cos",
     "dow_sin",
     "dow_cos",
+    # Temporal — binary
+    "is_weekend",
+    "is_peak",
+    # Trip geography
+    "trip_distance_km",
+    "dist_cbd_km",
+    # Reliability
+    "origin_headway_reliability",
+    "origin_headway_cv",
+    "mean_delay_min",
+    "on_time_pct",
+    # Lag demand
+    "lag_1_trip_count",
+    "lag_day_trip_count",
+    "rolling_24h_mean",
+]
+
+_OPTIONAL_FEATS: list[str] = [
+    # Additional temporal
     "month_sin",
     "month_cos",
     "doy_sin",
     "doy_cos",
-    # Temporal — binary
-    "is_weekend",
-    "is_peak",
     "is_monsoon",
     "is_pre_monsoon",
     "is_winter",
-    # Trip geography
-    "trip_distance_km",
-    "dist_cbd_km",
-    # Reliability (from 07)
-    "origin_headway_reliability",
-    "origin_headway_cv",
+    # Additional reliability
     "origin_mean_headway_min",
     "origin_bunching_events",
-    "mean_delay_min",
-    "on_time_pct",
-    # Weather (from 08 — engineered columns)
+    # Weather (many may be absent if not merged)
     "precipitation",
     "log_precip",
     "precip_3h",
@@ -91,17 +95,15 @@ FEATURE_COLS: list[str] = [
     "wind_gusts_10m",
     "strong_wind",
     "soil_near_saturation",
-    # Lag / rolling demand
-    "lag_1_trip_count",
+    # Extra lags
     "lag_2_trip_count",
-    "lag_day_trip_count",
     "lag_week_trip_count",
-    "rolling_24h_mean",
     "rolling_24h_std",
     # Leakage-safe hex demand (appended dynamically after split)
     "hex_avg_demand",
     "hex_demand_rank",
 ]
+
 TARGET = "trip_count"
 
 
@@ -219,8 +221,6 @@ def historical_mean_baseline(
 
 # Main
 def run_xgboost(features_path: Path) -> None:
-    np.random.seed(RANDOM_SEED)
-
     MODELS_DIR.mkdir(parents=True, exist_ok=True)
     TABLES_DIR.mkdir(parents=True, exist_ok=True)
     FIGURES.mkdir(parents=True, exist_ok=True)
@@ -236,80 +236,149 @@ def run_xgboost(features_path: Path) -> None:
 
     # Temporal split
     train, valid, test = temporal_split(df, train_end, valid_end, test_start)
+
+    # Print split sizes with empty-split guard
+    print("Temporal split sizes (before dropna):")
     for name, fold in [("train", train), ("valid", valid), ("test", test)]:
-        lo = fold["time_bin_30min"].min().date()
-        hi = fold["time_bin_30min"].max().date()
-        print(f"  {name:<6}: {len(fold):>10,} rows  ({lo} – {hi})")
+        if fold.empty:
+            print(f"  {name:<6}:         0 rows  (EMPTY)")
+        else:
+            lo = fold["time_bin_30min"].min().date()
+            hi = fold["time_bin_30min"].max().date()
+            print(f"  {name:<6}: {len(fold):>10,} rows  ({lo} – {hi})")
 
     # Leakage-safe hex demand features
     train, valid, test = add_hex_demand_features(train, [train, valid, test])
 
-    # Feature filtering (graceful if columns absent)
-    feat_cols = [c for c in FEATURE_COLS if c in train.columns]
-    missing = set(FEATURE_COLS) - set(feat_cols)
-    if missing:
-        print(f"\n  Feature columns not in data (skipped): {sorted(missing)}")
+    # Feature classification: required vs optional
+    missing_required = [c for c in _REQUIRED_FEATS if c not in train.columns]
+    if missing_required:
+        raise RuntimeError(
+            f"Required feature columns missing from data: {sorted(missing_required)}. "
+            "These features are assumed essential for model training."
+        )
 
-    # Drop rows with missing required columns
+    missing_optional = [c for c in _OPTIONAL_FEATS if c not in train.columns]
+    if missing_optional:
+        print(
+            f"  Optional features missing (will be skipped): {sorted(missing_optional)}"
+        )
+
+    # Build final feature list: all required + optional that exist
+    feat_cols = _REQUIRED_FEATS.copy()
+    feat_cols += [c for c in _OPTIONAL_FEATS if c in train.columns]
+    # Drop any accidental duplicates (shouldn't happen)
+    feat_cols = list(dict.fromkeys(feat_cols))
+
+    # Track row counts before dropna
+    n_before = {"train": len(train), "valid": len(valid), "test": len(test)}
+
+    # Drop rows with missing required columns (the final feature list + target)
     required = feat_cols + [TARGET]
     train = train.dropna(subset=required)
     valid = valid.dropna(subset=required)
     test = test.dropna(subset=required)
+
+    n_after = {"train": len(train), "valid": len(valid), "test": len(test)}
     print(
-        f"\nAfter dropna  train : {len(train):,}  valid : {len(valid):,}  test : {len(test):,}"
+        "\nRows after dropna  "
+        f"train : {n_after['train']:,} (dropped {n_before['train'] - n_after['train']:,})  "
+        f"valid : {n_after['valid']:,} (dropped {n_before['valid'] - n_after['valid']:,})  "
+        f"test  : {n_after['test']:,} (dropped {n_before['test'] - n_after['test']:,})"
     )
+    if len(train) == 0:
+        raise RuntimeError(
+            "No training rows remain after feature filtering. "
+            "Likely cause: headway/schedule features unavailable because "
+            "no trip assignments were produced in the sampled data."
+        )
 
     # Baselines
     print("\nBaselines —")
-    persistence_baseline(test[TARGET].values, test["lag_1_trip_count"].values, "test")
-    historical_mean_baseline(train, test, "test")
+    all_metrics: list[dict] = []
+
+    # Persistence baseline (requires lag_1_trip_count in test)
+    if "lag_1_trip_count" in test.columns and not test.empty:
+        p_metric = persistence_baseline(
+            test[TARGET].values, test["lag_1_trip_count"].values, "test"
+        )
+        if p_metric:
+            all_metrics.append(p_metric)
+    else:
+        print(
+            "  Test empty or missing lag_1_trip_count; skipping persistence baseline."
+        )
+
+    # Historical mean baseline
+    if not test.empty:
+        h_metric = historical_mean_baseline(train, test, "test")
+        if h_metric:
+            all_metrics.append(h_metric)
+    else:
+        print("  Test empty; skipping historical mean baseline.")
+        
+    CV_N_SPLITS = XGB_PARAMS.get("cv_n_splits", 5)
+    EARLY_STOPPING_ROUNDS = XGB_PARAMS.get("early_stopping_rounds", 30)
+    VAL_FRACTION = XGB_PARAMS.get("validation_fraction", 0.15)
+    SHAP_SAMPLE_N = XGB_PARAMS.get("shap_sample_n", 5000)
 
     # TimeSeriesSplit cross-validation
-    print(
-        f"\nTimeSeriesSplit CV ({CV_N_SPLITS} folds)"
-    )
-    X_full = train[feat_cols].astype(np.float32)
+    print(f"\nTimeSeriesSplit CV ({CV_N_SPLITS} folds)")
+    x_full = train[feat_cols].astype(np.float32)
     y_full = train[TARGET].astype(np.float32)
 
-    tscv = TimeSeriesSplit(
-        n_splits=CV_N_SPLITS, test_size=int(VAL_FRACTION * len(X_full))
-    )
+    # Clamp test_size to at least 1 to avoid zero-size splits
+    cv_test_size = max(1, int(VAL_FRACTION * len(x_full)))
+
+    if len(x_full) <= CV_N_SPLITS:
+        raise RuntimeError(
+            f"Training data too small ({len(x_full)} rows) for TimeSeriesSplit "
+            f"with {CV_N_SPLITS} splits. At least {CV_N_SPLITS + 1} rows required."
+        )
+
+    tscv = TimeSeriesSplit(n_splits=CV_N_SPLITS, test_size=cv_test_size)
     cv_maes = []
     cv_iters = []
 
-    for fold, (tr_idx, te_idx) in enumerate(tscv.split(X_full)):
-        Xtr, ytr = X_full.iloc[tr_idx], y_full.iloc[tr_idx]
-        Xte, yte = X_full.iloc[te_idx], y_full.iloc[te_idx]
+    for fold, (tr_idx, te_idx) in enumerate(tscv.split(x_full)):
+        x_tr, ytr = x_full.iloc[tr_idx], y_full.iloc[tr_idx]
+        x_te, y_te = x_full.iloc[te_idx], y_full.iloc[te_idx]
         m = xgb.XGBRegressor(
             **XGB_PARAMS,
             n_jobs=-1,
             early_stopping_rounds=EARLY_STOPPING_ROUNDS,
             random_state=RANDOM_SEED,
         )
-        m.fit(Xtr, ytr, eval_set=[(Xte, yte)], verbose=False)
-        mae = float(np.abs(yte.values - m.predict(Xte)).mean())
+        m.fit(x_tr, ytr, eval_set=[(x_te, y_te)], verbose=False)
+        mae = float(np.abs(y_te.values - m.predict(x_te)).mean())
         cv_maes.append(mae)
         cv_iters.append(m.best_iteration)
         print(f"  Fold {fold + 1}: MAE={mae:.4f}  best_iter={m.best_iteration}")
 
     print(f"\n  CV MAE : {np.mean(cv_maes):.4f} ± {np.std(cv_maes):.4f}")
 
-    # Final model
-    # Carve the last VAL_FRACTION of the train rows as a temporal early-stop set.
-    # This keeps temporal ordering intact — no random sampling.
+    # Final model — carve temporal early-stop validation set
     n_val = max(1, int(len(train) * VAL_FRACTION))
+    if n_val >= len(train):
+        raise RuntimeError("Early-stop validation size exceeds training data.")
     train_core = train.iloc[:-n_val]
     train_val = train.iloc[-n_val:]
 
-    Xtr = train_core[feat_cols].astype(np.float32)
+    if len(train_core) == 0:
+        raise RuntimeError(
+            "train_core is empty after splitting off early-stop validation. "
+            "Dataset may be too small."
+        )
+
+    x_tr = train_core[feat_cols].astype(np.float32)
     ytr = train_core[TARGET].astype(np.float32)
-    Xval = train_val[feat_cols].astype(np.float32)
+    x_val = train_val[feat_cols].astype(np.float32)
     yval = train_val[TARGET].astype(np.float32)
-    Xte = test[feat_cols].astype(np.float32)
-    yte = test[TARGET].astype(np.float32)
+    x_te = test[feat_cols].astype(np.float32)
+    y_te = test[TARGET].astype(np.float32)
 
     print(
-        f"\nFinal model: core={len(Xtr):,}  early-stop val={len(Xval):,}  test={len(Xte):,}"
+        f"\nFinal model: core={len(x_tr):,}  early-stop val={len(x_val):,}  test={len(x_te):,}"
     )
 
     final_model = xgb.XGBRegressor(
@@ -318,24 +387,21 @@ def run_xgboost(features_path: Path) -> None:
         early_stopping_rounds=EARLY_STOPPING_ROUNDS,
         random_state=RANDOM_SEED,
     )
-    final_model.fit(Xtr, ytr, eval_set=[(Xval, yval)], verbose=50)
+    final_model.fit(x_tr, ytr, eval_set=[(x_val, yval)], verbose=50)
     print(f"  Best iteration : {final_model.best_iteration}")
 
-    # Evaluate on validation fold and test
+    # Evaluate on validation fold and test (skip empty folds)
     print("\nEvaluation —")
-    all_metrics: list[dict] = []
     prediction_frames: list[pd.DataFrame] = []
 
-    for split_name, split_df, X_split, y_split in [
-        (
-            "validation",
-            valid,
-            valid[feat_cols].astype(np.float32),
-            valid[TARGET].astype(np.float32),
-        ),
-        ("test", test, Xte, yte),
-    ]:
-        y_pred = final_model.predict(X_split)
+    for split_name, split_df in [("validation", valid), ("test", test)]:
+        if split_df.empty:
+            print(f"  {split_name}: empty — skipping evaluation")
+            continue
+
+        x_split = split_df[feat_cols].astype(np.float32)
+        y_split = split_df[TARGET].astype(np.float32)
+        y_pred = final_model.predict(x_split)
         metrics = evaluate(y_split.values, y_pred, split_name)
         all_metrics.append(metrics)
 
@@ -351,38 +417,43 @@ def run_xgboost(features_path: Path) -> None:
     joblib.dump(final_model, pkl_path)
     print(f"\n  Model pickle → {pkl_path}")
 
-    # Save predictions
-    predictions = pd.concat(prediction_frames, ignore_index=True)
-    pred_path = TABLES_DIR / "xgb_predictions.parquet"
-    predictions.to_parquet(pred_path, index=False, compression="zstd")
+    # Save predictions (if any)
+    pred_path = None
+    if prediction_frames:
+        predictions = pd.concat(prediction_frames, ignore_index=True)
+        pred_path = TABLES_DIR / "xgb_predictions.parquet"
+        predictions.to_parquet(pred_path, index=False, compression="zstd")
+        print(f"  Predictions → {pred_path}")
+    else:
+        print("  No predictions to save (both validation and test empty).")
 
-    # Save metrics
+    # Save metrics (includes baselines)
     metrics_df = pd.DataFrame(all_metrics)
     metrics_df.to_csv(TABLES_DIR / "xgb_metrics.csv", index=False)
+    print(f"  Metrics     → {TABLES_DIR / 'xgb_metrics.csv'}")
 
-    # Metadata
-    test_metrics = next(m for m in all_metrics if m["split"] == "test")
+    # Helper for safe period metadata
+    def _period_info(fold):
+        if fold.empty:
+            return {"start": None, "end": None, "n_rows": 0}
+        return {
+            "start": str(fold["time_bin_30min"].min().date()),
+            "end": str(fold["time_bin_30min"].max().date()),
+            "n_rows": len(fold),
+        }
+
+    # Pick a test metrics dict if available for SHAP title
+    test_metrics = next((m for m in all_metrics if m["split"] == "test"), None)
+
     metadata = {
         "model": "XGBoost",
         "random_seed": RANDOM_SEED,
         "xgb_params": XGB_PARAMS,
         "early_stopping_rounds": EARLY_STOPPING_ROUNDS,
         "best_iteration": int(final_model.best_iteration),
-        "train_period": {
-            "start": str(train["time_bin_30min"].min().date()),
-            "end": str(train["time_bin_30min"].max().date()),
-            "n_rows": len(train),
-        },
-        "validation_period": {
-            "start": str(valid["time_bin_30min"].min().date()),
-            "end": str(valid["time_bin_30min"].max().date()),
-            "n_rows": len(valid),
-        },
-        "test_period": {
-            "start": str(test["time_bin_30min"].min().date()),
-            "end": str(test["time_bin_30min"].max().date()),
-            "n_rows": len(test),
-        },
+        "train_period": _period_info(train_core),
+        "validation_period": _period_info(valid),
+        "test_period": _period_info(test),
         "n_features": len(feat_cols),
         "features": feat_cols,
         "cv": {
@@ -397,54 +468,60 @@ def run_xgboost(features_path: Path) -> None:
     with open(meta_path, "w") as fh:
         json.dump(metadata, fh, indent=2)
 
-    # SHAP analysis
+    # SHAP analysis (only if test not empty)
     print(f"\nSHAP analysis (sample n={SHAP_SAMPLE_N}) —")
-    if len(Xte) == 0:
-        raise ValueError("Empty test set — cannot compute SHAP values.")
+    if test.empty:
+        print("  Test set empty; cannot compute SHAP values. Skipping SHAP plots.")
+    else:
+        if len(x_te) == 0:
+            print("  Test features empty after filtering; skipping SHAP.")
+        else:
+            sample = x_te.sample(
+                n=min(SHAP_SAMPLE_N, len(x_te)), random_state=RANDOM_SEED
+            )
+            explainer = shap.TreeExplainer(final_model)
+            shap_values = explainer.shap_values(sample)
 
-    sample = Xte.sample(n=min(SHAP_SAMPLE_N, len(Xte)), random_state=RANDOM_SEED)
-    explainer = shap.TreeExplainer(final_model)
-    shap_values = explainer.shap_values(sample)
+            # Two-panel: bar (mean |SHAP|) + beeswarm
+            _, axes = plt.subplots(1, 2, figsize=(20, 9))
 
-    # Two-panel: bar (mean |SHAP|) + beeswarm (distribution)
-    fig, axes = plt.subplots(1, 2, figsize=(20, 9))
+            plt.sca(axes[0])
+            shap.summary_plot(
+                shap_values,
+                sample,
+                feature_names=feat_cols,
+                plot_type="bar",
+                show=False,
+                max_display=20,
+            )
+            axes[0].set_title("Mean |SHAP| Value per Feature", fontsize=12)
 
-    plt.sca(axes[0])
-    shap.summary_plot(
-        shap_values,
-        sample,
-        feature_names=feat_cols,
-        plot_type="bar",
-        show=False,
-        max_display=20,
-    )
-    axes[0].set_title("Mean |SHAP| Value per Feature", fontsize=12)
+            plt.sca(axes[1])
+            shap.summary_plot(
+                shap_values,
+                sample,
+                feature_names=feat_cols,
+                plot_type="dot",
+                show=False,
+                max_display=20,
+            )
+            axes[1].set_title("SHAP Value Distribution (Beeswarm)", fontsize=12)
 
-    plt.sca(axes[1])
-    shap.summary_plot(
-        shap_values,
-        sample,
-        feature_names=feat_cols,
-        plot_type="dot",
-        show=False,
-        max_display=20,
-    )
-    axes[1].set_title("SHAP Value Distribution (Beeswarm)", fontsize=12)
-
-    plt.suptitle(
-        f"XGBoost SHAP Analysis — Cityflo Travel Demand\n"
-        f"Test  R²={test_metrics['R2']:.3f}  "
-        f"MAE={test_metrics['MAE']:.3f}  "
-        f"sMAPE={test_metrics['sMAPE']:.1f}%",
-        fontsize=13,
-        fontweight="bold",
-        y=1.01,
-    )
-    plt.tight_layout()
-    shap_path = FIGURES / "xgb_shap_analysis.png"
-    plt.savefig(shap_path, dpi=150, bbox_inches="tight")
-    plt.close()
-    print(f"  SHAP figure → {shap_path}")
+            if test_metrics:
+                title_str = (
+                    f"XGBoost SHAP Analysis — Cityflo Travel Demand\n"
+                    f"Test  R²={test_metrics['R2']:.3f}  "
+                    f"MAE={test_metrics['MAE']:.3f}  "
+                    f"sMAPE={test_metrics['sMAPE']:.1f}%"
+                )
+            else:
+                title_str = "XGBoost SHAP Analysis — Cityflo Travel Demand"
+            plt.suptitle(title_str, fontsize=13, fontweight="bold", y=1.01)
+            plt.tight_layout()
+            shap_path = FIGURES / "xgb_shap_analysis.png"
+            plt.savefig(shap_path, dpi=150, bbox_inches="tight")
+            plt.close()
+            print(f"  SHAP figure → {shap_path}")
 
     # Feature importance — XGBoost gain (top 20)
     imp_df = (
@@ -467,10 +544,13 @@ def run_xgboost(features_path: Path) -> None:
     plt.close()
 
     print("\nXGBoost complete")
-    print(f"  Predictions → {pred_path}")
-    print(f"  Metrics     → {TABLES_DIR / 'xgb_metrics.csv'}")
-    print(f"  Metadata    → {meta_path}")
-    print(f"  Pickle      → {pkl_path}")
+    if pred_path is not None:
+        print(f"  Predictions → {pred_path}")
+    else:
+        print("  No predictions saved.")
+    print(f"  Metrics → {TABLES_DIR / 'xgb_metrics.csv'}")
+    print(f"  Metadata → {meta_path}")
+    print(f"  Model Checkpoint → {pkl_path}")
 
 
 if __name__ == "__main__":

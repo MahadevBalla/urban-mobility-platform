@@ -166,6 +166,7 @@ CBD_LAT = 18.9256
 CBD_LNG = 72.8243
 
 # Model hyper-parameters
+RANDOM_SEED = 42
 XGB_PARAMS = {
     "n_estimators": 500,
     "max_depth": 6,
@@ -179,11 +180,16 @@ XGB_PARAMS = {
     "tree_method": "hist",
     "device": "cuda",  # switch to "cpu" if no GPU
     "random_state": 42,
+    "early_stopping_rounds": 30,
+    "validation_fraction": 0.15,
+    "cv_n_splits": 5,
+    "shap_sample_n": 5000,
 }
 
 STGNN_PARAMS = {
     "hidden_dim": 64,
     "n_layers": 2,
+    "n_heads": 4,  # must divide hidden_dim evenly
     "seq_len": 12,  # 12 × 30 min = 6 h lookback
     "pred_horizon": 4,  # predict next 4 × 30 min
     "epochs": 100,
@@ -191,6 +197,7 @@ STGNN_PARAMS = {
     "lr": 1e-3,
     "dropout": 0.1,
     "weight_decay": 1e-4,
+    "patience": 15,
 }
 
 # Policy Outputs

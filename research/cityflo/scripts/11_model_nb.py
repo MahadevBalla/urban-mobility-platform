@@ -36,16 +36,10 @@ from config import (
     MODEL_TRAIN_END,
     MODEL_VALID_END,
     TABLES_DIR,
+    RANDOM_SEED,
 )
 
-RANDOM_SEED = 42
-
-# Feature columns — audited against 09_feature_engineering.py output
-# Removed from static list : hex_avg_demand, hex_demand_rank
-#   → computed below from training fold only (leakage-safe)
-# Added vs original        : is_peak, dist_cbd_km, lag_2_trip_count,
-#                            lag_week_trip_count, rolling_24h_std,
-#                            precip_3h, doy_sin, doy_cos
+# Feature columns
 FEATURE_COLS: list[str] = [
     # Temporal — cyclical
     "hour_sin",
@@ -230,8 +224,6 @@ def historical_mean_baseline(
 
 # Main
 def run_nb(features_path: Path) -> None:
-    np.random.seed(RANDOM_SEED)
-
     MODELS_DIR.mkdir(parents=True, exist_ok=True)
     TABLES_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -245,13 +237,22 @@ def run_nb(features_path: Path) -> None:
 
     # Temporal split (assertion inside)
     train, valid, test = temporal_split(df, train_end, valid_end, test_start)
+
+    # Print split sizes with empty‑split guard
+    print("Temporal split sizes (before dropna):")
     for name, fold in [("train", train), ("valid", valid), ("test", test)]:
-        lo = fold["time_bin_30min"].min().date()
-        hi = fold["time_bin_30min"].max().date()
-        print(f"  {name:<6}: {len(fold):>10,} rows  ({lo} – {hi})")
+        if fold.empty:
+            print(f"  {name:<6}:         0 rows  (EMPTY)")
+        else:
+            lo = fold["time_bin_30min"].min().date()
+            hi = fold["time_bin_30min"].max().date()
+            print(f"  {name:<6}: {len(fold):>10,} rows  ({lo} – {hi})")
 
     # Leakage-safe hex demand features
     train, valid, test = add_hex_demand_features(train, [train, valid, test])
+
+    # Track row counts before dropna
+    n_before = {"train": len(train), "valid": len(valid), "test": len(test)}
 
     # Drop rows with missing required columns
     required = FEATURE_COLS + [TARGET]
@@ -262,9 +263,15 @@ def run_nb(features_path: Path) -> None:
     train = train.dropna(subset=required)
     valid = valid.dropna(subset=required)
     test = test.dropna(subset=required)
+
+    n_after = {"train": len(train), "valid": len(valid), "test": len(test)}
     print(
-        f"\nAfter dropna  train : {len(train):,}  valid : {len(valid):,}  test : {len(test):,}"
+        "\nRows after dropna  "
+        f"train : {n_after['train']:,} (dropped {n_before['train'] - n_after['train']:,})  "
+        f"valid : {n_after['valid']:,} (dropped {n_before['valid'] - n_after['valid']:,})  "
+        f"test  : {n_after['test']:,} (dropped {n_before['test'] - n_after['test']:,})"
     )
+
     if len(train) == 0:
         raise RuntimeError(
             "No training rows remain after feature filtering. "
@@ -275,10 +282,22 @@ def run_nb(features_path: Path) -> None:
     # Overdispersion check
     disp = check_overdispersion(train[TARGET])
 
-    # Baselines
+    # Baselines (on test set only; validation not used intentionally but can be added)
     print("\nBaselines —")
-    persistence_baseline(test[TARGET].values, test["lag_1_trip_count"].values, "test")
-    historical_mean_baseline(train, test, "test")
+    all_metrics: list[dict] = []
+
+    # Persistence and Historical mean baseline
+    if test.empty:
+        print("  Test set empty, skipping persistence baseline and historical mean baseline.")
+    else:
+        p_metric = persistence_baseline(
+            test[TARGET].values, test["lag_1_trip_count"].values, "test"
+        )
+        if p_metric:
+            all_metrics.append(p_metric)
+        h_metric = historical_mean_baseline(train, test, "test")
+        if h_metric:
+            all_metrics.append(h_metric)
 
     # Fit GLM-NB
     print("\nFitting GLM — NegativeBinomial family ...")
@@ -314,10 +333,12 @@ def run_nb(features_path: Path) -> None:
 
     # Evaluate on validation then test
     print("\nEvaluation —")
-    all_metrics: list[dict] = []
     prediction_frames: list[pd.DataFrame] = []
 
     for split_name, split_df in [("validation", valid), ("test", test)]:
+        if split_df.empty:
+            print(f"  {split_name}: empty — skipping evaluation")
+            continue
         X = sm.add_constant(split_df[FEATURE_COLS].astype(float), has_constant="add")
         y_true = split_df[TARGET].astype(int).values
         y_pred = model.predict(X).values
@@ -333,31 +354,34 @@ def run_nb(features_path: Path) -> None:
         prediction_frames.append(pf)
 
     # Save outputs
-    predictions = pd.concat(prediction_frames, ignore_index=True)
-    pred_path = TABLES_DIR / "nb_predictions.parquet"
-    predictions.to_parquet(pred_path, index=False, compression="zstd")
+    if prediction_frames:
+        predictions = pd.concat(prediction_frames, ignore_index=True)
+        pred_path = TABLES_DIR / "nb_predictions.parquet"
+        predictions.to_parquet(pred_path, index=False, compression="zstd")
+        print(f"  Predictions → {pred_path}")
+    else:
+        print("  No predictions to save (both validation and test empty).")
 
     metrics_df = pd.DataFrame(all_metrics)
     metrics_df.to_csv(TABLES_DIR / "nb_metrics.csv", index=False)
+    print(f"  Metrics     → {TABLES_DIR / 'nb_metrics.csv'}")
+
+    # Build metadata (with empty‑split guards)
+    def _period_info(fold):
+        if fold.empty:
+            return {"start": None, "end": None, "n_rows": 0}
+        return {
+            "start": str(fold["time_bin_30min"].min().date()),
+            "end": str(fold["time_bin_30min"].max().date()),
+            "n_rows": len(fold),
+        }
 
     metadata = {
         "model": "GLM-NegativeBinomial",
         "random_seed": RANDOM_SEED,
-        "train_period": {
-            "start": str(train["time_bin_30min"].min().date()),
-            "end": str(train["time_bin_30min"].max().date()),
-            "n_rows": len(train),
-        },
-        "validation_period": {
-            "start": str(valid["time_bin_30min"].min().date()),
-            "end": str(valid["time_bin_30min"].max().date()),
-            "n_rows": len(valid),
-        },
-        "test_period": {
-            "start": str(test["time_bin_30min"].min().date()),
-            "end": str(test["time_bin_30min"].max().date()),
-            "n_rows": len(test),
-        },
+        "train_period": _period_info(train),
+        "validation_period": _period_info(valid),
+        "test_period": _period_info(test),
         "n_features": len(FEATURE_COLS),
         "features": FEATURE_COLS,
         "overdispersion": disp,
@@ -375,11 +399,9 @@ def run_nb(features_path: Path) -> None:
     with open(meta_path, "w") as fh:
         json.dump(metadata, fh, indent=2)
 
+    print(f"  Metadata → {meta_path}")
+    print(f"  Model Checkpoint → {pkl_path}")
     print("\nNB complete")
-    print(f"  Predictions → {pred_path}")
-    print(f"  Metrics     → {TABLES_DIR / 'nb_metrics.csv'}")
-    print(f"  Metadata    → {meta_path}")
-    print(f"  Pickle      → {pkl_path}")
 
 
 if __name__ == "__main__":
