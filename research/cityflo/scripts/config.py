@@ -11,6 +11,7 @@ Import in every script:
 
 import os
 from pathlib import Path
+
 import polars as pl
 
 # Repository root
@@ -28,12 +29,15 @@ TABLES_DIR = OUTPUTS / "tables"
 for _d in [DATA_PROCESSED, DATA_INTERIM, FIGURES, MODELS_DIR, TABLES_DIR]:
     _d.mkdir(parents=True, exist_ok=True)
 
-# GPS raw files
+# GPS raw files — legacy format (Sep 2021 – Jan 2024), no CSV header
 GPS_FILES = [
     DATA_RAW / "before_2022-10-22_698096e5f4994518a37a0b9c59bb9756",
     DATA_RAW / "before_2022-10-22_698096e5f4994518a37a0b9c59bb9756_part2",
     DATA_RAW / "before_2022-10-22_698096e5f4994518a37a0b9c59bb9756_part3",
 ]
+
+# GPS raw files — current format (Oct 2024 – Mar 2026), CSV with header
+CURRENT_DATA_DIR = DATA_RAW / "2024-2026"
 
 # Reference data
 STOPS_FILE = DATA_PROCESSED / "stops_clean.csv"
@@ -41,7 +45,7 @@ TRIPS_FILE = DATA_PROCESSED / "trips_clean.csv"
 WEATHER_DIR = DATA_RAW / "WeatherData" / "mumbai_openmeteo_10km_grid_data"
 WARD_KML = DATA_RAW / "mumbai_wards.kml"
 
-# Study window
+# Default study window (legacy dataset)
 STUDY_START = "2021-09-01"
 STUDY_END = "2022-10-22"
 
@@ -53,7 +57,7 @@ MODEL_TRAIN_END = "2022-07-31"  # ~10 months of training data
 MODEL_VALID_END = "2022-08-31"  # August = validation
 MODEL_TEST_START = "2022-09-01"  # September–October = held-out test
 
-# GPS schema
+# GPS schema — legacy format
 LEGACY_COLS = [
     "id",  # pos  1  unique int, sequential
     "lat",  # pos  2  WGS84 latitude
@@ -89,6 +93,23 @@ LEGACY_DTYPES = {
 }
 
 LEGACY_DROP_COLS = ["created", "c10", "c11", "c13", "c14", "bearing"]
+
+# GPS schema — current format
+CURRENT_DTYPES = {
+    "id": pl.Int64,
+    "lat": pl.Float64,
+    "lng": pl.Float64,
+    "source": pl.Utf8,
+    "speed": pl.Float64,
+    "vehicle_id": pl.Int64,
+    "ride_date": pl.Utf8,
+    "meta_data": pl.Utf8,
+    "created": pl.Utf8,
+    "timestamp": pl.Utf8,
+    "deviation_in_seconds": pl.Float64,
+}
+
+CURRENT_DROP_COLS = ["created", "meta_data", "ride_date"]
 
 # GPS quality filters
 MUMBAI_BBOX = {

@@ -1,15 +1,11 @@
 """
 01_2_finalize_pings.py
 
-Merges bucket parquet files created by 01_1_ingest_legacy.py,
-deduplicates GPS pings, applies GPS jump filtering,
-and writes one finalized parquet per bucket.
+Merges bucket parquet files, removes duplicate GPS pings, applies GPS jump
+filtering, and writes one finalized parquet per bucket.
 
-Input:
-    *_bucket{N}.parquet
-
-Output:
-    pings_clean_bucket{N}.parquet
+Usage:
+    python scripts/01_2_finalize_pings.py --bucket_id 0
 """
 
 import argparse
@@ -17,10 +13,9 @@ from pathlib import Path
 
 import polars as pl
 
-from config import GPS_JUMP_MAX_KMH
+from config import DATA_PROCESSED, GPS_JUMP_MAX_KMH
 
-
-PROCESSED_DIR = Path("data/processed")
+PROCESSED_DIR = DATA_PROCESSED
 
 
 def apply_gps_jump_filter(lf: pl.LazyFrame) -> pl.LazyFrame:
@@ -28,9 +23,7 @@ def apply_gps_jump_filter(lf: pl.LazyFrame) -> pl.LazyFrame:
     Remove pings whose implied speed from previous ping
     exceeds GPS_JUMP_MAX_KMH.
     """
-
     R = 6371.0
-
     return (
         lf.sort(["vehicle_id", "timestamp_ist"])
         .with_columns(
@@ -93,25 +86,31 @@ def apply_gps_jump_filter(lf: pl.LazyFrame) -> pl.LazyFrame:
     )
 
 
+def _find_bucket_input_files(bucket_id: int) -> list[Path]:
+    """
+    Return raw ingestion outputs for a bucket from both legacy and
+    current-format ingestion.
+    """
+    legacy_files = sorted(PROCESSED_DIR.glob(f"before*_bucket{bucket_id}.parquet"))
+    current_files = sorted(PROCESSED_DIR.glob(f"*.csv_bucket{bucket_id}.parquet"))
+
+    return sorted(set(legacy_files + current_files))
+
+
 def main(bucket_id: int):
-
-    files = sorted(PROCESSED_DIR.glob(f"before*_bucket{bucket_id}.parquet"))
-
+    files = _find_bucket_input_files(bucket_id)
     if not files:
         raise FileNotFoundError(f"No parquet files found for bucket {bucket_id}")
 
     print(f"\nBucket {bucket_id}")
     print(f"Found {len(files)} files")
-
     for f in files:
         print(f"  {f.name}")
 
     lf = pl.scan_parquet([str(f) for f in files])
 
     before_rows = lf.select(pl.len()).collect().item()
-
     before_vehicles = lf.select(pl.col("vehicle_id").n_unique()).collect().item()
-
     print(f"\nRows before dedupe: {before_rows:,}")
     print(f"Vehicles          : {before_vehicles}")
 
@@ -122,28 +121,24 @@ def main(bucket_id: int):
     ).drop("ts_utc")
 
     after_dedupe = lf.select(pl.len()).collect().item()
-
     print(f"Rows after dedupe : {after_dedupe:,} (-{before_rows - after_dedupe:,})")
 
     print("\nApplying GPS jump filter...")
     lf = apply_gps_jump_filter(lf)
 
     out_file = PROCESSED_DIR / f"pings_clean_bucket{bucket_id}.parquet"
-
     lf.sink_parquet(
         out_file,
         compression="zstd",
     )
 
     final_rows = pl.scan_parquet(out_file).select(pl.len()).collect().item()
-
     final_vehicles = (
         pl.scan_parquet(out_file)
         .select(pl.col("vehicle_id").n_unique())
         .collect()
         .item()
     )
-
     print(f"\nWritten -> {out_file.name}")
     print(f"Final rows     : {final_rows:,}")
     print(f"Final vehicles : {final_vehicles}")
@@ -151,13 +146,10 @@ def main(bucket_id: int):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-
     parser.add_argument(
         "--bucket_id",
         type=int,
         required=True,
     )
-
     args = parser.parse_args()
-
     main(args.bucket_id)

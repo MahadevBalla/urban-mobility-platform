@@ -1,6 +1,6 @@
 # Dataset — Cityflo Mobility Analysis
 
-Four data assets underpin the pipeline: legacy GPS location logs, a stops reference file, a trips schedule file, and an Open-Meteo weather grid. This document covers schemas, confirmed field semantics, EDA findings, and the cleaning decisions made before any pipeline script runs.
+Five data assets underpin the pipeline: legacy GPS location logs, current-format GPS location logs, a stops reference file, a trips schedule file, and an Open-Meteo weather grid. This document covers schemas, confirmed field semantics, EDA findings, and the cleaning decisions made before any pipeline script runs.
 
 ## GPS Location Data (Legacy Format)
 
@@ -63,6 +63,38 @@ Inter-ping gap distribution (within same vehicle):
 | p99 | ~18 min |
 
 The gap distribution is bimodal — normal within-trip variation falls below ~10 minutes, with inter-trip idle periods clustering above 20 minutes. The segmentation threshold is set at 20 minutes (`GAP_THRESHOLD_MIN`), which captures 99.9% of transitions as within-segment.
+
+## GPS Location Data (Current Format)
+
+A second GPS export, spanning October 2024 through March 2026, was added later to extend the pipeline beyond the original legacy study window. It originates from a different underlying table (`vehiclelocationlog`, versus the legacy `vehicles_vehiclelocation` table, since dropped) and uses a different file layout and schema.
+
+Unlike the legacy files, current-format files have a header row — but only on the first file of each export group. Files are partitioned by month or half-month, with continuation files for exports exceeding ~6 GB:
+
+- `YYYY-MM.csv` — full-month export
+- `YYYY-MM-a.csv` / `YYYY-MM-b.csv` — half-month export (days 1–15 / 16–end)
+- `*_part2`, `*_part3`, ... — continuation of the preceding file in the same group; header-less
+
+`01_1_ingest_current.py` reads the header from each group's primary file directly (rather than assuming a fixed column order) and reuses it for that group's continuation files, so column alignment does not depend on the documented order matching the actual file layout.
+
+| Field | Type | Description |
+| --- | --- | --- |
+| `id` | int | Unique record ID |
+| `lat` | float64 | WGS84 latitude |
+| `lng` | float64 | WGS84 longitude |
+| `source` | string | GPS hardware type (documented as text, e.g. `"2"`, `"4"`); cast to `int32` during ingestion for consistency with the legacy field |
+| `speed` | float64 | Speed in km/h; may be null |
+| `vehicle_id` | int64 | Internal vehicle identifier |
+| `ride_date` | date | Ride date as recorded at source — not used directly; see note below |
+| `meta_data` | JSON string | Vehicle registration, odometer, device ID, etc. — not used by the pipeline, dropped during ingestion |
+| `created` | timestamptz | DB ingestion timestamp (UTC) — dropped, same role as legacy `created` |
+| `timestamp` | timestamptz | GPS event time (UTC) — same role as legacy `timestamp` |
+| `deviation_in_seconds` | int | GPS vs. DB time difference — renamed to `deviation_s` during ingestion to match the legacy field name |
+
+`ride_date` as provided at source is not used. It is instead regenerated from `timestamp` after IST conversion, matching how the legacy format (which has no source `ride_date` at all) derives the field. This keeps the definition of "ride date" identical across both formats rather than relying on two potentially different upstream conventions.
+
+`01_1_ingest_current.py` applies the same quality filters as the legacy ingestion script and emits the canonical pipeline schema expected by downstream stages.
+
+No EDA equivalent to `notebooks/02_gps_data_audit.ipynb` has yet been run on the current-format data (filter yield rates, snap rate against `stops_clean.csv`, inter-ping gap distribution, etc.). The filter thresholds documented above for the legacy data are applied as-is on the assumption that GPS hardware behavior is broadly similar across formats, but this has not been independently confirmed for the current export and should be treated as provisional until audited.
 
 ## Stops Reference Data
 
