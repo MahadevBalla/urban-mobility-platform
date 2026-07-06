@@ -21,16 +21,10 @@ practice, and avoids penalizing a trip that is running consistently
 early/late but otherwise matches the timetable shape. Falls back to a
 start-time-only comparison when too few timestamped stops are shared.
 
-Known limitation: this remains a two-stage discrete pipeline rather
-than a joint probabilistic model (e.g. HMM/Viterbi map matching). Given
-the candidate set sizes here (tens of templates, <=40 stops), that is
-not a practical concern.
-
 Input:
     pings_snapped.parquet
     route_catalog.parquet
     trips_clean.csv
-
 Output:
     segments_inferred.parquet
 """
@@ -69,6 +63,7 @@ from config import (
     ROUTE_MAX_TRIP_RESIDUAL_MIN,
 )
 
+
 # Parsing helpers
 _ROUTE_PAIR_RE = re.compile(r"(\d+)\s*,\s*(\d{6}|\d{2}:\d{2}:\d{2})")
 
@@ -91,7 +86,7 @@ def parse_trip_route(route_str: str) -> List[Tuple[int, str]]:
                     t = normalize_time_str(item[1])
                     out.append((sid, t))
             return out
-        except Exception:
+        except (SyntaxError, ValueError):
             pass
 
     matches = _ROUTE_PAIR_RE.findall(s)
@@ -132,8 +127,9 @@ def parse_ts_to_minutes(ts: str) -> float:
 def ts_to_date_str(ts: str) -> str:
     """Normalize any timestamp/date string to YYYY-MM-DD.
 
-    Used for both segment timestamps and trip_date so the (date,
-    template_id) lookup key is consistent on both sides of the join.
+    Retained for segment-level date bookkeeping (seg_start_date,
+    seg_end_date on the output rows) even though trip-instance lookup no
+    longer keys on date.
     """
     s = str(ts).strip()
     if not s or s.lower() in ("nan", "nat", "none"):
@@ -337,6 +333,7 @@ def compute_match_score(observed: List[int], tmpl: dict) -> dict:
     stop-id sequences, normalized by the longer of the two sequences so
     a short observation cannot trivially score 1.0 against a much
     longer template. This is `confidence` / the primary rank key.
+
     Overlap / coverage / jaccard / direction / endpoint are diagnostics
     and secondary tie-breakers only.
     """
@@ -468,7 +465,16 @@ def build_trip_template_index(
     stop_to_templates: Dict[int, set],
     min_shared_stops: int = DEFAULT_MIN_SHARED_STOPS,
     top_n: int = DEFAULT_TOP_N_CANDIDATES,
-) -> Tuple[pd.DataFrame, Dict[Tuple[str, int], List[dict]]]:
+) -> Tuple[pd.DataFrame, Dict[int, List[dict]]]:
+    """
+    Builds the trip-instance index used by infer_trip_id.
+
+    Indexed by template_id only.
+
+    Trip dates are retained for bookkeeping and diagnostics but are not
+    used during lookup because trip selection is based on time-of-day
+    schedule residuals rather than calendar dates.
+    """
     trips_df = pd.read_csv(trips_path)
     trips_df = trips_df.rename(
         columns={
@@ -495,13 +501,13 @@ def build_trip_template_index(
     trips_df = trips_df[trips_df["template_id"].notna()].copy()
     trips_df["template_id"] = trips_df["template_id"].astype(int)
 
-    trip_idx: Dict[Tuple[str, int], List[dict]] = defaultdict(list)
+    trip_idx: Dict[int, List[dict]] = defaultdict(list)
     for row in trips_df.itertuples(index=False):
-        key = (row.trip_date, int(row.template_id))
         sched_stop_min = {sid: time_str_to_minutes(t) for sid, t in row.parsed}
-        trip_idx[key].append(
+        trip_idx[int(row.template_id)].append(
             {
                 "trip_id": row.trip_id,
+                "trip_date": row.trip_date,  # retained for debugging only
                 "sched_start_min": row.sched_start_min,
                 "sched_stop_min": sched_stop_min,
                 "template_assign_confidence": row.template_assign_confidence,
@@ -511,44 +517,38 @@ def build_trip_template_index(
     for key in trip_idx:
         trip_idx[key] = sorted(trip_idx[key], key=lambda x: x["sched_start_min"])
 
-    print(f"  Trip index keys (date,template): {len(trip_idx):,}")
+    n_instances = sum(len(v) for v in trip_idx.values())
+    print(f"  Trip index keys (template only): {len(trip_idx):,}")
+    print(f"  Total trip instances indexed   : {n_instances:,}")
+    if trip_idx:
+        max_key = max(trip_idx, key=lambda k: len(trip_idx[k]))
+        print(
+            f"  Largest candidate pool         : template {max_key} "
+            f"({len(trip_idx[max_key]):,} trip instances)"
+        )
     return trips_df, trip_idx
 
 
 def infer_trip_id(
     template_id: int,
-    seg_start_date: str,
-    seg_end_date: str,
     seg_start_min: float,
     stop_time_map: Dict[int, float],
-    trip_index: Dict[Tuple[str, int], List[dict]],
+    trip_index: Dict[int, List[dict]],
     window_min: int,
     min_shared_timed_stops: int = 2,
     max_residual_min: float = ROUTE_MAX_TRIP_RESIDUAL_MIN,
 ) -> Tuple[Optional[int], Optional[float]]:
-    """Select the scheduled trip instance on `template_id`.
+    """Select the scheduled trip instance for a matched route template.
 
-    For each candidate trip, estimate a constant offset delta (median
-    signed difference between observed and scheduled stop times over
-    shared stops) representing the trip's overall delay/earliness, then
-    score the trip by the residual dispersion AFTER removing delta. A
-    bus running consistently late still matches its own timetable shape
-    well and should not be penalized for the offset itself.
+    Candidates are all scheduled trips assigned to `template_id`. When at
+    least `min_shared_timed_stops` are available, estimate a constant
+    delay/earliness offset from the shared stops and rank candidates by the
+    remaining timing residual. Otherwise, fall back to comparing segment
+    start time against the scheduled departure time.
 
-    If two trips have identical residuals (rare, but possible), the one
-    with the smaller absolute offset |delta| is preferred as a deterministic
-    tie-breaker favoring the candidate requiring the least temporal adjustment.
-    Falls back to a start-time-only comparison when fewer than
-    `min_shared_timed_stops` stops are shared.
-
-    Acceptance requires the residual to be within both `window_min`
-    (day-level sanity bound) and `max_residual_min` (tighter bound
-    applied only to the timing-residual path, since it is the stronger
-    signal).
+    Returns `(trip_id, residual_minutes)` if the best candidate satisfies
+    the configured residual threshold; otherwise returns `(None, None)`.
     """
-    candidate_dates = [seg_start_date]
-    if seg_end_date != seg_start_date:
-        candidate_dates.append(seg_end_date)
 
     def wrapped_diff(a: float, b: float) -> float:
         return min(abs(a - b), abs((a + 1440) - b), abs(a - (b + 1440)))
@@ -562,40 +562,37 @@ def infer_trip_id(
     best_score = (float("inf"), float("inf"))
     best_is_timing = False
 
-    for dt in candidate_dates:
-        candidates = trip_index.get((dt, template_id), [])
-        for trip in candidates:
-            sched_stop_min = trip.get("sched_stop_min", {})
-            shared_stops = set(stop_time_map) & set(sched_stop_min)
+    for trip in trip_index.get(template_id, []):
+        sched_stop_min = trip.get("sched_stop_min", {})
+        shared_stops = set(stop_time_map) & set(sched_stop_min)
+        if len(shared_stops) >= min_shared_timed_stops:
+            signed_diffs = [
+                wrapped_signed_diff(stop_time_map[sid], sched_stop_min[sid])
+                for sid in shared_stops
+            ]
+            delta = float(np.median(signed_diffs))
+            residual = float(np.mean([abs(d - delta) for d in signed_diffs]))
+            is_timing = True
+            score = (residual, abs(delta))
+        else:
+            residual = wrapped_diff(seg_start_min, trip["sched_start_min"])
+            is_timing = False
+            score = (residual, abs(residual))
 
-            if len(shared_stops) >= min_shared_timed_stops:
-                signed_diffs = [
-                    wrapped_signed_diff(stop_time_map[sid], sched_stop_min[sid])
-                    for sid in shared_stops
-                ]
-                delta = float(np.median(signed_diffs))
-                residual = float(np.mean([abs(d - delta) for d in signed_diffs]))
-                is_timing = True
-                score = (residual, abs(delta))
-            else:
-                residual = wrapped_diff(seg_start_min, trip["sched_start_min"])
-                is_timing = False
-                score = (residual, abs(residual))
+        # Compare: prefer timing-based matches, then smaller (residual, |delta|)
+        if best_trip_id is None:
+            better = True
+        elif is_timing and not best_is_timing:
+            better = True
+        elif not is_timing and best_is_timing:
+            better = False
+        else:
+            better = score < best_score
 
-            # Compare: prefer timing-based matches, then smaller (residual, |delta|)
-            if best_trip_id is None:
-                better = True
-            elif is_timing and not best_is_timing:
-                better = True
-            elif not is_timing and best_is_timing:
-                better = False
-            else:
-                better = score < best_score
-
-            if better:
-                best_trip_id = trip["trip_id"]
-                best_score = score
-                best_is_timing = is_timing
+        if better:
+            best_trip_id = trip["trip_id"]
+            best_score = score
+            best_is_timing = is_timing
 
     if best_trip_id is None:
         return None, None
@@ -831,6 +828,12 @@ def run_inference(
     print(f"Extracting segment sequences (min_obs_stops={min_obs_stops}) ...")
     segs = extract_segment_sequences(snapped_path, min_obs_stops)
     print(f"Segments to match: {len(segs):,}")
+    print("segs['n_obs_stops'].describe:")
+    print(segs["n_obs_stops"].describe())
+    print("\nTemplate length distribution:")
+    print(pd.Series([t["n_stops"] for t in templates.values()]).describe())
+    print("\nAverage snap distance:")
+    print(segs["avg_snap_distance_m"].describe())
 
     results = []
     total_segments = len(segs)
@@ -938,8 +941,6 @@ def run_inference(
         if best_sc["confidence"] >= ROUTE_HIGH_CONFIDENCE:
             trip_id, time_diff = infer_trip_id(
                 template_id=best_tid,
-                seg_start_date=row.seg_start_date,
-                seg_end_date=row.seg_end_date,
                 seg_start_min=row.seg_start_min,
                 stop_time_map=row.stop_time_map,
                 trip_index=trip_index,
@@ -1045,7 +1046,6 @@ if __name__ == "__main__":
     ap.add_argument("--validation_keep_fraction", type=float, default=0.6)
     ap.add_argument("--validation_corrupt_prob", type=float, default=0.0)
     args = ap.parse_args()
-
 
     if args.run_validation:
         templates = load_templates(Path(args.catalog))

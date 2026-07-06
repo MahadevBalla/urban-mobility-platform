@@ -29,14 +29,14 @@ TABLES_DIR = OUTPUTS / "tables"
 for _d in [DATA_PROCESSED, DATA_INTERIM, FIGURES, MODELS_DIR, TABLES_DIR]:
     _d.mkdir(parents=True, exist_ok=True)
 
-# GPS raw files — legacy format (Sep 2021 – Jan 2024), no CSV header
+# Legacy GPS archive (2021–2024)
 GPS_FILES = [
     DATA_RAW / "before_2022-10-22_698096e5f4994518a37a0b9c59bb9756",
     DATA_RAW / "before_2022-10-22_698096e5f4994518a37a0b9c59bb9756_part2",
     DATA_RAW / "before_2022-10-22_698096e5f4994518a37a0b9c59bb9756_part3",
 ]
 
-# GPS raw files — current format (Oct 2024 – Mar 2026), CSV with header
+# Current GPS archive (2024–2026)
 CURRENT_DATA_DIR = DATA_RAW / "2024-2026"
 
 # Reference data
@@ -45,7 +45,7 @@ TRIPS_FILE = DATA_PROCESSED / "trips_clean.csv"
 WEATHER_DIR = DATA_RAW / "WeatherData" / "mumbai_openmeteo_10km_grid_data"
 WARD_KML = DATA_RAW / "mumbai_wards.kml"
 
-# Default study window (legacy dataset)
+# Default study period
 STUDY_START = "2021-09-01"
 STUDY_END = "2022-10-22"
 
@@ -135,7 +135,7 @@ EARTH_R_M = 6_371_000.0  # metres; used for haversine distance calculations
 # Route inference
 ROUTE_MIN_OBS_STOPS = 4
 ROUTE_MIN_CONFIDENCE = 0.20
-ROUTE_HIGH_CONFIDENCE = 0.50
+ROUTE_HIGH_CONFIDENCE = 0.30
 ROUTE_TRIP_WINDOW_MIN = 45
 DEFAULT_MIN_SHARED_STOPS = 2
 DEFAULT_TOP_N_CANDIDATES = 15

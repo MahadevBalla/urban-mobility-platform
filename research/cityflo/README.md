@@ -1,14 +1,24 @@
 # Cityflo Mobility Analysis
 
-GPS-based travel demand pipeline for Cityflo's Mumbai bus network. Processes legacy vehicle location pings into OD matrices, service reliability metrics, and model-ready travel demand features — then trains and evaluates three forecasting models.
+GPS-based travel demand pipeline for Cityflo's Mumbai bus network. Processes vehicle location data from both historical and current GPS exports into OD matrices, service reliability metrics, and model-ready travel demand features — then trains and evaluates three forecasting models.
 
-**Study window:** September 2021 – October 2022  
-**Data:** ~165M GPS pings, 6,115 stops, 135,125 scheduled trips, 15-point weather grid
+**Coverage:** September 2021 – January 2024 (legacy archive) and October 2024 – March 2026 (current archive)
+**Data:** ~336 GB GPS logs, 6,115 stops, 185,452 scheduled trips, 15-point weather grid
 
 Full documentation:
 
 - [`docs/cityflo/dataset.md`](../../docs/cityflo/dataset.md) — data schemas, EDA findings, cleaning decisions
 - [`docs/cityflo/methodology.md`](../../docs/cityflo/methodology.md) — pipeline design, script breakdown, configuration reference
+
+## Supported GPS Data Formats
+
+The ingestion pipeline supports both Cityflo vehicle location exports.
+
+- **Historical export (2022–2024 archive)** — header-less CSVs from the retired `vehicles_vehiclelocation` table covering approximately September 2021–January 2024.
+
+- **Current export (2024–2026 archive)** — headered CSVs from `vehiclelocationlog` covering October 2024–March 2026.
+
+Both formats are normalized into a common canonical schema before downstream processing.
 
 ## Repository Layout
 
@@ -23,8 +33,9 @@ research/cityflo/
 │   ├── figures/        model plots, EDA dashboards, spatial maps
 │   ├── models/         saved model files and metadata JSON
 │   └── tables/         predictions, evaluation metrics, network summary
-├── scripts/            pipeline scripts (01–15) and config.py
+├── scripts/            pipeline scripts and configuration
 ├── slurm/              SLURM job scripts for HPC execution
+├── dry_run.py          end-to-end pipeline smoke test
 └── req.txt             Python dependencies
 ```
 
@@ -104,12 +115,20 @@ jupyter notebook notebooks/02_gps_data_audit.ipynb
 The pipeline scripts then run in the following order. Scripts 06 and 07 are independent once `segments_inferred.parquet` is available and can run in parallel.
 
 ```bash
-# Route catalog (fast, no GPS dependency — run first)
+# Route catalog
 python scripts/02_route_catalog.py
 
-# GPS ingestion (single-machine, all data in one bucket)
+# Historical GPS archive
 python scripts/01_1_ingest_legacy.py --bucket_id 0 --bucket_count 1
+
+# Current GPS archive
+python scripts/01_1_ingest_current.py --bucket_id 0 --bucket_count 1 \
+    --study_start 2024-10-01 \
+    --study_end 2026-03-31
+
+# Merge all ingested buckets
 python scripts/01_2_finalize_pings.py --bucket_id 0
+
 python scripts/01_3_merge_buckets.py
 
 # Or on HPC (8 parallel buckets via SLURM):
@@ -163,4 +182,4 @@ sbatch slurm/09_feature_engineering.slurm
 sbatch slurm/13_model_stgnn.slurm
 ```
 
-All parameters are in `scripts/config.py`. Changing a parameter requires re-running from the first script that reads it — the methodology doc has the dependency chain.
+All configurable pipeline parameters are defined in `scripts/config.py`. Changes generally require re-running from the earliest pipeline stage that consumes the modified parameter.

@@ -4,7 +4,7 @@ Five data assets underpin the pipeline: legacy GPS location logs, current-format
 
 ## GPS Location Data (Legacy Format)
 
-The legacy export covers September 2021 through January 2024, split across four file groups by snapshot date. Each group may have multiple part files representing a single continuous DB export. The current pipeline uses only the `before_2022-10-22` group (three parts, ~17 GB total), which covers September 2021 through October 2022.
+The legacy export covers September 2021 through January 2024, split across dated snapshot exports. Each group may have multiple part files representing a single continuous DB export. The current pipeline uses only the `before_2022-10-22` group (three parts, ~17 GB total), covering September 2021 through October 2022.
 
 Files have no header row. Columns are positional.
 
@@ -52,7 +52,7 @@ The snap rate against `stops_clean.csv` using Haversine nearest-neighbour:
 | 300 m | 82% |
 | 500 m | 90% |
 
-The pipeline uses 300 m as the snap threshold (`SNAP_THRESHOLD_M` in `config.py`).
+The pipeline uses 200 m as the snap threshold (`SNAP_THRESHOLD_M` in `config.py`).
 
 Inter-ping gap distribution (within same vehicle):
 
@@ -94,7 +94,7 @@ Unlike the legacy files, current-format files have a header row — but only on 
 
 `01_1_ingest_current.py` applies the same quality filters as the legacy ingestion script and emits the canonical pipeline schema expected by downstream stages.
 
-No EDA equivalent to `notebooks/02_gps_data_audit.ipynb` has yet been run on the current-format data (filter yield rates, snap rate against `stops_clean.csv`, inter-ping gap distribution, etc.). The filter thresholds documented above for the legacy data are applied as-is on the assumption that GPS hardware behavior is broadly similar across formats, but this has not been independently confirmed for the current export and should be treated as provisional until audited.
+No EDA equivalent to `notebooks/02_gps_data_audit.ipynb` has yet been run on the current-format data (filter yield rates, snap rate against `stops_clean.csv`, inter-ping gap distribution, etc.). The same filter thresholds used for the legacy data are currently applied to the new-format archive, based on the assumption that GPS hardware behavior is broadly similar across formats, but this has not been independently confirmed for the current export and should be treated as provisional until audited.
 
 ## Stops Reference Data
 
@@ -130,7 +130,7 @@ Total: 6,115 stops. Valid for snapping: 6,093.
 [(142, '19:30:00'), (152, '19:30:00'), (5301, '19:34:00'), ...]
 ```
 
-Parse with `ast.literal_eval`. Do not use `json.loads` or regex — the format is a Python literal, not JSON. Scheduled times are in IST.
+Parse with `ast.literal_eval`; the format is a Python literal rather than JSON. Scheduled times are in IST.
 
 `trips.csv` has no `vehicle_id` column. There is no direct join key between GPS pings and scheduled trips. Route inference (`05_route_inference.py`) bridges this gap by matching observed GPS stop sequences against route templates.
 
