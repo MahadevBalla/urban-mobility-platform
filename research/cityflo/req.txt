@@ -8,7 +8,7 @@ h3
 fiona
 xgboost
 torch
-scipy.sparse
+scipy
 statsmodels
 shap
 matplotlib
