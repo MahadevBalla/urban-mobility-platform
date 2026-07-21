@@ -40,16 +40,11 @@ from config import (
 )
 
 # Feature columns
-FEATURE_COLS: list[str] = [
-    # Temporal — cyclical
+FEATURE_COLS_REQUIRED: list[str] = [
     "hour_sin",
     "hour_cos",
     "dow_sin",
     "dow_cos",
-    "month_sin",
-    "month_cos",
-    "doy_sin",
-    "doy_cos",
     # Temporal — binary
     "is_weekend",
     "is_peak",
@@ -59,12 +54,21 @@ FEATURE_COLS: list[str] = [
     # Trip geography
     "trip_distance_km",
     "dist_cbd_km",
-    # Reliability (from 07)
     "origin_headway_reliability",
     "origin_headway_cv",
+    "lag_1_trip_count",
+    "rolling_24h_mean",
+    "hex_avg_demand",
+    "hex_demand_rank",
+]
+
+FEATURE_COLS_OPTIONAL: list[str] = [
     "mean_delay_min",
     "on_time_pct",
-    # Weather (from 08 — engineered columns only)
+    "lag_2_trip_count",
+    "lag_day_trip_count",
+    "lag_week_trip_count",
+    "rolling_24h_std",
     "log_precip",
     "precip_3h",
     "temperature_2m",
@@ -72,17 +76,10 @@ FEATURE_COLS: list[str] = [
     "is_heavy_rain",
     "heat_stress",
     "weather_severity",
-    # Lag / rolling demand
-    "lag_1_trip_count",
-    "lag_2_trip_count",
-    "lag_day_trip_count",
-    "lag_week_trip_count",
-    "rolling_24h_mean",
-    "rolling_24h_std",
-    # Leakage-safe hex demand (appended dynamically after split)
-    "hex_avg_demand",
-    "hex_demand_rank",
 ]
+FEATURE_COLS = FEATURE_COLS_REQUIRED + FEATURE_COLS_OPTIONAL
+
+
 TARGET = "trip_count"
 
 
@@ -251,11 +248,19 @@ def run_nb(features_path: Path) -> None:
     # Leakage-safe hex demand features
     train, valid, test = add_hex_demand_features(train, [train, valid, test])
 
+    for col in FEATURE_COLS_OPTIONAL:
+        if col in train.columns:
+            median = train[col].median(skipna=True)
+            fill_val = 0.0 if pd.isna(median) else median
+            train[col] = train[col].fillna(fill_val)
+            valid[col] = valid[col].fillna(fill_val)
+            test[col] = test[col].fillna(fill_val)
+
     # Track row counts before dropna
     n_before = {"train": len(train), "valid": len(valid), "test": len(test)}
 
     # Drop rows with missing required columns
-    required = FEATURE_COLS + [TARGET]
+    required = FEATURE_COLS_REQUIRED + [TARGET]
     print("\nMissing values (train):")
     print(train[required].isna().sum().sort_values(ascending=False))
     print("\nMissing percentage (train):")

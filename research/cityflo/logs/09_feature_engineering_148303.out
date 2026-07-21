@@ -1,0 +1,33 @@
+=================================================
+09_feature_engineering.py
+Started: Thu Jul  9 16:26:16 IST 2026
+Node   : cn39-a40.prajna.iitb.ac.in
+=================================================
+
+Input:
+-rw-r--r-- 1 25d0295 ride 2.2M Jul  9 16:03 data/processed/od_agg.parquet
+-rw-r--r-- 1 25d0295 ride 2.7M Jul  9 16:05 data/processed/headway_stats.parquet
+-rw-r--r-- 1 25d0295 ride 181K Jul  9 16:03 data/processed/service_supply.parquet
+-rw-r--r-- 1 25d0295 ride 4.6K Jul  9 16:05 data/processed/schedule_adherence_stats.parquet
+-rw-r--r-- 1 25d0295 ride 2.2G Jul  9 16:20 data/processed/weather_stop_hourly.parquet
+
+   total_rows  hw_matches  sched_matches
+0       95022       85276            359
+Joining weather (nearest hour, DuckDB-native)...
+  Rows after weather join : 95,022
+Fetching joined result for H3 / CBD-distance features...
+Assigning H3 cells …
+Computing dist_cbd_km …
+
+Features master  →  /home/ride/25d0295/urban-mobility-platform/research/cityflo/data/processed/features_master.parquet
+  Rows : 95,022
+  Cols : 80
+  Weather coverage     : 74.8 %
+  dist_cbd_km range    : 0.1 – 46.9 km
+  H3 hexes (origin)    : 498
+  H3 resolution        : 8
+
+Output:
+-rw-r--r-- 1 25d0295 ride 7.9M Jul  9 16:26 data/processed/features_master.parquet
+
+Finished: Thu Jul  9 16:26:32 IST 2026

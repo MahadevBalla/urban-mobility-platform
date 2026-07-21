@@ -1,0 +1,6 @@
+Traceback (most recent call last):
+  File "/home/ride/25d0295/urban-mobility-platform/research/cityflo/scripts/12_model_xgboost.py", line 566, in <module>
+    run_xgboost(FEATURES_MASTER)
+  File "/home/ride/25d0295/urban-mobility-platform/research/cityflo/scripts/12_model_xgboost.py", line 299, in run_xgboost
+    raise RuntimeError(
+RuntimeError: No training rows remain after feature filtering. Likely cause: headway/schedule features unavailable because no trip assignments were produced in the sampled data.

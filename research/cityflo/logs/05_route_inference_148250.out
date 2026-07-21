@@ -1,0 +1,70 @@
+=================================================
+05_route_inference.py
+Started: Thu Jul  9 15:37:14 IST 2026
+Node   : cn39-a40.prajna.iitb.ac.in
+=================================================
+
+Input:
+-rw-r--r-- 1 25d0295 ride 4.0G Jul  9 15:04 data/processed/pings_snapped.parquet
+-rw-r--r-- 1 25d0295 ride 77K Jul  9 15:32 data/processed/route_catalog.parquet
+-rw-r--r-- 1 25d0295 ride 77M Jul  9 02:07 data/processed/trips_clean.csv
+
+Loading route templates ...
+Route templates loaded: 641
+Loading and indexing trips ...
+  Trip index keys (template only): 641
+  Total trip instances indexed   : 135,125
+  Largest candidate pool         : template 2 (1,751 trip instances)
+Trips indexed: 135,125
+Extracting segment sequences (min_obs_stops=4) ...
+Segments to match: 89,021
+segs['n_obs_stops'].describe:
+count    89021.000000
+mean       198.633637
+std        360.973364
+min          4.000000
+25%         95.000000
+50%        191.000000
+75%        226.000000
+max      27749.000000
+Name: n_obs_stops, dtype: float64
+
+Template length distribution:
+count    641.000000
+mean      16.689548
+std       10.699826
+min        2.000000
+25%        7.000000
+50%       16.000000
+75%       24.000000
+max       40.000000
+dtype: float64
+
+Average snap distance:
+count    89021.000000
+mean        72.127906
+std         13.481249
+min          5.770089
+25%         64.614281
+50%         70.468469
+75%         77.083159
+max        185.259325
+Name: avg_snap_distance_m, dtype: float64
+
+Route inference results:
+  Segments processed       : 89,021
+  Template matched         : 1,668 (1.9%)
+  trip_id assigned         : 43 (0.0%)
+  Mean confidence          : 0.229
+  Mean margin              : 0.088
+  High-conf (>=0.30) : 49
+  Full subsequence matches : 0
+  Mean candidate templates : 12.08
+  Of high-conf segments, trip_id resolved for: 43/49 (87.8%)
+
+Written -> /home/ride/25d0295/urban-mobility-platform/research/cityflo/data/processed/segments_inferred.parquet
+
+Output:
+-rw-r--r-- 1 25d0295 ride 4.8M Jul  9 15:57 data/processed/segments_inferred.parquet
+
+Finished: Thu Jul  9 15:57:51 IST 2026

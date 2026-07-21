@@ -1,0 +1,7 @@
+Traceback (most recent call last):
+  File "/home/ride/25d0295/urban-mobility-platform/research/cityflo/scripts/12_model_xgboost.py", line 562, in <module>
+    run_xgboost(FEATURES_MASTER)
+  File "/home/ride/25d0295/urban-mobility-platform/research/cityflo/scripts/12_model_xgboost.py", line 353, in run_xgboost
+    m = xgb.XGBRegressor(
+        ^^^^^^^^^^^^^^^^^
+TypeError: xgboost.sklearn.XGBRegressor() got multiple values for keyword argument 'random_state'

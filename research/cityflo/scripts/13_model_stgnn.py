@@ -187,7 +187,7 @@ def build_h3_graph(hex_list: list[str]) -> torch.Tensor:
     for hx in hex_list:
         i = hex_to_idx[hx]
         lat1, lng1 = coords[hx]
-        active_nb = [nb for nb in h3.grid_disk(hx, 1) - {hx} if nb in hex_to_idx]
+        active_nb = [nb for nb in h3.grid_disk(hx, 1) if nb != hx and nb in hex_to_idx]
         if not active_nb:
             continue
         nb_lats = np.array([coords[nb][0] for nb in active_nb], dtype=np.float64)

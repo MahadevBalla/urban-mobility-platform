@@ -1,0 +1,22 @@
+=================================================
+10_ward_aggregation.py
+Started: Thu Jul  9 16:27:53 IST 2026
+Node   : cn39-a40.prajna.iitb.ac.in
+=================================================
+
+Input:
+-rw-r--r-- 1 25d0295 ride 2.2M Jul  9 16:03 data/processed/od_agg.parquet
+-rw-r--r-- 1 25d0295 ride 359K Jul  9 02:07 data/processed/stops_clean.csv
+
+Assigning stops to wards using KML polygons...
+  Ward polygons loaded: 24 features
+  4089 stops outside polygons → nearest centroid
+Stop-ward assignments: 6,115  (wards: 33)
+  Stop-ward map → /home/ride/25d0295/urban-mobility-platform/research/cityflo/data/processed/stop_ward_map.csv
+Ward OD → /home/ride/25d0295/urban-mobility-platform/research/cityflo/data/processed/ward_od.parquet  (17,573 ward-pair × period rows)
+
+Output:
+-rw-r--r-- 1 25d0295 ride 197K Jul  9 16:28 data/processed/ward_od.parquet
+-rw-r--r-- 1 25d0295 ride 73K Jul  9 16:28 data/processed/stop_ward_map.csv
+
+Finished: Thu Jul  9 16:28:04 IST 2026

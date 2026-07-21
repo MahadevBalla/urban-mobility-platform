@@ -1,0 +1,22 @@
+=================================================
+04_stop_snapping.py
+Started: Thu Jul  9 14:32:17 IST 2026
+Node   : cn39-a40.prajna.iitb.ac.in
+=================================================
+
+Input:
+-rw-r--r-- 1 25d0295 ride 3.1G Jul  9 01:53 data/processed/pings_segmented.parquet
+
+Loading stops from stops_clean.csv ...
+  Stops excluded (bad coordinates): 664
+  Stops in BallTree: 5,451
+Total pings      : 156,149,262
+Snapped (<=200m) : 108,752,677  (69.6%)
+Unsnapped        : 47,396,585
+
+Written -> /home/ride/25d0295/urban-mobility-platform/research/cityflo/data/processed/pings_snapped.parquet
+
+Output:
+-rw-r--r-- 1 25d0295 ride 4.0G Jul  9 15:04 data/processed/pings_snapped.parquet
+
+Finished: Thu Jul  9 15:04:25 IST 2026

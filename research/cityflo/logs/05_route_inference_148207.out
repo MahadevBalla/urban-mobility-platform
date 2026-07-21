@@ -1,0 +1,8 @@
+=================================================
+05_route_inference.py
+Started: Thu Jul  9 15:12:12 IST 2026
+Node   : cn39-a40.prajna.iitb.ac.in
+=================================================
+
+Input:
+-rw-r--r-- 1 25d0295 ride 4.0G Jul  9 15:04 data/processed/pings_snapped.parquet

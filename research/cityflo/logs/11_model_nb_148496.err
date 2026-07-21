@@ -1,0 +1,2 @@
+/home/ride/25d0295/urban-mobility-platform/research/cityflo/scripts/11_model_nb.py:158: ConstantInputWarning: An input array is constant; the correlation coefficient is not defined.
+  r, _ = stats.pearsonr(y_true, y_pred)

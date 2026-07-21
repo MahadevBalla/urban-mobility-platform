@@ -1,0 +1,15 @@
+=================================================
+01_1_ingest_legacy.py  (bucket 0)
+Started: Fri Jul 10 16:41:29 IST 2026
+Node   : cn23-a40.prajna.iitb.ac.in
+=================================================
+Ingesting 3 GPS file(s)
+Study window: 2021-09-01 → 2022-10-22
+
+  before_2022-10-22_698096e5f4994518a37a0b9c59bb9756_part2-007_ (6.44 GB)... Written -> before_2022-10-22_698096e5f4994518a37a0b9c59bb9756_part2-007__bucket0.parquet
+  before_2022-10-22_698096e5f4994518a37a0b9c59bb9756_part3-006_ (5.45 GB)... Written -> before_2022-10-22_698096e5f4994518a37a0b9c59bb9756_part3-006__bucket0.parquet
+  before_2022-10-22_698096e5f4994518a37a0b9c59bb9756-004_ (6.44 GB)... Written -> before_2022-10-22_698096e5f4994518a37a0b9c59bb9756-004__bucket0.parquet
+
+Bucket 0 ingestion complete
+
+Finished: Fri Jul 10 16:42:08 IST 2026

@@ -1,0 +1,6 @@
+Traceback (most recent call last):
+  File "/home/ride/25d0295/urban-mobility-platform/research/cityflo/scripts/11_model_nb.py", line 413, in <module>
+    run_nb(FEATURES_MASTER)
+  File "/home/ride/25d0295/urban-mobility-platform/research/cityflo/scripts/11_model_nb.py", line 276, in run_nb
+    raise RuntimeError(
+RuntimeError: No training rows remain after feature filtering. Likely cause: headway/schedule features unavailable because no trip assignments were produced in the sampled data.

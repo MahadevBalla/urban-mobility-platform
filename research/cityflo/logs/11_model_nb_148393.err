@@ -1,0 +1,14 @@
+Traceback (most recent call last):
+  File "/home/ride/25d0295/urban-mobility-platform/research/cityflo/scripts/11_model_nb.py", line 418, in <module>
+    run_nb(FEATURES_MASTER)
+  File "/home/ride/25d0295/urban-mobility-platform/research/cityflo/scripts/11_model_nb.py", line 254, in run_nb
+    print(df[FEATURE_COLS].isna().sum().sort_values(ascending=False))
+          ~~^^^^^^^^^^^^^^
+  File "/home/ride/25d0295/urban-mobility-platform/research/cityflo/.venv/lib64/python3.11/site-packages/pandas/core/frame.py", line 4384, in __getitem__
+    indexer = self.columns._get_indexer_strict(key, "columns")[1]
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/ride/25d0295/urban-mobility-platform/research/cityflo/.venv/lib64/python3.11/site-packages/pandas/core/indexes/base.py", line 6302, in _get_indexer_strict
+    self._raise_if_missing(keyarr, indexer, axis_name)
+  File "/home/ride/25d0295/urban-mobility-platform/research/cityflo/.venv/lib64/python3.11/site-packages/pandas/core/indexes/base.py", line 6355, in _raise_if_missing
+    raise KeyError(f"{not_found} not in index")
+KeyError: "['hex_avg_demand', 'hex_demand_rank'] not in index"

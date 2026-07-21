@@ -1,0 +1,121 @@
+=================================================
+11_model_nb.py
+Started: Thu Jul  9 23:05:37 IST 2026
+Node   : cn23-a40.prajna.iitb.ac.in
+=================================================
+
+Input:
+-rw-r--r-- 1 25d0295 ride 7.9M Jul  9 16:26 data/processed/features_master.parquet
+
+Temporal split sizes (before dropna):
+  train :     69,666 rows  (2021-09-01 – 2022-07-30)
+  valid :      8,049 rows  (2022-07-31 – 2022-08-30)
+  test  :     17,268 rows  (2022-09-01 – 2022-10-21)
+
+Missing values (train):
+lag_1_trip_count              19892
+rolling_24h_mean              19892
+origin_headway_reliability     7344
+origin_headway_cv              7344
+hour_cos                          0
+hour_sin                          0
+dow_sin                           0
+dow_cos                           0
+is_weekend                        0
+is_peak                           0
+trip_distance_km                  0
+is_winter                         0
+is_pre_monsoon                    0
+is_monsoon                        0
+dist_cbd_km                       0
+hex_avg_demand                    0
+hex_demand_rank                   0
+trip_count                        0
+dtype: int64
+
+Missing percentage (train):
+lag_1_trip_count              28.553383
+rolling_24h_mean              28.553383
+origin_headway_reliability    10.541728
+origin_headway_cv             10.541728
+hour_cos                       0.000000
+hour_sin                       0.000000
+dow_sin                        0.000000
+dow_cos                        0.000000
+is_weekend                     0.000000
+is_peak                        0.000000
+trip_distance_km               0.000000
+is_winter                      0.000000
+is_pre_monsoon                 0.000000
+is_monsoon                     0.000000
+dist_cbd_km                    0.000000
+hex_avg_demand                 0.000000
+hex_demand_rank                0.000000
+trip_count                     0.000000
+dtype: float64
+
+Rows after dropna  train : 46,389 (dropped 23,277)  valid : 5,737 (dropped 2,312)  test  : 12,662 (dropped 4,606)
+
+  Overdispersion check (train target)
+    mean     : 1.000
+    variance : 0.000
+    var/mean : 0.00  → close to Poisson
+
+Baselines —
+
+  [Persistence baseline (test)]
+    MAE     : 0.0005
+    RMSE    : 0.0218
+    sMAPE   : 0.03 %
+    R²      : -1.0005
+    Pearson : -0.0002
+
+  [Historical mean baseline (test)]
+    MAE     : 0.0001
+    RMSE    : 0.0093
+    sMAPE   : 0.01 %
+    R²      : -0.0026
+    Pearson : -0.0008
+
+Fitting GLM — NegativeBinomial family ...
+
+  GLM-NB fit statistics
+    alpha      : 0.0000
+    AIC        : 92834.79
+    BIC        : 93070.90
+    Log-lik    : -46390.40
+    Pseudo R²  : 0.0000  (McFadden)
+    Deviance   : 1.54
+    df resid   : 46362
+
+  Model summary → /home/ride/25d0295/urban-mobility-platform/research/cityflo/outputs/models/nb_model_summary.txt
+  Model pickle  → /home/ride/25d0295/urban-mobility-platform/research/cityflo/outputs/models/nb_model.pkl
+
+Evaluation —
+
+  [validation]
+    MAE     : 0.0001
+    RMSE    : 0.0002
+    sMAPE   : 0.01 %
+    R²      : nan
+    Pearson : nan
+
+  [test]
+    MAE     : 0.0003
+    RMSE    : 0.0154
+    sMAPE   : 0.03 %
+    R²      : -0.0010
+    Pearson : -0.0190
+  Predictions → /home/ride/25d0295/urban-mobility-platform/research/cityflo/outputs/tables/nb_predictions.parquet
+  Metrics     → /home/ride/25d0295/urban-mobility-platform/research/cityflo/outputs/tables/nb_metrics.csv
+  Metadata → /home/ride/25d0295/urban-mobility-platform/research/cityflo/outputs/models/nb_metadata.json
+  Model Checkpoint → /home/ride/25d0295/urban-mobility-platform/research/cityflo/outputs/models/nb_model.pkl
+
+NB complete
+
+Output:
+-rw-r--r-- 1 25d0295 ride 4.1K Jul  9 23:05 outputs/models/nb_model_summary.txt
+-rw-r--r-- 1 25d0295 ride 325K Jul  9 23:05 outputs/tables/nb_predictions.parquet
+-rw-r--r-- 1 25d0295 ride 537 Jul  9 23:05 outputs/tables/nb_metrics.csv
+
+Finished: Thu Jul  9 23:05:45 IST 2026

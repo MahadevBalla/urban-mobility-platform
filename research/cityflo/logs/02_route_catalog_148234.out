@@ -1,0 +1,45 @@
+=================================================
+02_route_catalog.py
+Started: Thu Jul  9 15:28:24 IST 2026
+Node   : cn21-a40.prajna.iitb.ac.in
+=================================================
+
+Input:
+-rw-r--r-- 1 25d0295 ride 77M Jul  9 02:07 data/processed/trips_clean.csv
+-rw-r--r-- 1 25d0295 ride 359K Jul  9 02:07 data/processed/stops_clean.csv
+
+Trips loaded      : 135,125  columns: ['trip_id', 'trip_route', 'trip_date', 'stop_sequence']
+Parse failures    : 0 empty routes  |  0 null route strings
+Unique templates  : 641
+Trips retained    : 135,125
+
+Template statistics:
+  Total templates         : 641
+  Total trips covered     : 135,125
+  Coverage                : 100.0% of retained trips
+  Stops/template  median  : 16
+  Stops/template  range   : 2–40
+  Trips/template  median  : 78
+  Trips/template  range   : 1–1751
+
+Top 10 templates by trip count:
+ template_id  n_stops  typical_start_hour  n_trips_in_catalog  first_stop_id  last_stop_id first_seen  last_seen
+           2       37                7.42                1751            623             5 2025-12-08 2026-06-30
+          52       23                8.00                1720           3257           952 2025-12-08 2026-06-30
+          38       29                8.17                1615           2061          2467 2025-12-08 2026-06-30
+          17       36               17.75                1615           6564           622 2025-12-08 2026-06-30
+          65       17                9.33                1548           4281          3555 2025-12-08 2026-06-30
+          18       31               17.92                1537            639          2062 2025-12-08 2026-06-30
+          51       25                8.50                1447           2301           920 2025-12-08 2026-06-30
+          70       25                7.50                1351            858            24 2025-12-08 2026-06-30
+          12       31                7.67                1273            858          2467 2025-12-08 2026-06-30
+          22       24               18.00                1224            919            27 2025-12-08 2026-06-30
+
+Route catalog  → /home/ride/25d0295/urban-mobility-platform/research/cityflo/data/processed/route_catalog.parquet
+Debug JSON     → /home/ride/25d0295/urban-mobility-platform/research/cityflo/data/processed/route_catalog.json
+
+Output:
+-rw-r--r-- 1 25d0295 ride 77K Jul  9 15:32 data/processed/route_catalog.parquet
+-rw-r--r-- 1 25d0295 ride 287K Jul  9 15:36 data/processed/route_catalog.json
+
+Finished: Thu Jul  9 15:36:33 IST 2026

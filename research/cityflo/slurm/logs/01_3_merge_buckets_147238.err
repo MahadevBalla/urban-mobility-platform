@@ -1,0 +1,4 @@
+fatal: unable to access 'https://github.com/spack/spack-packages.git/': Could not resolve host: github.com
+==> Warning: Error constructing repository '/home/ride/25d0295/.spack/package_repos/fncqgg4': Failed to clone repository builtin
+[1;93m==>[0m Warning: Error constructing repository '/home/ride/25d0295/.spack/package_repos/fncqgg4': failed to read /home/ride/25d0295/.spack/package_repos/fncqgg4/spack-repo-index.yaml: [Errno 2] No such file or directory: '/home/ride/25d0295/.spack/package_repos/fncqgg4/spack-repo-index.yaml'
+[1;31m==>[0m Error: Spec 'python@3.13.5' matches no installed packages.

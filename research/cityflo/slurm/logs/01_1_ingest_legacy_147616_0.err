@@ -1,0 +1,25 @@
+Traceback (most recent call last):
+  File "/home/ride/25d0295/urban-mobility-platform/research/cityflo/scripts/01_1_ingest_legacy.py", line 150, in <module>
+    main(
+  File "/home/ride/25d0295/urban-mobility-platform/research/cityflo/scripts/01_1_ingest_legacy.py", line 127, in main
+    lf = ingest_one_file(f, study_start, study_end, bucket_id, bucket_count)
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/ride/25d0295/urban-mobility-platform/research/cityflo/scripts/01_1_ingest_legacy.py", line 47, in ingest_one_file
+    lf = pl.scan_csv(
+         ^^^^^^^^^^^^
+  File "/home/ride/25d0295/urban-mobility-platform/research/cityflo/.venv/lib64/python3.11/site-packages/polars/_utils/deprecation.py", line 128, in wrapper
+    return function(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/ride/25d0295/urban-mobility-platform/research/cityflo/.venv/lib64/python3.11/site-packages/polars/_utils/deprecation.py", line 128, in wrapper
+    return function(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/ride/25d0295/urban-mobility-platform/research/cityflo/.venv/lib64/python3.11/site-packages/polars/_utils/deprecation.py", line 128, in wrapper
+    return function(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/ride/25d0295/urban-mobility-platform/research/cityflo/.venv/lib64/python3.11/site-packages/polars/io/csv/functions.py", line 1441, in scan_csv
+    return _scan_csv_impl(
+           ^^^^^^^^^^^^^^^
+  File "/home/ride/25d0295/urban-mobility-platform/research/cityflo/.venv/lib64/python3.11/site-packages/polars/io/csv/functions.py", line 1542, in _scan_csv_impl
+    pylf = PyLazyFrame.new_from_csv(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^
+polars.exceptions.ShapeError: The length of the new names list should be equal to or less than the original column length

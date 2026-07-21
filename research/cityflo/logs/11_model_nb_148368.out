@@ -1,0 +1,91 @@
+=================================================
+11_model_nb.py
+Started: Thu Jul  9 17:51:59 IST 2026
+Node   : cn39-a40.prajna.iitb.ac.in
+=================================================
+
+Input:
+-rw-r--r-- 1 25d0295 ride 7.9M Jul  9 16:26 data/processed/features_master.parquet
+
+Temporal split sizes (before dropna):
+  train :     69,666 rows  (2021-09-01 – 2022-07-30)
+  valid :      8,049 rows  (2022-07-31 – 2022-08-30)
+  test  :     17,268 rows  (2022-09-01 – 2022-10-21)
+
+Missing values (train):
+on_time_pct                   69590
+mean_delay_min                69590
+lag_week_trip_count           66070
+lag_day_trip_count            55069
+lag_2_trip_count              26027
+rolling_24h_std               26027
+weather_severity              23921
+wind_speed_10m                23921
+temperature_2m                23921
+precip_3h                     23921
+log_precip                    23921
+is_heavy_rain                 23921
+heat_stress                   23921
+rolling_24h_mean              19892
+lag_1_trip_count              19892
+origin_headway_reliability     7344
+origin_headway_cv              7344
+hour_sin                          0
+hour_cos                          0
+dow_sin                           0
+is_winter                         0
+trip_distance_km                  0
+dist_cbd_km                       0
+is_pre_monsoon                    0
+is_weekend                        0
+is_peak                           0
+is_monsoon                        0
+doy_sin                           0
+month_cos                         0
+month_sin                         0
+dow_cos                           0
+doy_cos                           0
+hex_avg_demand                    0
+hex_demand_rank                   0
+trip_count                        0
+dtype: int64
+
+Missing percentage (train):
+on_time_pct                   99.890908
+mean_delay_min                99.890908
+lag_week_trip_count           94.838228
+lag_day_trip_count            79.047168
+lag_2_trip_count              37.359688
+rolling_24h_std               37.359688
+weather_severity              34.336692
+wind_speed_10m                34.336692
+temperature_2m                34.336692
+precip_3h                     34.336692
+log_precip                    34.336692
+is_heavy_rain                 34.336692
+heat_stress                   34.336692
+rolling_24h_mean              28.553383
+lag_1_trip_count              28.553383
+origin_headway_reliability    10.541728
+origin_headway_cv             10.541728
+hour_sin                       0.000000
+hour_cos                       0.000000
+dow_sin                        0.000000
+is_winter                      0.000000
+trip_distance_km               0.000000
+dist_cbd_km                    0.000000
+is_pre_monsoon                 0.000000
+is_weekend                     0.000000
+is_peak                        0.000000
+is_monsoon                     0.000000
+doy_sin                        0.000000
+month_cos                      0.000000
+month_sin                      0.000000
+dow_cos                        0.000000
+doy_cos                        0.000000
+hex_avg_demand                 0.000000
+hex_demand_rank                0.000000
+trip_count                     0.000000
+dtype: float64
+
+Rows after dropna  train : 0 (dropped 69,666)  valid : 0 (dropped 8,049)  test  : 0 (dropped 17,268)

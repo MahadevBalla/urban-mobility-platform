@@ -58,8 +58,6 @@ _REQUIRED_FEATS: list[str] = [
     # Reliability
     "origin_headway_reliability",
     "origin_headway_cv",
-    "mean_delay_min",
-    "on_time_pct",
     # Lag demand
     "lag_1_trip_count",
     "lag_day_trip_count",
@@ -67,6 +65,8 @@ _REQUIRED_FEATS: list[str] = [
 ]
 
 _OPTIONAL_FEATS: list[str] = [
+    "mean_delay_min",
+    "on_time_pct",
     # Additional temporal
     "month_sin",
     "month_cos",
@@ -99,6 +99,7 @@ _OPTIONAL_FEATS: list[str] = [
     "lag_2_trip_count",
     "lag_week_trip_count",
     "rolling_24h_std",
+    "lag_day_trip_count"
     # Leakage-safe hex demand (appended dynamically after split)
     "hex_avg_demand",
     "hex_demand_rank",
@@ -274,7 +275,13 @@ def run_xgboost(features_path: Path) -> None:
     n_before = {"train": len(train), "valid": len(valid), "test": len(test)}
 
     # Drop rows with missing required columns (the final feature list + target)
-    required = feat_cols + [TARGET]
+    required = _REQUIRED_FEATS + [TARGET]
+
+    print("\nMissing values (train):")
+    print(train[required].isna().sum().sort_values(ascending=False))
+    print("\nMissing percentage (train):")
+    print((train[required].isna().mean() * 100).sort_values(ascending=False))
+
     train = train.dropna(subset=required)
     valid = valid.dropna(subset=required)
     test = test.dropna(subset=required)
@@ -345,9 +352,7 @@ def run_xgboost(features_path: Path) -> None:
         x_te, y_te = x_full.iloc[te_idx], y_full.iloc[te_idx]
         m = xgb.XGBRegressor(
             **XGB_PARAMS,
-            n_jobs=-1,
-            early_stopping_rounds=EARLY_STOPPING_ROUNDS,
-            random_state=RANDOM_SEED,
+            n_jobs=-1
         )
         m.fit(x_tr, ytr, eval_set=[(x_te, y_te)], verbose=False)
         mae = float(np.abs(y_te.values - m.predict(x_te)).mean())
@@ -383,9 +388,7 @@ def run_xgboost(features_path: Path) -> None:
 
     final_model = xgb.XGBRegressor(
         **XGB_PARAMS,
-        n_jobs=-1,
-        early_stopping_rounds=EARLY_STOPPING_ROUNDS,
-        random_state=RANDOM_SEED,
+        n_jobs=-1
     )
     final_model.fit(x_tr, ytr, eval_set=[(x_val, yval)], verbose=50)
     print(f"  Best iteration : {final_model.best_iteration}")

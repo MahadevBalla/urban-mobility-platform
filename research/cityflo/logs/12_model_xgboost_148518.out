@@ -1,0 +1,114 @@
+=================================================
+12_model_xgboost.py
+Started: Thu Jul  9 23:45:44 IST 2026
+Node   : cn32-a40.prajna.iitb.ac.in
+=================================================
+
+Input:
+-rw-r--r-- 1 25d0295 ride 7.9M Jul  9 16:26 data/processed/features_master.parquet
+
+Temporal split sizes (before dropna):
+  train :     69,666 rows  (2021-09-01 – 2022-07-30)
+  valid :      8,049 rows  (2022-07-31 – 2022-08-30)
+  test  :     17,268 rows  (2022-09-01 – 2022-10-21)
+  Optional features missing (will be skipped): ['lag_day_trip_counthex_avg_demand']
+
+Missing values (train):
+lag_day_trip_count            55069
+lag_1_trip_count              19892
+rolling_24h_mean              19892
+origin_headway_cv              7344
+origin_headway_reliability     7344
+hour_sin                          0
+is_peak                           0
+is_weekend                        0
+dow_cos                           0
+dow_sin                           0
+hour_cos                          0
+dist_cbd_km                       0
+trip_distance_km                  0
+trip_count                        0
+dtype: int64
+
+Missing percentage (train):
+lag_day_trip_count            79.047168
+lag_1_trip_count              28.553383
+rolling_24h_mean              28.553383
+origin_headway_cv             10.541728
+origin_headway_reliability    10.541728
+hour_sin                       0.000000
+is_peak                        0.000000
+is_weekend                     0.000000
+dow_cos                        0.000000
+dow_sin                        0.000000
+hour_cos                       0.000000
+dist_cbd_km                    0.000000
+trip_distance_km               0.000000
+trip_count                     0.000000
+dtype: float64
+
+Rows after dropna  train : 14,264 (dropped 55,402)  valid : 2,385 (dropped 5,664)  test  : 4,695 (dropped 12,573)
+
+Baselines —
+
+  [Persistence baseline (test)]
+    MAE     : 0.0013
+    RMSE    : 0.0357
+    sMAPE   : 0.09 %
+    R²      : -1.0013
+    Pearson : -0.0006
+
+  [Historical mean baseline (test)]
+    MAE     : 0.0004
+    RMSE    : 0.0153
+    sMAPE   : 0.03 %
+    R²      : -0.0176
+    Pearson : -0.0014
+
+TimeSeriesSplit CV (5 folds)
+  Fold 1: MAE=0.0000  best_iter=0
+  Fold 2: MAE=0.0009  best_iter=0
+  Fold 3: MAE=0.0002  best_iter=0
+  Fold 4: MAE=0.0002  best_iter=5
+  Fold 5: MAE=0.0002  best_iter=1
+
+  CV MAE : 0.0003 ± 0.0003
+
+Final model: core=12,125  early-stop val=2,139  test=4,695
+[0]	validation_0-rmse:0.00016
+[31]	validation_0-rmse:0.00104
+  Best iteration : 1
+
+Evaluation —
+
+  [validation]
+    MAE     : 0.0002
+    RMSE    : 0.0003
+    sMAPE   : 0.02 %
+    R²      : nan
+    Pearson : nan
+
+  [test]
+    MAE     : 0.0008
+    RMSE    : 0.0253
+    sMAPE   : 0.06 %
+    R²      : -0.0005
+    Pearson : -0.0014
+
+  Model pickle → /home/ride/25d0295/urban-mobility-platform/research/cityflo/outputs/models/xgb_model.pkl
+  Predictions → /home/ride/25d0295/urban-mobility-platform/research/cityflo/outputs/tables/xgb_predictions.parquet
+  Metrics     → /home/ride/25d0295/urban-mobility-platform/research/cityflo/outputs/tables/xgb_metrics.csv
+
+SHAP analysis (sample n=5000) —
+  SHAP figure → /home/ride/25d0295/urban-mobility-platform/research/cityflo/outputs/figures/xgb_shap_analysis.png
+
+XGBoost complete
+  Predictions → /home/ride/25d0295/urban-mobility-platform/research/cityflo/outputs/tables/xgb_predictions.parquet
+  Metrics → /home/ride/25d0295/urban-mobility-platform/research/cityflo/outputs/tables/xgb_metrics.csv
+  Metadata → /home/ride/25d0295/urban-mobility-platform/research/cityflo/outputs/models/xgb_metadata.json
+  Model Checkpoint → /home/ride/25d0295/urban-mobility-platform/research/cityflo/outputs/models/xgb_model.pkl
+
+Output:
+-rw-r--r-- 1 25d0295 ride 44K Jul  9 23:45 outputs/models/xgb_model.pkl
+-rw-r--r-- 1 25d0295 ride 69K Jul  9 23:45 outputs/tables/xgb_predictions.parquet
+-rw-r--r-- 1 25d0295 ride 536 Jul  9 23:45 outputs/tables/xgb_metrics.csv

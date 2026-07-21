@@ -1,0 +1,54 @@
+=================================================
+12_model_xgboost.py
+Started: Thu Jul  9 23:26:46 IST 2026
+Node   : cn33-a40.prajna.iitb.ac.in
+=================================================
+
+Input:
+-rw-r--r-- 1 25d0295 ride 7.9M Jul  9 16:26 data/processed/features_master.parquet
+
+Temporal split sizes (before dropna):
+  train :     69,666 rows  (2021-09-01 – 2022-07-30)
+  valid :      8,049 rows  (2022-07-31 – 2022-08-30)
+  test  :     17,268 rows  (2022-09-01 – 2022-10-21)
+  Optional features missing (will be skipped): ['lag_day_trip_counthex_avg_demand']
+
+Missing values (train):
+mean_delay_min                69590
+on_time_pct                   69590
+lag_day_trip_count            55069
+lag_1_trip_count              19892
+rolling_24h_mean              19892
+origin_headway_cv              7344
+origin_headway_reliability     7344
+hour_sin                          0
+dist_cbd_km                       0
+trip_distance_km                  0
+is_peak                           0
+is_weekend                        0
+dow_cos                           0
+dow_sin                           0
+hour_cos                          0
+trip_count                        0
+dtype: int64
+
+Missing percentage (train):
+mean_delay_min                99.890908
+on_time_pct                   99.890908
+lag_day_trip_count            79.047168
+lag_1_trip_count              28.553383
+rolling_24h_mean              28.553383
+origin_headway_cv             10.541728
+origin_headway_reliability    10.541728
+hour_sin                       0.000000
+dist_cbd_km                    0.000000
+trip_distance_km               0.000000
+is_peak                        0.000000
+is_weekend                     0.000000
+dow_cos                        0.000000
+dow_sin                        0.000000
+hour_cos                       0.000000
+trip_count                     0.000000
+dtype: float64
+
+Rows after dropna  train : 0 (dropped 69,666)  valid : 0 (dropped 8,049)  test  : 7 (dropped 17,261)

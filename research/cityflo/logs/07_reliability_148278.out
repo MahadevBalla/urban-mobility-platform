@@ -1,0 +1,23 @@
+=================================================
+07_reliability.py
+Started: Thu Jul  9 16:04:24 IST 2026
+Node   : cn39-a40.prajna.iitb.ac.in
+=================================================
+
+Input:
+-rw-r--r-- 1 25d0295 ride 4.0G Jul  9 15:04 data/processed/pings_snapped.parquet
+-rw-r--r-- 1 25d0295 ride 4.8M Jul  9 15:57 data/processed/segments_inferred.parquet
+-rw-r--r-- 1 25d0295 ride 77M Jul  9 02:07 data/processed/trips_clean.csv
+
+Building exact trip-stop schedule from trips_clean.csv ...
+  Trip-stop schedule entries : 3,033,144  (135,125 trips,  3,107 unique stops)
+Headway stats rows             : 59,912
+Schedule adherence obs         : 174
+Schedule adherence stat rows   : 132
+
+Output:
+-rw-r--r-- 1 25d0295 ride 2.7M Jul  9 16:05 data/processed/headway_stats.parquet
+-rw-r--r-- 1 25d0295 ride 4.6K Jul  9 16:05 data/processed/schedule_adherence_stats.parquet
+-rw-r--r-- 1 25d0295 ride 220M Jul  9 16:05 data/processed/stop_visits.parquet
+
+Finished: Thu Jul  9 16:05:27 IST 2026

@@ -1,0 +1,35 @@
+/home/ride/25d0295/urban-mobility-platform/research/cityflo/.venv/lib64/python3.11/site-packages/xgboost/callback.py:385: UserWarning: [23:45:51] WARNING: /__w/xgboost/xgboost/src/learner.cc:782: 
+Parameters: { "cv_n_splits", "shap_sample_n", "validation_fraction" } are not used.
+
+  self.starting_round = model.num_boosted_rounds()
+/home/ride/25d0295/urban-mobility-platform/research/cityflo/.venv/lib64/python3.11/site-packages/xgboost/core.py:751: UserWarning: [23:45:53] WARNING: /__w/xgboost/xgboost/src/common/error_msg.cc:62: Falling back to prediction using DMatrix due to mismatched devices. This might lead to higher memory usage and slower performance. XGBoost is running on: cuda:0, while the input data is on: cpu.
+Potential solutions:
+- Use a data structure that matches the device ordinal in the booster.
+- Set the device for booster before call to inplace_predict.
+
+This warning will only be shown once.
+
+  return func(**kwargs)
+/home/ride/25d0295/urban-mobility-platform/research/cityflo/.venv/lib64/python3.11/site-packages/xgboost/callback.py:385: UserWarning: [23:45:53] WARNING: /__w/xgboost/xgboost/src/learner.cc:782: 
+Parameters: { "cv_n_splits", "shap_sample_n", "validation_fraction" } are not used.
+
+  self.starting_round = model.num_boosted_rounds()
+/home/ride/25d0295/urban-mobility-platform/research/cityflo/.venv/lib64/python3.11/site-packages/xgboost/callback.py:385: UserWarning: [23:45:54] WARNING: /__w/xgboost/xgboost/src/learner.cc:782: 
+Parameters: { "cv_n_splits", "shap_sample_n", "validation_fraction" } are not used.
+
+  self.starting_round = model.num_boosted_rounds()
+/home/ride/25d0295/urban-mobility-platform/research/cityflo/.venv/lib64/python3.11/site-packages/xgboost/callback.py:385: UserWarning: [23:45:54] WARNING: /__w/xgboost/xgboost/src/learner.cc:782: 
+Parameters: { "cv_n_splits", "shap_sample_n", "validation_fraction" } are not used.
+
+  self.starting_round = model.num_boosted_rounds()
+/home/ride/25d0295/urban-mobility-platform/research/cityflo/.venv/lib64/python3.11/site-packages/xgboost/callback.py:385: UserWarning: [23:45:54] WARNING: /__w/xgboost/xgboost/src/learner.cc:782: 
+Parameters: { "cv_n_splits", "shap_sample_n", "validation_fraction" } are not used.
+
+  self.starting_round = model.num_boosted_rounds()
+/home/ride/25d0295/urban-mobility-platform/research/cityflo/.venv/lib64/python3.11/site-packages/xgboost/callback.py:385: UserWarning: [23:45:54] WARNING: /__w/xgboost/xgboost/src/learner.cc:782: 
+Parameters: { "cv_n_splits", "shap_sample_n", "validation_fraction" } are not used.
+
+  self.starting_round = model.num_boosted_rounds()
+/home/ride/25d0295/urban-mobility-platform/research/cityflo/scripts/12_model_xgboost.py:164: ConstantInputWarning: An input array is constant; the correlation coefficient is not defined.
+  r, _ = stats.pearsonr(y_true, y_pred)
+ls: cannot access 'outputs/figures/xgb_shap_summary.png': No such file or directory

@@ -1,0 +1,23 @@
+=================================================
+06_od_matrix.py
+Started: Thu Jul  9 16:02:36 IST 2026
+Node   : cn39-a40.prajna.iitb.ac.in
+=================================================
+
+Input:
+-rw-r--r-- 1 25d0295 ride 4.0G Jul  9 15:04 data/processed/pings_snapped.parquet
+-rw-r--r-- 1 25d0295 ride 4.8M Jul  9 15:57 data/processed/segments_inferred.parquet
+-rw-r--r-- 1 25d0295 ride 77K Jul  9 15:32 data/processed/route_catalog.parquet
+
+OD Tier1 (route-template) : 49 segments
+OD Tier2 (first/last snap): 94,979 segments
+OD aggregated             : 95,022 OD x time-bin combinations
+
+Output:
+-rw-r--r-- 1 25d0295 ride 5.8K Jul  9 16:03 data/processed/od_tier1.parquet
+-rw-r--r-- 1 25d0295 ride 2.7M Jul  9 16:03 data/processed/od_tier2.parquet
+-rw-r--r-- 1 25d0295 ride 2.2M Jul  9 16:03 data/processed/od_agg.parquet
+-rw-r--r-- 1 25d0295 ride 181K Jul  9 16:03 data/processed/service_supply.parquet
+-rw-r--r-- 1 25d0295 ride 182K Jul  9 16:03 data/processed/service_frequency.parquet
+
+Finished: Thu Jul  9 16:03:02 IST 2026

@@ -1,0 +1,13 @@
+=================================================
+11_model_nb.py
+Started: Thu Jul  9 22:59:42 IST 2026
+Node   : cn23-a40.prajna.iitb.ac.in
+=================================================
+
+Input:
+-rw-r--r-- 1 25d0295 ride 7.9M Jul  9 16:26 data/processed/features_master.parquet
+
+Temporal split sizes (before dropna):
+  train :     69,666 rows  (2021-09-01 – 2022-07-30)
+  valid :      8,049 rows  (2022-07-31 – 2022-08-30)
+  test  :     17,268 rows  (2022-09-01 – 2022-10-21)
