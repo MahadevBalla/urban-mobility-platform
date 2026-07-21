@@ -126,6 +126,41 @@ def main(bucket_id: int):
     print("\nApplying GPS jump filter...")
     lf = apply_gps_jump_filter(lf)
 
+    # =====================================================================
+    # CITYFLO DEBUG BLOCK: INJECT EXACTLY HERE
+    # =====================================================================
+    print(f"\n--- RUNNING JUMP FILTER DIAGNOSTICS FOR BUCKET {bucket_id} ---")
+
+    # Materialize the frame to test the filter's damage
+    debug_df = lf.collect()
+    final_rows_check = debug_df.height
+
+    # 1. Total Row Integrity
+    assert final_rows_check > 0, "CRITICAL FAILURE: Jump filter dropped 100% of your data. The speed calculation or coordinates are corrupted."
+
+    # 2. Filter Drop Rate
+    dropped_by_jump = after_dedupe - final_rows_check
+    dropped_pct = (dropped_by_jump / after_dedupe) * 100
+    print(f"[TEST 1] Jump Filter Drops: {dropped_by_jump:,} rows ({dropped_pct:.2f}%)")
+    
+    if dropped_pct > 15.0:
+        print("WARNING: More than 15% of data dropped due to >120km/h jumps. Check coordinate projections or timestamp sorting!")
+
+    # 3. Sequential Time Integrity Check
+    neg_time_check = debug_df.filter(
+        (pl.col("timestamp_ist").shift(1).over("vehicle_id") > pl.col("timestamp_ist"))
+    ).height
+    print(f"[TEST 2] Negative Time Jumps: {neg_time_check}")
+    assert neg_time_check == 0, "CRITICAL FAILURE: Found backward time jumps. Sorting failed or vehicle IDs are mixed up."
+
+    # 4. Final Bounding Box Sanity Check
+    lat_min, lat_max = debug_df["lat"].min(), debug_df["lat"].max()
+    print(f"[TEST 3] Post-Jump Lat Bounds: [{lat_min:.4f}, {lat_max:.4f}]")
+
+    # Re-wrap back into LazyFrame to continue the pipeline seamlessly
+    lf = debug_df.lazy()
+    # =====================================================================
+
     out_file = PROCESSED_DIR / f"pings_clean_bucket{bucket_id}.parquet"
     lf.sink_parquet(
         out_file,

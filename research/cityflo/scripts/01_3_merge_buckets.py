@@ -54,6 +54,46 @@ def main(out_path: Path):
     print(f"Rows     : {total_rows:,}")
     print(f"Vehicles : {total_vehicles:,}")
 
+    # =====================================================================
+    # CITYFLO DEBUG BLOCK: INJECT EXACTLY HERE - PC
+    # =====================================================================
+    print("\n--- RUNNING GLOBAL MERGE DIAGNOSTICS ---")
+
+    # Note: We do NOT use lf.collect() here to prevent RAM explosion. 
+    # We use lazy aggregations to probe the massive dataset.
+
+    # 1. Global Null Leakage Check
+    null_counts = lf.select([
+        pl.col("lat").null_count().alias("lat_nulls"),
+        pl.col("lng").null_count().alias("lng_nulls"),
+        pl.col("timestamp_ist").null_count().alias("time_nulls")
+    ]).collect().row(0)
+    
+    print(f"[TEST 1] Global Nulls - Lat: {null_counts[0]:,}, Lng: {null_counts[1]:,}, Time: {null_counts[2]:,}")
+    assert sum(null_counts) == 0, "CRITICAL FAILURE: Null coordinates or timestamps leaked into the final dataset."
+
+    # 2. Bucket Bleed (Cross-Contamination Check)
+    dup_check = (
+        lf.group_by(["vehicle_id", "timestamp_ist"])
+        .len()
+        .filter(pl.col("len") > 1)
+        .select(pl.len())
+        .collect()
+        .item()
+    )
+    print(f"[TEST 2] Global Duplicates (Vehicle + Time): {dup_check:,}")
+    if dup_check > 0:
+        print("WARNING: Found global duplicates! Bucketing logic leaked. Did someone change 'bucket_count' mid-run?")
+
+    # 3. Global Time Bounds Sanity
+    time_bounds = lf.select([
+        pl.col("timestamp_ist").min().alias("min_time"),
+        pl.col("timestamp_ist").max().alias("max_time")
+    ]).collect().row(0)
+    print(f"[TEST 3] Global Time Bounds: {time_bounds[0]} to {time_bounds[1]}")
+
+    # =====================================================================
+
     out_path.parent.mkdir(
         parents=True,
         exist_ok=True,

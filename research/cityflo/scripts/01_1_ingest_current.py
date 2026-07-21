@@ -171,6 +171,40 @@ def clean_current_gps(
         )
     )
 
+    # =====================================================================
+    # CITYFLO DEBUG BLOCK: INJECT EXACTLY HERE -- PC
+    # =====================================================================
+    print(f"\n--- RUNNING DIAGNOSTICS FOR BUCKET {bucket_id} ---")
+    
+    # Materialize the frame to test it
+    debug_df = lf.collect()
+    
+    # 1. Total Row Integrity
+    total_rows = debug_df.height
+    assert total_rows > 0, "CRITICAL FAILURE: DataFrame is completely empty. The timestamp parser or study window filter dropped everything."
+    print(f"[TEST 1] Row Count: {total_rows:,} rows survived filtering.")
+
+    # 2. Timestamp & Timezone Integrity
+    null_utc = debug_df["ts_utc"].null_count()
+    assert null_utc == 0, f"CRITICAL FAILURE: Found {null_utc} null UTC timestamps. Parser is failing silently."
+    
+    unique_hours = sorted(debug_df["hour"].unique().to_list())
+    print(f"[TEST 2] Active IST Hours: {unique_hours}")
+
+    # 3. Spatial Bounding Box Bleed
+    lat_min, lat_max = debug_df["lat"].min(), debug_df["lat"].max()
+    lng_min, lng_max = debug_df["lng"].min(), debug_df["lng"].max()
+    print(f"[TEST 3] Spatial Bounds - Lat: [{lat_min:.4f}, {lat_max:.4f}], Lng: [{lng_min:.4f}, {lng_max:.4f}]")
+
+    # 4. Speed Sentinel Check
+    null_speed_count = debug_df["speed"].null_count()
+    null_speed_pct = (null_speed_count / total_rows) * 100
+    print(f"[TEST 4] Null Speeds (Capped > {SPEED_MAX_KMH} km/h): {null_speed_count:,} ({null_speed_pct:.2f}%)")
+    
+    # Re-wrap back into LazyFrame to continue the pipeline seamlessly
+    lf = debug_df.lazy()
+    # =====================================================================
+
     lf = lf.select(
         pl.col("id").cast(pl.Int64),
         pl.col("lat").cast(pl.Float64),
