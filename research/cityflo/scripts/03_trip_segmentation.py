@@ -52,10 +52,11 @@ def segment_trips(in_path: Path, out_path: Path) -> None:
         n_raw = con.execute("SELECT COUNT(*) FROM pings").fetchone()[0]
         print(f"Input pings: {n_raw:,}")
 
-        # Partition by vehicle_id so trajectories remain continuous across calendar boundaries.
-        # A new segment starts when:
-        #   - it is the first ping observed for the vehicle, OR
-        #   - the gap to the previous ping exceeds GAP_THRESHOLD_MIN
+        # =====================================================================
+        # FIX 1: Exact Second-Level Gap Threshold 
+        # By using DATEDIFF('second') and converting the config threshold to seconds,
+        # we completely bypass the SQL minute-boundary truncation trap.
+        # =====================================================================
         con.execute(f"""
             CREATE TABLE pings_segs AS
             SELECT *,
@@ -72,20 +73,23 @@ def segment_trips(in_path: Path, out_path: Path) -> None:
                             ORDER BY timestamp_ist
                         ) IS NULL
                         OR DATEDIFF(
-                            'minute',
+                            'second',
                             LAG(timestamp_ist) OVER (
                                 PARTITION BY vehicle_id
                                 ORDER BY timestamp_ist
                             ),
                             timestamp_ist
-                        ) > {GAP_THRESHOLD_MIN}
+                        ) > ({GAP_THRESHOLD_MIN} * 60)
                     ) AS is_new
                 FROM pings
             ) _flagged
         """)
 
-        # Quality filter: minimum ping count AND minimum duration per segment.
-        # Micro-segments (< 5 pings or < 5 min) are likely GPS noise or idle time.
+        # =====================================================================
+        # FIX 2: Exact Second-Level Duration Validation
+        # Forces the total segment duration to truly exceed the physical minimum 
+        # time, preventing 2-second glitches from masquerading as 1-minute trips.
+        # =====================================================================
         con.execute(f"""
             CREATE TABLE valid_segs AS
             SELECT vehicle_id, segment_id
@@ -94,10 +98,10 @@ def segment_trips(in_path: Path, out_path: Path) -> None:
             HAVING
                 COUNT(*) >= {MIN_PINGS_PER_SEG}
                 AND DATEDIFF(
-                    'minute',
+                    'second',
                     MIN(timestamp_ist),
                     MAX(timestamp_ist)
-                ) >= {MIN_DURATION_MIN}
+                ) >= ({MIN_DURATION_MIN} * 60)
         """)
 
         n_all = con.execute(
