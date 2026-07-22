@@ -162,6 +162,22 @@ def consolidate_grid(
         raise RuntimeError("No weather data loaded — check WEATHER_DIR path")
 
     master = pd.concat(all_frames, ignore_index=True)
+
+    # FIX 1: Map WMO weather codes to a linear severity scale BEFORE interpolation.
+    # This prevents the IDW math from averaging a thunderstorm (95) and clear sky (0) into fog (47.5).
+    if "weather_code" in master.columns:
+        wc = master["weather_code"]
+        master["weather_severity"] = 0
+        master.loc[wc.isin(range(51, 58)), "weather_severity"] = 1  # drizzle
+        master.loc[wc.isin(range(61, 68)), "weather_severity"] = 2  # rain
+        master.loc[wc.isin(range(80, 83)), "weather_severity"] = 3  # shower
+        master.loc[wc.isin(range(95, 100)), "weather_severity"] = 4  # thunderstorm
+        master.loc[wc.isin([45, 48]), "weather_severity"] = 2       # fog
+        
+        # Overwrite the categorical code with the continuous severity score
+        # so the IDW engine can mathematically interpolate it safely.
+        master["weather_code"] = master["weather_severity"]
+
     dup_count = master.duplicated(["grid_id", TIME_COL]).sum()
 
     if dup_count > 0:
@@ -325,13 +341,10 @@ def add_derived_features(df: pd.DataFrame) -> pd.DataFrame:
         df["heat_stress"] = (df["heat_index"] > 35).astype(int)
 
     if "weather_code" in df.columns:
-        wc = df["weather_code"]
-        df["weather_severity"] = 0
-        df.loc[wc.isin(range(51, 58)), "weather_severity"] = 1  # drizzle
-        df.loc[wc.isin(range(61, 68)), "weather_severity"] = 2  # rain
-        df.loc[wc.isin(range(80, 83)), "weather_severity"] = 3  # shower
-        df.loc[wc.isin(range(95, 100)), "weather_severity"] = 4  # thunderstorm
-        df.loc[wc.isin([45, 48]), "weather_severity"] = 2  # fog
+        # FIX 2: Since we mapped severity before IDW, 'weather_code' now contains
+        # the safely interpolated continuous severity score (e.g., 2.3).
+        # We simply round it to get the final categorical severity for the stop.
+        df["weather_severity"] = df["weather_code"].round().astype(int)
 
     if "soil_moisture_0_to_7cm" in df.columns:
         sm = df["soil_moisture_0_to_7cm"]
