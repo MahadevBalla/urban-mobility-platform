@@ -119,9 +119,10 @@ def build_od_matrix(
                 c.last_stop_id              AS dest_stop_id,
                 MIN(s.timestamp_ist)        AS depart_ist,
                 MAX(s.timestamp_ist)        AS arrive_ist,
-                DATEDIFF('minute',
-                    MIN(s.timestamp_ist),
-                    MAX(s.timestamp_ist))   AS trip_dur_min,
+                
+                -- FIX 1: Absolute float minutes instead of boundary DATEDIFF
+                (EXTRACT(EPOCH FROM MAX(s.timestamp_ist)) - EXTRACT(EPOCH FROM MIN(s.timestamp_ist))) / 60.0 AS trip_dur_min,
+                
                 COUNT(*)                    AS ping_count,
                 {_30min_bin_expr("MIN(s.timestamp_ist)")} AS time_bin_30min,
                 CASE
@@ -136,8 +137,10 @@ def build_od_matrix(
             FROM inferred i
             JOIN catalog c  ON i.template_id = c.template_id
             JOIN snapped s  ON i.vehicle_id  = s.vehicle_id
-                        AND i.seg_start_date   = s.ride_date
+            
+                        -- FIX 2: Removed ride_date constraint to prevent midnight amputation
                         AND i.segment_id  = s.segment_id
+                        
             WHERE i.template_id IS NOT NULL
             AND i.match_confidence >= {OD_TIER1_MIN_CONF}
             AND c.first_stop_id IS NOT NULL
@@ -162,7 +165,10 @@ def build_od_matrix(
             CREATE TABLE tier2_base AS
             SELECT
                 s.vehicle_id,
-                s.ride_date,
+                
+                -- FIX 3: Use MIN(ride_date) so the group doesn't split over midnight
+                MIN(s.ride_date)            AS ride_date,
+                
                 s.segment_id,
                 NULL::INTEGER               AS template_id,
                 NULL::INTEGER               AS candidate_trip_id,
@@ -171,9 +177,10 @@ def build_od_matrix(
                 LAST( s.snapped_stop_id ORDER BY s.timestamp_ist, s.snapped_stop_id) AS dest_stop_id,
                 MIN(s.timestamp_ist)        AS depart_ist,
                 MAX(s.timestamp_ist)        AS arrive_ist,
-                DATEDIFF('minute',
-                    MIN(s.timestamp_ist),
-                    MAX(s.timestamp_ist))   AS trip_dur_min,
+                
+                -- FIX 4: Absolute float minutes for Tier 2
+                (EXTRACT(EPOCH FROM MAX(s.timestamp_ist)) - EXTRACT(EPOCH FROM MIN(s.timestamp_ist))) / 60.0 AS trip_dur_min,
+                
                 COUNT(*)                    AS ping_count,
                 {_30min_bin_expr("MIN(s.timestamp_ist)")} AS time_bin_30min,
                 CASE
@@ -181,17 +188,21 @@ def build_od_matrix(
                     WHEN HOUR(MIN(s.timestamp_ist)) >= 17 AND HOUR(MIN(s.timestamp_ist)) < 21 THEN 'PM_peak'
                     ELSE 'off_peak'
                 END                         AS period,
-                DAYOFWEEK(s.ride_date)      AS dow,
-                MONTH(s.ride_date)          AS month_num,
-                CASE WHEN MONTH(s.ride_date) IN (6,7,8,9) THEN 1 ELSE 0 END AS is_monsoon,
+                DAYOFWEEK(MIN(s.ride_date))      AS dow,
+                MONTH(MIN(s.ride_date))          AS month_num,
+                CASE WHEN MONTH(MIN(s.ride_date)) IN (6,7,8,9) THEN 1 ELSE 0 END AS is_monsoon,
                 'first_last_snap'           AS od_method
             FROM snapped s
             LEFT JOIN inferred i
                 ON s.vehicle_id = i.vehicle_id
-            AND s.ride_date  = i.seg_start_date
+                
+            -- FIX 5: Removed ride_date constraint from Tier 2 JOIN
             AND s.segment_id = i.segment_id
+            
             WHERE (i.template_id IS NULL OR i.match_confidence < {OD_TIER1_MIN_CONF})
-            GROUP BY s.vehicle_id, s.ride_date, s.segment_id
+            
+            -- FIX 6: Removed s.ride_date from GROUP BY to keep midnight trips together
+            GROUP BY s.vehicle_id, s.segment_id
         """)
 
         con.execute(f"""
