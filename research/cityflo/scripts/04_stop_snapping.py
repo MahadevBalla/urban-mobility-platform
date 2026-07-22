@@ -82,6 +82,22 @@ def load_stops(stops_path: Path) -> tuple[pd.DataFrame, BallTree, np.ndarray]:
     coords = np.radians(stops_valid[["lat", "lng"]].to_numpy(dtype=np.float64))
     tree = BallTree(coords, metric="haversine")
 
+    # =====================================================================
+    # CITYFLO DEBUG BLOCK 1: STOP DENSITY & CROSS-STREET TRAP -- PC
+    # =====================================================================
+    print("\n--- RUNNING STOP SNAPPING DIAGNOSTICS ---")
+    
+    # Query the 2 nearest neighbors (itself + closest neighbor)
+    dist_rad_2, _ = tree.query(coords, k=2)
+    # The second column is the distance to the closest DIFFERENT stop
+    dist_to_neighbor_m = (dist_rad_2[:, 1] * EARTH_R_M)
+    
+    danger_stops = np.sum(dist_to_neighbor_m < 30)
+    print(f"[TEST 1] Stops with a neighbor < 30m away: {danger_stops:,}")
+    if danger_stops > 0:
+        print("WARNING: High risk of cross-street snapping! GPS jitter will cause pings to snap to the wrong side of the road.")
+    # =====================================================================
+
     return stops_valid, tree, stops_valid["stop_id"].values
 
 
@@ -173,8 +189,15 @@ def snap_pings(
     print(f"Total pings      : {n_total:,}")
     print(f"Snapped (<={threshold_m:.0f}m) : {n_snapped:,}  ({snap_pct:.1f}%)")
     print(f"Unsnapped        : {n_total - n_snapped:,}")
-    print(f"\nWritten -> {out_path}")
 
+    # =====================================================================
+    # CITYFLO DEBUG BLOCK 2: SNAP RATE SANITY -- PC
+    # =====================================================================
+    print(f"[TEST 2] Total Snapped Percentage: {snap_pct:.1f}%")
+    assert snap_pct > 15.0, f"CRITICAL FAILURE: Only {snap_pct:.1f}% of pings snapped to a stop. Either your coordinates are mismatched, or SNAP_THRESHOLD_M ({threshold_m}m) is way too small."
+    # =====================================================================
+    
+    print(f"\nWritten -> {out_path}")
 
 if __name__ == "__main__":
     import argparse
