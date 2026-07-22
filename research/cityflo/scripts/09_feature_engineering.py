@@ -255,6 +255,34 @@ def build_features(
             )
         """)
 
+        # =====================================================================
+        # CITYFLO DEBUG BLOCK: INJECT EXACTLY HERE -- PC
+        # =====================================================================
+        print("\n--- RUNNING FEATURE ENGINEERING DIAGNOSTICS ---")
+        
+        # 1. Sparse Lag Time-Travel Check
+        time_travel = con.execute("""
+            SELECT 
+                MAX(EPOCH(time_bin_30min) - EPOCH(lag_time)) / 3600.0 AS max_hrs,
+                AVG(EPOCH(time_bin_30min) - EPOCH(lag_time)) / 3600.0 AS avg_hrs
+            FROM (
+                SELECT 
+                    time_bin_30min, 
+                    LAG(time_bin_30min, 48) OVER w AS lag_time
+                FROM base
+                WINDOW w AS (PARTITION BY origin_stop_id, dest_stop_id ORDER BY time_bin_30min)
+            )
+            WHERE lag_time IS NOT NULL
+        """).fetchone()
+        
+        if time_travel and time_travel[0] is not None:
+            print(f"[TEST 1] Intended 'Yesterday' Lag: 24.0 hours")
+            print(f"[TEST 1] Actual Average Lag Fetched: {time_travel[1]:.1f} hours")
+            print(f"[TEST 1] Worst-Case Time Travel: {time_travel[0]:.1f} hours")
+            if time_travel[0] > 24.5:
+                print("WARNING: Row-based LAG() is fetching data from weeks/months ago due to matrix sparsity!")
+        # =====================================================================
+
         # Stage 3 — nearest-hour weather join, entirely in DuckDB.
         # Script 08 already engineers all derived columns (precip_3h/6h/24h,
         # log_precip, is_raining, heat_index, weather_severity, …); this
