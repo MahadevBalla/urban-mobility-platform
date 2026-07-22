@@ -448,7 +448,45 @@ def compute_reliability(
             FROM schedule_adherence
             GROUP BY stop_id, day_type, period, month_num, is_monsoon
         """)
+        # =====================================================================
+        # CITYFLO DEBUG BLOCK: INJECT EXACTLY HERE
+        # =====================================================================
+        print("\n--- RUNNING RELIABILITY DIAGNOSTICS ---")
 
+        # 1. Join Amputation Check
+        amputated_stops = con.execute("""
+            SELECT COUNT(*) FROM stop_arrivals sa
+            JOIN inferred inf ON sa.vehicle_id = inf.vehicle_id AND sa.segment_id = inf.segment_id
+            WHERE sa.ride_date != inf.seg_start_date
+        """).fetchone()[0]
+        print(f"[TEST 1] Stops amputated by ride_date mismatch: {amputated_stops:,}")
+
+        # 2. Midnight Adherence Rejection Check
+        modulo_rejects = con.execute("""
+            SELECT COUNT(*) FROM stop_arrivals sa
+            JOIN inferred inf ON sa.vehicle_id = inf.vehicle_id AND sa.segment_id = inf.segment_id
+            JOIN trip_stop_schedule tss ON inf.candidate_trip_id = tss.trip_id AND sa.stop_id = tss.stop_id
+            WHERE inf.candidate_trip_id IS NOT NULL
+            AND (
+                ABS((HOUR(sa.arrival_time) * 60.0 + MINUTE(sa.arrival_time)) - tss.scheduled_arrival_min) >= 90
+                AND
+                LEAST(
+                    ABS((HOUR(sa.arrival_time) * 60.0 + MINUTE(sa.arrival_time) + 1440) - tss.scheduled_arrival_min),
+                    ABS((HOUR(sa.arrival_time) * 60.0 + MINUTE(sa.arrival_time) - 1440) - tss.scheduled_arrival_min)
+                ) < 90
+            )
+        """).fetchone()[0]
+        print(f"[TEST 2] Valid night buses falsely rejected by raw adherence math: {modulo_rejects:,}")
+        
+        # 3. Headway Severing Check
+        severed_headways = con.execute("""
+            SELECT COUNT(*) FROM stop_visits 
+            WHERE headway_min IS NULL 
+            AND HOUR(arrival_time) < 4
+        """).fetchone()[0]
+        print(f"[TEST 3] Early morning headways severed by date partition: {severed_headways:,}")
+        # =====================================================================
+       
         # Write outputs
         for tbl, fpath in [
             ("headway_stats", HEADWAY_STATS),
