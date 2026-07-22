@@ -666,9 +666,20 @@ def extract_segment_sequences(snapped_path: Path, min_obs_stops: int) -> pd.Data
         if con is not None:
             con.close()
 
-    segs["stop_seq"] = segs["stop_seq_raw"].apply(
-        lambda x: dedup_consecutive([int(v) for v in x])
-    )
+    # FIX: Replace simple consecutive deduplication with a jitter-filtering collapse
+    # that removes rapid back-and-forth cross street snaps (A -> B -> A).
+    def clean_jitter(seq_list):
+        cleaned = []
+        for v in seq_list:
+            v_int = int(v)
+            if not cleaned or cleaned[-1] != v_int:
+                # If we bounce back to a stop we were just at immediately prior, skip it
+                if len(cleaned) >= 2 and cleaned[-2] == v_int:
+                    continue
+                cleaned.append(v_int)
+        return cleaned
+
+    segs["stop_seq"] = segs["stop_seq_raw"].apply(clean_jitter)
     segs["n_obs_stops"] = segs["stop_seq"].apply(len)
     segs = segs[segs["n_obs_stops"] >= min_obs_stops].copy()
 
