@@ -54,15 +54,15 @@ FEATURE_COLS_REQUIRED: list[str] = [
     # Trip geography
     "trip_distance_km",
     "dist_cbd_km",
-    "origin_headway_reliability",
-    "origin_headway_cv",
-    "lag_1_trip_count",
-    "rolling_24h_mean",
     "hex_avg_demand",
     "hex_demand_rank",
 ]
 
 FEATURE_COLS_OPTIONAL: list[str] = [
+    "lag_1_trip_count",
+    "rolling_24h_mean",
+    "origin_headway_reliability",
+    "origin_headway_cv",
     "mean_delay_min",
     "on_time_pct",
     "lag_2_trip_count",
@@ -248,8 +248,18 @@ def run_nb(features_path: Path) -> None:
     # Leakage-safe hex demand features
     train, valid, test = add_hex_demand_features(train, [train, valid, test])
 
-    for col in FEATURE_COLS_OPTIONAL:
+    # FIX: Explicitly treat missing lag/rolling trip counts as 0.0 
+    # (since a missing record in a sparse matrix means zero trips occurred)
+    sparse_zero_cols = ["lag_1_trip_count", "rolling_24h_mean"]
+    for col in sparse_zero_cols:
         if col in train.columns:
+            train[col] = train[col].fillna(0.0)
+            valid[col] = valid[col].fillna(0.0)
+            test[col] = test[col].fillna(0.0)
+
+    # Impute remaining optional features with training median
+    for col in FEATURE_COLS_OPTIONAL:
+        if col not in sparse_zero_cols and col in train.columns:
             median = train[col].median(skipna=True)
             fill_val = 0.0 if pd.isna(median) else median
             train[col] = train[col].fillna(fill_val)
