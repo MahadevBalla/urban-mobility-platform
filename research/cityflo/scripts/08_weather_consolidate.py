@@ -406,6 +406,20 @@ def interpolate_to_stops_streaming(
         # chunk already contains in full (all n_times per stop).
         chunk_df = add_derived_features(chunk_df)
 
+        # =====================================================================
+        # CITYFLO DEBUG BLOCK: INJECT EXACTLY HERE -- PC
+        # =====================================================================
+        if start == 0 and "weather_severity" in chunk_df.columns:
+            print("\n--- RUNNING WEATHER DIAGNOSTICS (CHUNK 1) ---")
+            non_zero = (chunk_df['weather_severity'] > 0).sum()
+            print(f"[TEST 1] Rows with Weather Severity > 0: {non_zero:,}")
+            corrupted = chunk_df['weather_code'].dropna().head(5).tolist()
+            print(f"[TEST 2] Sample Interpolated Weather Codes: {corrupted}")
+            if non_zero == 0:
+                print("WARNING: Categorical weather codes were mathematically averaged into floats!")
+                print("The severity mapping is completely broken.")
+        # =====================================================================
+            
         table = pa.Table.from_pandas(chunk_df, preserve_index=False)
         if writer is None:
             writer = pq.ParquetWriter(out_path, table.schema, compression="zstd")
