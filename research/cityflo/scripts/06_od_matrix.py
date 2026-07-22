@@ -292,6 +292,32 @@ def build_od_matrix(
                 f"Warning: {n_neg_dur} aggregated OD records have negative average duration"
             )
 
+        # =====================================================================
+        # CITYFLO DEBUG BLOCK: INJECT EXACTLY HERE -- PC
+        # =====================================================================
+        print("\n--- RUNNING OD MATRIX DIAGNOSTICS ---")
+
+        # 1. Midnight Amputation Check
+        # Count how many trips magically "arrived" precisely between 23:59:00 and 23:59:59
+        midnight_drops = con.execute("""
+            SELECT COUNT(*) FROM od_combined 
+            WHERE EXTRACT(HOUR FROM arrive_ist) = 23 
+              AND EXTRACT(MINUTE FROM arrive_ist) = 59
+        """).fetchone()[0]
+        print(f"[TEST 1] Night buses artificially amputated at 23:59: {midnight_drops:,}")
+        if midnight_drops > 0:
+            print("WARNING: The ride_date JOIN trap is deleting the second half of your night trips!")
+
+        # 2. DateDiff Trap Return Check
+        fake_durations = con.execute(f"""
+            SELECT COUNT(*) FROM od_combined
+            WHERE (EXTRACT(EPOCH FROM arrive_ist) - EXTRACT(EPOCH FROM depart_ist)) < ({OD_MIN_DURATION_MIN} * 60)
+        """).fetchone()[0]
+        print(f"[TEST 2] False 'Valid' trips (< {OD_MIN_DURATION_MIN} absolute minutes): {fake_durations:,}")
+        if fake_durations > 0:
+            print("WARNING: DATEDIFF minute-boundary trap detected again in OD construction.")
+        # =====================================================================
+
         # Write outputs
         for tbl, fpath in [
             ("od_tier1", OD_TIER1),
