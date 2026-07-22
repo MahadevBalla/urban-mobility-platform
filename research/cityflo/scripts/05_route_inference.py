@@ -1022,6 +1022,31 @@ def run_inference(
                 f"({100 * n_high_conf_with_trip / n_high_conf:.1f}%)"
             )
 
+    # =====================================================================
+    # CITYFLO DEBUG BLOCK: INJECT EXACTLY HERE -- PC
+    # =====================================================================
+    print("\n--- RUNNING ROUTE INFERENCE DIAGNOSTICS ---")
+    
+    # 1. The Short-Sequence Illusion Check
+    short_matches = inferred[inferred["n_obs_stops"] < min_obs_stops]
+    print(f"[TEST 1] Inferred routes with < {min_obs_stops} stops: {len(short_matches):,}")
+    assert len(short_matches) == 0, f"CRITICAL FAILURE: LCSS is matching ghost segments. Segments with < {min_obs_stops} stops must be dropped."
+
+    # 2. Midnight Residual Wrap-around Check
+    massive_delays = inferred[inferred["trip_time_diff_min"].abs() > 700]
+    print(f"[TEST 2] Trips with >12 hour schedule residuals: {len(massive_delays):,}")
+    if len(massive_delays) > 0:
+        print("WARNING: Midnight residual trap detected! Night buses are failing stage 2 matching because of raw time subtraction.")
+        
+    # 3. Overall Match Rate
+    total_segments = len(inferred)
+    matched_segments = inferred["template_id"].notna().sum()
+    match_rate = (matched_segments / total_segments) * 100 if total_segments > 0 else 0
+    print(f"[TEST 3] Overall Segment Match Rate: {match_rate:.1f}%")
+    if match_rate < 30.0:
+        print("WARNING: Less than 30% of your segments matched a route. The snapping threshold or LCSS confidence parameters are too strict.")
+    # =====================================================================
+
     out_path.parent.mkdir(parents=True, exist_ok=True)
     inferred.to_parquet(out_path, index=False, compression="zstd")
     print(f"\nWritten -> {out_path}")
