@@ -61,10 +61,37 @@ def parse_route(route_str: str) -> list[tuple[int, str]]:
     return result
 
 
+# =====================================================================
+# FIXED PARSING & MATH HELPER FUNCTIONS -- PC
+# =====================================================================
 def time_to_minutes(t: str) -> float:
-    """Convert HH:MM:SS to minutes since midnight."""
-    h, m, s = map(int, t.split(":"))
+    """
+    Convert time to minutes since midnight robustly.
+    Safely handles both 'HH:MM:SS' and 'HH:MM' formats.
+    """
+    parts = t.split(":")
+    h = int(parts[0])
+    m = int(parts[1])
+    s = int(parts[2]) if len(parts) > 2 else 0
     return h * 60.0 + m + s / 60.0
+
+def midnight_safe_median(times_in_minutes: list[float]) -> float:
+    """
+    Calculate the median time, safely handling midnight crossovers.
+    If times span across midnight (e.g., 23:50 and 00:10), it shifts early 
+    morning times forward by 24 hours, calculates the median, and wraps back.
+    """
+    if not times_in_minutes:
+        return 0.0
+        
+    # If the spread is greater than 12 hours (720 mins), it's crossing midnight
+    if max(times_in_minutes) - min(times_in_minutes) > 720:
+        # Shift times before 4:00 AM (240 mins) to the next day
+        shifted_times = [t + 1440 if t < 240 else t for t in times_in_minutes]
+        med = median(shifted_times)
+        return round(med % 1440, 2)
+    
+    return round(median(times_in_minutes), 2)
 
 
 # Catalog builder
@@ -155,16 +182,19 @@ def build_route_catalog(
             for sid, t in route:
                 time_accum.setdefault(sid, []).append(time_to_minutes(t))
 
+        # FIX 2: Apply the midnight-safe median to individual stop schedules
         median_sched = {
-            sid: round(median(v), 2)
+            sid: midnight_safe_median(v)
             for sid, v in time_accum.items()
         }
 
-        # Typical start time (median across runs, not mean)
+        # Typical start time (midnight-safe median across runs)
         first_times = [
-            time_to_minutes(route[0][1]) / 60.0 for route in group["parsed"] if route
+            time_to_minutes(route[0][1]) for route in group["parsed"] if route
         ]
-        typical_start_h = round(median(first_times), 2) if first_times else 0.0
+        
+        # Convert back to hours after safely calculating the median in minutes
+        typical_start_h = round(midnight_safe_median(first_times) / 60.0, 2) if first_times else 0.0
 
         # Date coverage (first/last seen)
         first_seen = (
