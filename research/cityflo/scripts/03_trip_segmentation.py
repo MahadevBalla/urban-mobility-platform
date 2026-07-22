@@ -111,6 +111,49 @@ def segment_trips(in_path: Path, out_path: Path) -> None:
         print(f"Total segments:          {n_all:,}")
         print(f"Valid segments retained: {n_valid:,}")
 
+        # =====================================================================
+        # CITYFLO DEBUG BLOCK: STRICT ASSERTIONS
+        # =====================================================================
+        print("\n--- RUNNING TRIP SEGMENTATION DIAGNOSTICS ---")
+
+        # 1. Negative Time Check (Sorting integrity within segments)
+        time_travel = con.execute("""
+            SELECT COUNT(*) FROM (
+                SELECT DATEDIFF('second', 
+                    LAG(timestamp_ist) OVER (PARTITION BY vehicle_id, segment_id ORDER BY timestamp_ist), 
+                    timestamp_ist
+                ) as gap
+                FROM pings_segs
+            ) WHERE gap < 0
+        """).fetchone()[0]
+        print(f"[TEST 1] Backward Time Jumps within segments: {time_travel:,}")
+        assert time_travel == 0, "CRITICAL FAILURE: Time went backward inside a segment. SQL ORDER BY is non-deterministic or data is corrupted."
+
+        # 2. The DateDiff Trap Check (Now a strict assert to guarantee the fix worked)
+        fake_valid = con.execute(f"""
+            SELECT COUNT(*) FROM (
+                SELECT v.vehicle_id, v.segment_id
+                FROM valid_segs v
+                JOIN pings_segs p ON v.vehicle_id = p.vehicle_id AND v.segment_id = p.segment_id
+                GROUP BY v.vehicle_id, v.segment_id
+                HAVING EXTRACT(EPOCH FROM MAX(p.timestamp_ist)) - EXTRACT(EPOCH FROM MIN(p.timestamp_ist)) < ({MIN_DURATION_MIN} * 60)
+            )
+        """).fetchone()[0]
+        print(f"[TEST 2] False 'Valid' segments (< {MIN_DURATION_MIN} absolute minutes): {fake_valid:,}")
+        assert fake_valid == 0, "CRITICAL FAILURE: The boundary trap fix failed. Micro-segments are still leaking."
+
+        # 3. Giant Gap Check
+        giant_gaps = con.execute(f"""
+            SELECT COUNT(*) FROM (
+                SELECT 
+                    EXTRACT(EPOCH FROM timestamp_ist) - EXTRACT(EPOCH FROM LAG(timestamp_ist) OVER (PARTITION BY vehicle_id, segment_id ORDER BY timestamp_ist)) as abs_gap_seconds
+                FROM pings_segs
+            ) WHERE abs_gap_seconds > ({GAP_THRESHOLD_MIN} * 60)
+        """).fetchone()[0]
+        print(f"[TEST 3] Pings sharing a segment despite > {GAP_THRESHOLD_MIN}m gap: {giant_gaps:,}")
+        assert giant_gaps == 0, "CRITICAL FAILURE: Segmentation logic failed. Massive time gaps exist inside single trips."
+        # =====================================================================
+
         con.execute(f"""
             COPY (
                 SELECT p.*
