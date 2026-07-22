@@ -53,9 +53,7 @@ def segment_trips(in_path: Path, out_path: Path) -> None:
         print(f"Input pings: {n_raw:,}")
 
         # =====================================================================
-        # FIX 1: Exact Second-Level Gap Threshold 
-        # By using DATEDIFF('second') and converting the config threshold to seconds,
-        # we completely bypass the SQL minute-boundary truncation trap.
+        # FIX 1: Exact Absolute Float Seconds for Gap Threshold
         # =====================================================================
         con.execute(f"""
             CREATE TABLE pings_segs AS
@@ -72,23 +70,17 @@ def segment_trips(in_path: Path, out_path: Path) -> None:
                             PARTITION BY vehicle_id
                             ORDER BY timestamp_ist
                         ) IS NULL
-                        OR DATEDIFF(
-                            'second',
-                            LAG(timestamp_ist) OVER (
+                        OR (EXTRACT(EPOCH FROM timestamp_ist) - EXTRACT(EPOCH FROM LAG(timestamp_ist) OVER (
                                 PARTITION BY vehicle_id
                                 ORDER BY timestamp_ist
-                            ),
-                            timestamp_ist
-                        ) > ({GAP_THRESHOLD_MIN} * 60)
+                            ))) > ({GAP_THRESHOLD_MIN} * 60)
                     ) AS is_new
                 FROM pings
             ) _flagged
         """)
 
         # =====================================================================
-        # FIX 2: Exact Second-Level Duration Validation
-        # Forces the total segment duration to truly exceed the physical minimum 
-        # time, preventing 2-second glitches from masquerading as 1-minute trips.
+        # FIX 2: Exact Absolute Float Seconds for Duration
         # =====================================================================
         con.execute(f"""
             CREATE TABLE valid_segs AS
@@ -97,11 +89,7 @@ def segment_trips(in_path: Path, out_path: Path) -> None:
             GROUP BY vehicle_id, segment_id
             HAVING
                 COUNT(*) >= {MIN_PINGS_PER_SEG}
-                AND DATEDIFF(
-                    'second',
-                    MIN(timestamp_ist),
-                    MAX(timestamp_ist)
-                ) >= ({MIN_DURATION_MIN} * 60)
+                AND (EXTRACT(EPOCH FROM MAX(timestamp_ist)) - EXTRACT(EPOCH FROM MIN(timestamp_ist))) >= ({MIN_DURATION_MIN} * 60)
         """)
 
         n_all = con.execute(
