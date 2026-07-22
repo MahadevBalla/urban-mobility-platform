@@ -267,7 +267,8 @@ def compute_reliability(
                     EPOCH(arrival_time)
                     - EPOCH(
                         LAG(arrival_time) OVER (
-                            PARTITION BY stop_id, ride_date
+                            -- FIX 1: Removed ride_date from PARTITION BY so early morning headways aren't severed
+                            PARTITION BY stop_id
                             ORDER BY arrival_time
                         )
                     )
@@ -362,57 +363,72 @@ def compute_reliability(
         # B. Schedule adherence: exact trip-stop schedule
         # Join stop_arrivals → inferred (for candidate_trip_id) → trip_stop_schedule
         # (for the archived scheduled arrival of that stop on that trip).
-        # No template offsets; no trip start time reconstruction.
-        # The |delay| < 90-minute guard retains the same outlier filter as before.
         con.execute(f"""
             CREATE TABLE schedule_adherence AS
-            SELECT
-                sa.stop_id,
-                sa.vehicle_id,
-                sa.ride_date,
-                sa.segment_id,
-                inf.template_id,
-                inf.candidate_trip_id,
-                inf.match_confidence,
-                sa.arrival_time                                          AS actual_arrival,
-                tss.scheduled_arrival_min,
-                HOUR(sa.arrival_time) * 60.0
-                    + MINUTE(sa.arrival_time)
-                    + SECOND(sa.arrival_time) / 60.0                   AS actual_min_ist,
-                (
+            WITH raw_adherence AS (
+                SELECT
+                    sa.stop_id,
+                    sa.vehicle_id,
+                    sa.ride_date,
+                    sa.segment_id,
+                    inf.template_id,
+                    inf.candidate_trip_id,
+                    inf.match_confidence,
+                    sa.arrival_time                                          AS actual_arrival,
+                    tss.scheduled_arrival_min,
                     HOUR(sa.arrival_time) * 60.0
-                    + MINUTE(sa.arrival_time)
-                    + SECOND(sa.arrival_time) / 60.0
-                ) - tss.scheduled_arrival_min                           AS delay_min,
-                MONTH(sa.ride_date)                                      AS month_num,
-                CASE WHEN MONTH(sa.ride_date) IN (6,7,8,9) THEN 1 ELSE 0 END
-                                                                        AS is_monsoon,
-                CASE
-                    WHEN DAYOFWEEK(sa.ride_date) IN (0, 6) THEN 'weekend'
-                    ELSE 'weekday'
-                END                                                      AS day_type,
-                CASE
-                    WHEN HOUR(sa.arrival_time) >= 6  AND HOUR(sa.arrival_time) < 10 THEN 'AM_peak'
-                    WHEN HOUR(sa.arrival_time) >= 17 AND HOUR(sa.arrival_time) < 21 THEN 'PM_peak'
-                    ELSE 'off_peak'
-                END                                                      AS period
-            FROM stop_arrivals sa
-            JOIN inferred inf
-            ON sa.vehicle_id = inf.vehicle_id
-            AND sa.ride_date  = inf.seg_start_date
-            AND sa.segment_id = inf.segment_id
-            JOIN trip_stop_schedule tss
-            ON inf.candidate_trip_id = tss.trip_id
-            AND sa.stop_id            = tss.stop_id
-            WHERE inf.candidate_trip_id IS NOT NULL
-            AND inf.match_confidence  >= {ROUTE_HIGH_CONFIDENCE}
-            AND ABS(
+                        + MINUTE(sa.arrival_time)
+                        + SECOND(sa.arrival_time) / 60.0                   AS actual_min_ist,
                     (
                         HOUR(sa.arrival_time) * 60.0
                         + MINUTE(sa.arrival_time)
                         + SECOND(sa.arrival_time) / 60.0
-                    ) - tss.scheduled_arrival_min
-                ) < 90
+                    ) - tss.scheduled_arrival_min                           AS raw_delay_min,
+                    MONTH(sa.ride_date)                                      AS month_num,
+                    CASE WHEN MONTH(sa.ride_date) IN (6,7,8,9) THEN 1 ELSE 0 END
+                                                                            AS is_monsoon,
+                    CASE
+                        WHEN DAYOFWEEK(sa.ride_date) IN (0, 6) THEN 'weekend'
+                        ELSE 'weekday'
+                    END                                                      AS day_type,
+                    CASE
+                        WHEN HOUR(sa.arrival_time) >= 6  AND HOUR(sa.arrival_time) < 10 THEN 'AM_peak'
+                        WHEN HOUR(sa.arrival_time) >= 17 AND HOUR(sa.arrival_time) < 21 THEN 'PM_peak'
+                        ELSE 'off_peak'
+                    END                                                      AS period
+                FROM stop_arrivals sa
+                JOIN inferred inf
+                ON sa.vehicle_id = inf.vehicle_id
+                
+                -- FIX 2: Removed sa.ride_date = inf.seg_start_date join condition to stop 1.8M amputations
+                AND sa.segment_id = inf.segment_id
+                
+                JOIN trip_stop_schedule tss
+                ON inf.candidate_trip_id = tss.trip_id
+                AND sa.stop_id            = tss.stop_id
+                WHERE inf.candidate_trip_id IS NOT NULL
+                AND inf.match_confidence  >= {ROUTE_HIGH_CONFIDENCE}
+            )
+            SELECT
+                stop_id, vehicle_id, ride_date, segment_id, template_id, candidate_trip_id,
+                match_confidence, actual_arrival, scheduled_arrival_min, actual_min_ist,
+                
+                -- FIX 3: Midnight-safe wraparound math for delay
+                CASE 
+                    WHEN raw_delay_min > 720 THEN raw_delay_min - 1440
+                    WHEN raw_delay_min < -720 THEN raw_delay_min + 1440
+                    ELSE raw_delay_min
+                END AS delay_min,
+                
+                month_num, is_monsoon, day_type, period
+            FROM raw_adherence
+            WHERE ABS(
+                CASE 
+                    WHEN raw_delay_min > 720 THEN raw_delay_min - 1440
+                    WHEN raw_delay_min < -720 THEN raw_delay_min + 1440
+                    ELSE raw_delay_min
+                END
+            ) < 90
         """)
 
         con.execute(f"""
