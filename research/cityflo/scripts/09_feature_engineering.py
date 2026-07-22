@@ -230,24 +230,22 @@ def build_features(
         """).df())
 
         # Stage 2 — lag / rolling features (strictly backward-looking)
-        # Named WINDOW clause avoids repeating the PARTITION/ORDER spec.
-        # ROWS BETWEEN N PRECEDING AND 1 PRECEDING guarantees no look-ahead.
+        # FIX: Replaced physical ROWS with temporal RANGE to prevent time-travel on sparse data.
         con.execute("""
             CREATE TABLE base_lagged AS
             SELECT
                 *,
-                -- Short-term lags
-                LAG(trip_count,   1) OVER w  AS lag_1_trip_count,
-                LAG(trip_count,   2) OVER w  AS lag_2_trip_count,
-                -- Same time yesterday  (48 × 30 min = 24 h)
-                LAG(trip_count,  48) OVER w  AS lag_day_trip_count,
-                -- Same time last week (336 × 30 min = 7 d)
-                LAG(trip_count, 336) OVER w  AS lag_week_trip_count,
-                -- Rolling 24 h statistics (48 preceding bins, excluding current)
-                AVG(trip_count)    OVER (w ROWS BETWEEN 48 PRECEDING AND 1 PRECEDING)
-                                             AS rolling_24h_mean,
-                STDDEV(trip_count) OVER (w ROWS BETWEEN 48 PRECEDING AND 1 PRECEDING)
-                                             AS rolling_24h_std
+                -- Short-term lags: Exact time offsets instead of physical row counts
+                MAX(trip_count) OVER (w RANGE BETWEEN INTERVAL 30 MINUTE PRECEDING AND INTERVAL 30 MINUTE PRECEDING) AS lag_1_trip_count,
+                MAX(trip_count) OVER (w RANGE BETWEEN INTERVAL 60 MINUTE PRECEDING AND INTERVAL 60 MINUTE PRECEDING) AS lag_2_trip_count,
+                
+                -- Same time yesterday and last week
+                MAX(trip_count) OVER (w RANGE BETWEEN INTERVAL 24 HOUR PRECEDING AND INTERVAL 24 HOUR PRECEDING) AS lag_day_trip_count,
+                MAX(trip_count) OVER (w RANGE BETWEEN INTERVAL 7 DAY PRECEDING AND INTERVAL 7 DAY PRECEDING) AS lag_week_trip_count,
+                
+                -- Rolling 24 h statistics (strictly physical time range, excluding current bin)
+                AVG(trip_count)    OVER (w RANGE BETWEEN INTERVAL 24 HOUR PRECEDING AND INTERVAL 30 MINUTE PRECEDING) AS rolling_24h_mean,
+                STDDEV(trip_count) OVER (w RANGE BETWEEN INTERVAL 24 HOUR PRECEDING AND INTERVAL 30 MINUTE PRECEDING) AS rolling_24h_std
             FROM base
             WINDOW w AS (
                 PARTITION BY origin_stop_id, dest_stop_id
