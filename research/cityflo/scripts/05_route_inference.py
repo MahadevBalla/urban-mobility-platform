@@ -349,7 +349,10 @@ def compute_match_score(observed: List[int], tmpl: dict) -> dict:
     jaccard = n_match / len(obs_set | tpl_set) if (obs_set | tpl_set) else 0.0
 
     lcs_len = lcs_length(obs_unique, tmpl["stops"])
-    denom = max(len(obs_unique), len(tmpl["stops"]))
+    
+    # FIX: Normalize against the template length, not the bloated observed noise length.
+    # This prevents GPS jitter inflation from destroying valid confidence scores.
+    denom = len(tmpl["stops"])
     lcss_similarity = (lcs_len / denom) if denom else 0.0
     order_score_val = lcs_len / len(obs_unique) if obs_unique else 0.0
 
