@@ -187,41 +187,6 @@ CBD_LAT = 18.9256
 CBD_LNG = 72.8243
 
 # Model hyper-parameters
-# RANDOM_SEED = 42
-# XGB_PARAMS = {
-#     "n_estimators": 500,
-#     "max_depth": 6,
-#     "learning_rate": 0.05,
-#     "subsample": 0.8,
-#     "colsample_bytree": 0.8,
-#     "min_child_weight": 5,
-#     "reg_alpha": 0.1,
-#     "reg_lambda": 1.0,
-#     "objective": "reg:squarederror",
-#     "tree_method": "hist",
-#     "device": "cuda",  # switch to "cpu" if no GPU
-#     "random_state": 42,
-#     "early_stopping_rounds": 30,
-#     "validation_fraction": 0.15,
-#     "cv_n_splits": 5,
-#     "shap_sample_n": 5000,
-# }
-
-# STGNN_PARAMS = {
-#     "hidden_dim": 64,
-#     "n_layers": 2,
-#     "n_heads": 4,  # must divide hidden_dim evenly
-#     "seq_len": 12,  # 12 × 30 min = 6 h lookback
-#     "pred_horizon": 4,  # predict next 4 × 30 min
-#     "epochs": 100,
-#     "batch_size": 64,
-#     "lr": 1e-3,
-#     "dropout": 0.1,
-#     "weight_decay": 1e-4,
-#     "patience": 15,
-# }
-
-# Model hyper-parameters
 RANDOM_SEED = 42
 XGB_PARAMS = {
     "n_estimators": 500,
@@ -234,17 +199,11 @@ XGB_PARAMS = {
     "reg_lambda": 1.0,
     "objective": "reg:squarederror",
     "tree_method": "hist",
-    
-    # FIX 1: Mac Hardware Compatibility 
-    # Changed from "cuda" to "cpu". XGBoost on Mac runs safest on the CPU.
-    "device": "cpu",  
-    
+    "device": "cuda",  # switch to "cpu" if no GPU
     "random_state": 42,
     "early_stopping_rounds": 30,
     "validation_fraction": 0.15,
-    
-    # FIX 2: Reduced Cross-Validation splits from 5 to 3 to save RAM and time
-    "cv_n_splits": 3, 
+    "cv_n_splits": 5,
     "shap_sample_n": 5000,
 }
 
@@ -255,20 +214,11 @@ STGNN_PARAMS = {
     "seq_len": 12,  # 12 × 30 min = 6 h lookback
     "pred_horizon": 4,  # predict next 4 × 30 min
     "epochs": 100,
-    
-    # FIX 3: Critical RAM Safety
-    # Reduced batch_size from 64 to 16. A batch size of 64 on an 8GB Mac 
-    # processing gigabytes of spatial graphs will cause a fatal OOM crash.
-    "batch_size": 16, 
-    
+    "batch_size": 64,
     "lr": 1e-3,
     "dropout": 0.1,
     "weight_decay": 1e-4,
     "patience": 15,
-    
-    # FIX 4: Explicitly define the Apple device for PyTorch (if supported by your colleague's script)
-    # Use "mps" if you have an M1/M2/M3 Mac. If you are on an Intel Mac, change this to "cpu".
-    "device": "mps", 
 }
 
 # Policy Outputs

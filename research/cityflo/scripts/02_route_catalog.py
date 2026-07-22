@@ -107,6 +107,39 @@ def build_route_catalog(
     print(f"Unique templates  : {n_templates:,}")
     print(f"Trips retained    : {len(trips):,}\n")
 
+    # =====================================================================
+    # CITYFLO DEBUG BLOCK: INJECT EXACTLY HERE -- PC
+    # =====================================================================
+    print("--- RUNNING ROUTE CATALOG DIAGNOSTICS ---")
+
+    # 1. Total Parsed Integrity
+    assert len(trips) > 0, "CRITICAL FAILURE: 100% of trips failed to parse. Check the raw string format in trips_clean.csv."
+
+    # 2. Minimum Stops Check
+    short_trips = trips[trips["n_stops"] < 2]
+    print(f"[TEST 1] Trips with < 2 stops (unusable): {len(short_trips):,}")
+    if len(short_trips) > 0:
+        print("WARNING: Found trips with fewer than 2 stops. A valid trip requires at least an origin and destination.")
+
+    # 3. Time Format Sanity Check (The Unpacking Bomb)
+    sample_time = trips.iloc[0]["parsed"][0][1]
+    time_parts = str(sample_time).split(":")
+    print(f"[TEST 2] Sample Time Format: '{sample_time}' -> {len(time_parts)} parts")
+    assert len(time_parts) == 3, f"CRITICAL FAILURE: time_to_minutes expects HH:MM:SS (3 parts). Found: '{sample_time}'. The script will crash."
+
+    # 4. Midnight Crossings Check (The Median Trap)
+    # We check if any trips occur in the late night/early morning boundaries (23:00 - 01:00)
+    midnight_risk = 0
+    for route in trips["parsed"].head(5000): # Sample check for speed
+        for _, t in route:
+            if t.startswith("23:") or t.startswith("00:") or t.startswith("01:"):
+                midnight_risk += 1
+                break
+    print(f"[TEST 3] Midnight Crossing Risk (Sampled): {midnight_risk} routes")
+    if midnight_risk > 0:
+        print("WARNING: Found trips operating near midnight. Standard median calculations will heavily distort these schedules.")
+    # =====================================================================
+
     # Build catalog rows
     catalog_rows = []
 
