@@ -138,71 +138,71 @@ def build_features(
     con = None
     try:
         con = duckdb.connect()
-            
-            # Read the raw sparse OD matrix
-            con.execute(f"CREATE TABLE od_raw AS SELECT * FROM read_parquet('{od_path}')")
-            con.execute(f"CREATE TABLE hw AS SELECT * FROM read_parquet('{headway_path}')")
-            con.execute(f"CREATE TABLE sched AS SELECT * FROM read_parquet('{sched_path}')")
-
-            # Let DuckDB spill to disk instead of OOM-ing
-            con.execute(f"PRAGMA temp_directory='{duckdb_tmp_dir}'")
-            _assert_weather_is_hourly(con, weather_path)
-
-            # =================================================================
-            # FIX: The Implicit Zero Densification
-            # We explicitly create 0-count rows for time bins where no buses ran
-            # =================================================================
-            print("Densifying the sparse OD matrix with explicit zeros...")
-            con.execute("""
-                CREATE TABLE od AS
-                WITH unique_routes AS (
-                    SELECT 
-                        origin_stop_id, 
-                        dest_stop_id,
-                        FIRST(trip_distance_km) AS trip_distance_km,
-                        FIRST(origin_lat) AS origin_lat,
-                        FIRST(origin_lng) AS origin_lng,
-                        FIRST(dest_lat) AS dest_lat,
-                        FIRST(dest_lng) AS dest_lng
-                    FROM od_raw
-                    GROUP BY origin_stop_id, dest_stop_id
-                ),
-                time_grid AS (
-                    SELECT DISTINCT time_bin_30min FROM od_raw
-                ),
-                dense_grid AS (
-                    SELECT r.*, t.time_bin_30min
-                    FROM unique_routes r
-                    CROSS JOIN time_grid t
-                )
-                SELECT
-                    d.origin_stop_id,
-                    d.dest_stop_id,
-                    d.time_bin_30min,
-                    COALESCE(o.trip_count, 0) AS trip_count,
-                    d.trip_distance_km,
-                    d.origin_lat,
-                    d.origin_lng,
-                    d.dest_lat,
-                    d.dest_lng,
-                    
-                    -- Re-derive temporal join keys for the padded 0-count rows
-                    CASE
-                        WHEN HOUR(d.time_bin_30min) >= 6  AND HOUR(d.time_bin_30min) < 10 THEN 'AM_peak'
-                        WHEN HOUR(d.time_bin_30min) >= 17 AND HOUR(d.time_bin_30min) < 21 THEN 'PM_peak'
-                        ELSE 'off_peak'
-                    END AS period,
-                    MONTH(d.time_bin_30min) AS month_num,
-                    CASE WHEN MONTH(d.time_bin_30min) IN (6,7,8,9) THEN 1 ELSE 0 END AS is_monsoon,
-                    DAYOFWEEK(d.time_bin_30min) AS dow
-                    
-                FROM dense_grid d
-                LEFT JOIN od_raw o
-                    ON d.origin_stop_id = o.origin_stop_id
-                   AND d.dest_stop_id   = o.dest_stop_id
-                   AND d.time_bin_30min = o.time_bin_30min
-            """)
-            # =================================================================
+        
+        # Read the raw sparse OD matrix
+        con.execute(f"CREATE TABLE od_raw AS SELECT * FROM read_parquet('{od_path}')")
+        con.execute(f"CREATE TABLE hw AS SELECT * FROM read_parquet('{headway_path}')")
+        con.execute(f"CREATE TABLE sched AS SELECT * FROM read_parquet('{sched_path}')")
+        
+        # Let DuckDB spill to disk instead of OOM-ing
+        con.execute(f"PRAGMA temp_directory='{duckdb_tmp_dir}'")
+        _assert_weather_is_hourly(con, weather_path)
+        
+        # =================================================================
+        # FIX: The Implicit Zero Densification
+        # We explicitly create 0-count rows for time bins where no buses ran
+        # =================================================================
+        print("Densifying the sparse OD matrix with explicit zeros...")
+        con.execute("""
+            CREATE TABLE od AS
+            WITH unique_routes AS (
+                SELECT 
+                    origin_stop_id, 
+                    dest_stop_id,
+                    FIRST(trip_distance_km) AS trip_distance_km,
+                    FIRST(origin_lat) AS origin_lat,
+                    FIRST(origin_lng) AS origin_lng,
+                    FIRST(dest_lat) AS dest_lat,
+                    FIRST(dest_lng) AS dest_lng
+                FROM od_raw
+                GROUP BY origin_stop_id, dest_stop_id
+            ),
+            time_grid AS (
+                SELECT DISTINCT time_bin_30min FROM od_raw
+            ),
+            dense_grid AS (
+                SELECT r.*, t.time_bin_30min
+                FROM unique_routes r
+                CROSS JOIN time_grid t
+            )
+            SELECT
+                d.origin_stop_id,
+                d.dest_stop_id,
+                d.time_bin_30min,
+                COALESCE(o.trip_count, 0) AS trip_count,
+                d.trip_distance_km,
+                d.origin_lat,
+                d.origin_lng,
+                d.dest_lat,
+                d.dest_lng,
+                
+                -- Re-derive temporal join keys for the padded 0-count rows
+                CASE
+                    WHEN HOUR(d.time_bin_30min) >= 6  AND HOUR(d.time_bin_30min) < 10 THEN 'AM_peak'
+                    WHEN HOUR(d.time_bin_30min) >= 17 AND HOUR(d.time_bin_30min) < 21 THEN 'PM_peak'
+                    ELSE 'off_peak'
+                END AS period,
+                MONTH(d.time_bin_30min) AS month_num,
+                CASE WHEN MONTH(d.time_bin_30min) IN (6,7,8,9) THEN 1 ELSE 0 END AS is_monsoon,
+                DAYOFWEEK(d.time_bin_30min) AS dow
+                
+            FROM dense_grid d
+            LEFT JOIN od_raw o
+                ON d.origin_stop_id = o.origin_stop_id
+               AND d.dest_stop_id   = o.dest_stop_id
+               AND d.time_bin_30min = o.time_bin_30min
+        """)
+        # =================================================================
 
         # Stage 1 — temporal features + reliability join
         con.execute("""
