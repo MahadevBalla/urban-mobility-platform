@@ -224,6 +224,7 @@ def build_od_matrix(
 
         # Aggregate OD with stop metadata.  trip_distance_km uses equirectangular
         # approximation, accurate to ~0.5% for distances < 50 km.
+        # FIX: Removed 'od_method' from SELECT and GROUP BY to allow proper trip clustering
         con.execute("""
             CREATE TABLE od_agg AS
             SELECT
@@ -234,7 +235,6 @@ def build_od_matrix(
                 o.month_num,
                 o.is_monsoon,
                 o.dow,
-                o.od_method,
                 COUNT(*)               AS trip_count,
                 AVG(o.trip_dur_min)    AS avg_duration_min,
                 s1.stop_name           AS origin_name,
@@ -251,15 +251,13 @@ def build_od_matrix(
                         (s2.lng - s1.lng) * COS(RADIANS((s1.lat + s2.lat) / 2.0)),
                         2
                     )
-                ) AS trip_distance_km
+                )                      AS trip_distance_km
             FROM od_combined o
-            LEFT JOIN stops s1 ON o.origin_stop_id = s1.stop_id
-            LEFT JOIN stops s2 ON o.dest_stop_id   = s2.stop_id
-            WHERE o.origin_stop_id != o.dest_stop_id
+            JOIN stops s1 ON o.origin_stop_id = s1.stop_id
+            JOIN stops s2 ON o.dest_stop_id   = s2.stop_id
             GROUP BY
-                o.origin_stop_id, o.dest_stop_id,
-                o.time_bin_30min, o.period, o.month_num,
-                o.is_monsoon, o.dow, o.od_method,
+                o.origin_stop_id, o.dest_stop_id, o.time_bin_30min,
+                o.period, o.month_num, o.is_monsoon, o.dow,
                 s1.stop_name, s1.stop_category, s1.lat, s1.lng,
                 s2.stop_name, s2.stop_category, s2.lat, s2.lng
         """)
