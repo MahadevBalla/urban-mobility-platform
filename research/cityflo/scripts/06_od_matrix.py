@@ -65,6 +65,7 @@ from config import (
     STOPS_FILE,
     SERVICE_SUPPLY,
     SERVICE_FREQUENCY,
+    ROUTE_MIN_OBS_STOPS,
 )
 
 
@@ -203,6 +204,9 @@ def build_od_matrix(
             
             -- FIX 6: Removed s.ride_date from GROUP BY to keep midnight trips together
             GROUP BY s.vehicle_id, s.segment_id
+            
+            -- FIX 7: The Cardinality Leak Fix. Drop orphan segments that never qualified for Stage 5.
+            HAVING COUNT(DISTINCT s.snapped_stop_id) >= {ROUTE_MIN_OBS_STOPS}
         """)
 
         con.execute(f"""
