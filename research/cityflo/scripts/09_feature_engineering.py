@@ -151,9 +151,7 @@ def build_features(
         _assert_weather_is_hourly(con, weather_path)
         
         # =================================================================
-        # FIX 1: True Zero Densification
-        # We explicitly generate a continuous calendar grid using generate_series
-        # to ensure ST-GNN gets complete sequence windows without NULL gaps.
+        # FIX: True Densification + Ghost Route Pruning
         # =================================================================
         print("Densifying the sparse OD matrix with explicit zeros...")
         con.execute(f"""
@@ -169,6 +167,9 @@ def build_features(
                     FIRST(dest_lng) AS dest_lng
                 FROM od_raw
                 GROUP BY origin_stop_id, dest_stop_id
+                -- THE FIX: Prune ghost OD pairs! 
+                -- Only cross-join routes that had at least 10 trips over the whole year.
+                HAVING SUM(trip_count) >= 10
             ),
             time_grid AS (
                 -- True calendar-complete time grid
@@ -194,7 +195,6 @@ def build_features(
                 d.dest_lat,
                 d.dest_lng,
                 
-                -- Re-derive temporal join keys for the padded 0-count rows
                 CASE
                     WHEN HOUR(d.time_bin_30min) >= 6  AND HOUR(d.time_bin_30min) < 10 THEN 'AM_peak'
                     WHEN HOUR(d.time_bin_30min) >= 17 AND HOUR(d.time_bin_30min) < 21 THEN 'PM_peak'
@@ -211,7 +211,9 @@ def build_features(
                AND d.time_bin_30min = o.time_bin_30min
         """)
 
-        # Stage 1 — temporal features + reliability join
+        # =================================================================
+        # FIX: Stage 1 Base Table (Schedule Adherence Removed)
+        # =================================================================
         con.execute("""
             CREATE TABLE base AS
             SELECT
@@ -235,7 +237,7 @@ def build_features(
                 CASE WHEN MONTH(od.time_bin_30min) IN (12, 1, 2)
                      THEN 1 ELSE 0 END                                           AS is_winter,
 
-                -- Cyclical encodings (prevent ordinal discontinuity at wrap-around)
+                -- Cyclical encodings
                 SIN(2 * PI() * HOUR(od.time_bin_30min) / 24.0)                   AS hour_sin,
                 COS(2 * PI() * HOUR(od.time_bin_30min) / 24.0)                   AS hour_cos,
                 SIN(2 * PI() * DAYOFWEEK(od.time_bin_30min) / 7.0)               AS dow_sin,
@@ -252,8 +254,6 @@ def build_features(
                 hw_am.bunching_events       AS origin_bunching_events,
                 hw_pm.mean_headway_min      AS origin_pm_mean_headway_min,
                 hw_pm.headway_reliability   AS origin_pm_headway_reliability
-
-                -- FIX 2: schedule adherence metrics dropped entirely to prevent time-travel bias
 
             FROM od
 
@@ -272,7 +272,6 @@ def build_features(
                 AND hw_pm.month_num   = MONTH(od.time_bin_30min)
         """)
 
-        # Update the debug print to remove sched_matches since it no longer exists
         print(con.execute("""
         SELECT
             COUNT(*) total_rows,
