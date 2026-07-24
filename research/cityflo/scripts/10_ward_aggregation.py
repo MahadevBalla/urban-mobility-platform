@@ -56,11 +56,28 @@ WARD_CENTROIDS = [
 
 
 def assign_stops_to_wards_polygon(stops: pd.DataFrame, kml_path: Path) -> pd.DataFrame:
-    """Point-in-polygon assignment using ward KML boundaries."""
+    """Point-in-polygon assignment using ward KML boundaries, with taxonomy mapping."""
+    from sklearn.neighbors import BallTree
 
     fiona.drvsupport.supported_drivers["KML"] = "rw"
     wards = gpd.read_file(str(kml_path), driver="KML").to_crs("EPSG:4326")
     print(f"  Ward polygons loaded: {len(wards)} features")
+
+    # =====================================================================
+    # FIX 1: Auto-Crosswalk the Taxonomy
+    # Map unknown KML 'Name's to official BMC Ward Codes using polygon centroids
+    # =====================================================================
+    official_centroids = np.array([[lat, lng] for _, lat, lng in WARD_CENTROIDS])
+    ward_names = [w for w, _, _ in WARD_CENTROIDS]
+    ctree = BallTree(np.radians(official_centroids), metric="haversine")
+
+    # Get polygon centroids (lat/lng flipped for geometry)
+    ward_cents = np.column_stack((wards.geometry.centroid.y, wards.geometry.centroid.x))
+    _, idx = ctree.query(np.radians(ward_cents), k=1)
+    
+    # Overwrite the arbitrary KML names with official BMC codes
+    wards["ward_id"] = [ward_names[i[0]] for i in idx]
+    print(f"  Mapped KML polygons to official BMC taxonomies. Unique wards: {wards['ward_id'].nunique()}")
 
     stops_gdf = gpd.GeoDataFrame(
         stops,
@@ -68,34 +85,34 @@ def assign_stops_to_wards_polygon(stops: pd.DataFrame, kml_path: Path) -> pd.Dat
         crs="EPSG:4326",
     )
 
-    # Point-in-polygon
-    joined = gpd.sjoin(
+    # =====================================================================
+    # FIX 2: Spatial Coverage using Nearest Polygon
+    # Replaces exact 'within' (which failed for 66% of stops on coastal borders) 
+    # with nearest polygon snapping.
+    # =====================================================================
+    joined = gpd.sjoin_nearest(
         stops_gdf[["stop_id", "geometry"]],
-        wards[["geometry", "Name"]],
+        wards[["geometry", "ward_id"]],
         how="left",
-        predicate="within",
-    ).rename(columns={"Name": "ward_id"})
-
+        distance_col="dist_to_ward"
+    )
+    
     result = joined[["stop_id", "ward_id"]].drop_duplicates("stop_id")
 
-    # Fallback: assign unmatched stops to nearest centroid
+    # Safe fallback for any truly bizarre nulls (though sjoin_nearest rarely leaves NaNs)
     unmatched = result[result["ward_id"].isna()]
     if len(unmatched) > 0:
-        print(f"  {len(unmatched)} stops outside polygons → nearest centroid")
-        centroids = np.array([[lat, lng] for _, lat, lng in WARD_CENTROIDS])
-        ward_names = [w for w, _, _ in WARD_CENTROIDS]
+        print(f"  {len(unmatched)} stops still unmatched -> nearest centroid fallback")
         unmatched_stops = stops[stops["stop_id"].isin(unmatched["stop_id"])].copy()
         coords = unmatched_stops[["lat", "lng"]].values
-        from sklearn.neighbors import BallTree
-
-        ctree = BallTree(np.radians(centroids), metric="haversine")
+        
         _, idx = ctree.query(np.radians(coords), k=1)
-        unmatched_stops["ward_id"] = [ward_names[i[0]] for i in idx]
+        unmatched_stops["ward_id_fb"] = [ward_names[i[0]] for i in idx]
+        
         result = result.merge(
-            unmatched_stops[["stop_id", "ward_id"]],
+            unmatched_stops[["stop_id", "ward_id_fb"]],
             on="stop_id",
             how="left",
-            suffixes=("", "_fb"),
         )
         result["ward_id"] = result["ward_id"].fillna(result["ward_id_fb"])
         result = result.drop(columns=["ward_id_fb"])
