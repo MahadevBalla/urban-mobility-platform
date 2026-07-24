@@ -5,7 +5,7 @@
 #SBATCH --cpus-per-task=16
 #SBATCH --mem=128G
 #SBATCH --time=12:00:00
-#SBATCH --array=0-7
+#SBATCH --array=0
 #SBATCH --output=logs/01_2_finalize_pings_%A_%a.out
 #SBATCH --error=logs/01_2_finalize_pings_%A_%a.err
 
@@ -18,7 +18,9 @@ echo "Node   : $(hostname)"
 echo "================================================="
 
 source /lustre-flash/apps/spack/share/spack/setup-env.sh
-spack load python@3.13.5
+#spack load python@3.13.5
+
+CITYFLO_ROOT="/home/ride/25d0295/urban-mobility-platform/research/cityflo"
 
 cd "${CITYFLO_ROOT}"
 source .venv/bin/activate
