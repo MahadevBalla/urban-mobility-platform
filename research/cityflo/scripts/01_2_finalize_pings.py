@@ -20,8 +20,9 @@ PROCESSED_DIR = DATA_PROCESSED
 
 def apply_gps_jump_filter(lf: pl.LazyFrame) -> pl.LazyFrame:
     """
-    Remove pings whose implied speed from previous ping
-    exceeds GPS_JUMP_MAX_KMH.
+    Remove pings whose implied speed from previous ping (V_in)
+    AND implied speed to next ping (V_out) both exceed GPS_JUMP_MAX_KMH.
+    This prevents cascading deletions from a single GPS glitch.
     """
     R = 6371.0
     return (
@@ -30,59 +31,46 @@ def apply_gps_jump_filter(lf: pl.LazyFrame) -> pl.LazyFrame:
             pl.col("lat").shift(1).over("vehicle_id").alias("_lat_prev"),
             pl.col("lng").shift(1).over("vehicle_id").alias("_lng_prev"),
             pl.col("timestamp_ist").shift(1).over("vehicle_id").alias("_ts_prev"),
+            
+            pl.col("lat").shift(-1).over("vehicle_id").alias("_lat_next"),
+            pl.col("lng").shift(-1).over("vehicle_id").alias("_lng_next"),
+            pl.col("timestamp_ist").shift(-1).over("vehicle_id").alias("_ts_next"),
         )
         .with_columns(
-            (pl.col("lat") - pl.col("_lat_prev")).radians().alias("_dlat"),
-            (pl.col("lng") - pl.col("_lng_prev")).radians().alias("_dlng"),
+            (pl.col("lat") - pl.col("_lat_prev")).radians().alias("_dlat_in"),
+            (pl.col("lng") - pl.col("_lng_prev")).radians().alias("_dlng_in"),
+            (pl.col("_lat_next") - pl.col("lat")).radians().alias("_dlat_out"),
+            (pl.col("_lng_next") - pl.col("lng")).radians().alias("_dlng_out"),
             pl.col("lat").radians().alias("_lat_rad"),
             pl.col("_lat_prev").radians().alias("_lat_prev_rad"),
+            pl.col("_lat_next").radians().alias("_lat_next_rad"),
         )
         .with_columns(
-            (
-                2
-                * R
-                * (
-                    (
-                        (
-                            (pl.col("_dlat") / 2).sin() ** 2
-                            + pl.col("_lat_prev_rad").cos()
-                            * pl.col("_lat_rad").cos()
-                            * ((pl.col("_dlng") / 2).sin() ** 2)
-                        ).sqrt()
-                    ).arcsin()
-                )
-            ).alias("_dist_km")
+            (2 * R * (((pl.col("_dlat_in") / 2).sin() ** 2 + pl.col("_lat_prev_rad").cos() * pl.col("_lat_rad").cos() * ((pl.col("_dlng_in") / 2).sin() ** 2)).sqrt()).arcsin()).alias("_dist_in_km"),
+            (2 * R * (((pl.col("_dlat_out") / 2).sin() ** 2 + pl.col("_lat_rad").cos() * pl.col("_lat_next_rad").cos() * ((pl.col("_dlng_out") / 2).sin() ** 2)).sqrt()).arcsin()).alias("_dist_out_km"),
+            
+            ((pl.col("timestamp_ist") - pl.col("_ts_prev")).dt.total_seconds() / 3600.0).alias("_dt_in_hr"),
+            ((pl.col("_ts_next") - pl.col("timestamp_ist")).dt.total_seconds() / 3600.0).alias("_dt_out_hr"),
         )
         .with_columns(
-            (
-                (pl.col("timestamp_ist") - pl.col("_ts_prev")).dt.total_seconds()
-                / 3600.0
-            ).alias("_dt_hr")
+            pl.when(pl.col("_ts_prev").is_not_null() & (pl.col("_dt_in_hr") > 0))
+            .then(pl.col("_dist_in_km") / pl.col("_dt_in_hr"))
+            .otherwise(None).alias("_v_in"),
+            
+            pl.when(pl.col("_ts_next").is_not_null() & (pl.col("_dt_out_hr") > 0))
+            .then(pl.col("_dist_out_km") / pl.col("_dt_out_hr"))
+            .otherwise(None).alias("_v_out"),
         )
-        .with_columns(
-            pl.when(pl.col("_ts_prev").is_not_null() & (pl.col("_dt_hr") > 0))
-            .then(pl.col("_dist_km") / pl.col("_dt_hr"))
-            .otherwise(None)
-            .alias("_calc_speed")
-        )
+        # A true glitch teleports away AND back. Keep the ping if either speed is normal or null.
         .filter(
-            pl.col("_calc_speed").is_null()
-            | (pl.col("_calc_speed") <= GPS_JUMP_MAX_KMH)
+            pl.col("_v_in").is_null() | pl.col("_v_out").is_null() | 
+            (pl.col("_v_in") <= GPS_JUMP_MAX_KMH) | (pl.col("_v_out") <= GPS_JUMP_MAX_KMH)
         )
-        .drop(
-            [
-                "_lat_prev",
-                "_lng_prev",
-                "_ts_prev",
-                "_dlat",
-                "_dlng",
-                "_lat_rad",
-                "_lat_prev_rad",
-                "_dist_km",
-                "_dt_hr",
-                "_calc_speed",
-            ]
-        )
+        .drop([
+            "_lat_prev", "_lng_prev", "_ts_prev", "_lat_next", "_lng_next", "_ts_next",
+            "_dlat_in", "_dlng_in", "_dlat_out", "_dlng_out", "_lat_rad", "_lat_prev_rad", "_lat_next_rad",
+            "_dist_in_km", "_dist_out_km", "_dt_in_hr", "_dt_out_hr", "_v_in", "_v_out"
+        ])
     )
 
 
