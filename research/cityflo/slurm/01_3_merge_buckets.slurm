@@ -17,7 +17,9 @@ echo "Node   : $(hostname)"
 echo "================================================="
 
 source /lustre-flash/apps/spack/share/spack/setup-env.sh
-spack load python@3.13.5
+#spack load python@3.13.5
+
+CITYFLO_ROOT="/home/ride/25d0295/urban-mobility-platform/research/cityflo"
 
 cd "${CITYFLO_ROOT}"
 source .venv/bin/activate
