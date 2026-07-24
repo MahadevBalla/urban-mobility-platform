@@ -114,11 +114,15 @@ def main(bucket_id: int):
     print(f"\nRows before dedupe: {before_rows:,}")
     print(f"Vehicles          : {before_vehicles}")
 
-    lf = lf.unique(
-        subset=["vehicle_id", "ts_utc"],
-        keep="first",
-        maintain_order=True,
-    ).drop("ts_utc")
+    lf = (
+        lf.sort(["vehicle_id", "ts_utc"])  # Explicit deterministic sort
+        .unique(
+            subset=["vehicle_id", "ts_utc"],
+            keep="first",
+            maintain_order=True,
+        )
+        .drop("ts_utc")
+    )
 
     after_dedupe = lf.select(pl.len()).collect().item()
     print(f"Rows after dedupe : {after_dedupe:,} (-{before_rows - after_dedupe:,})")
