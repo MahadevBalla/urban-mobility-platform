@@ -248,18 +248,17 @@ def endpoint_proximity_score(
 
 
 def score_margin_from_rank_keys(best_key: Tuple, second_key: Tuple) -> float:
-    """Scalar ambiguity summary from the rank_key components
-    (LCSS similarity, coverage, negative length penalty)."""
+    """
+    Scalar ambiguity summary from the rank_key. 
+    Because ranking is lexicographical (LCSS first), the margin must purely 
+    reflect the LCSS difference. Adding secondary tie-breakers mathematically 
+    allows the margin to turn negative, which poisons downstream ML weights.
+    """
     if second_key is None:
         return 1.0
-    return round(
-        float(
-            (best_key[0] - second_key[0])
-            + (best_key[1] - second_key[1])
-            + (best_key[2] - second_key[2])
-        ),
-        4,
-    )
+    
+    # Only compare the primary deciding factor (LCSS Similarity)
+    return round(float(best_key[0] - second_key[0]), 4)
 
 
 # Template loading and indexing
