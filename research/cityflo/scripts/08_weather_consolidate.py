@@ -51,18 +51,23 @@ STOP_CHUNK_SIZE = 200
 
 # Grid consolidation
 def _load_grid_hourly(
-    grid_dir: Path, study_start: str, study_end: str
+    grid_dirs: list[Path], study_start: str, study_end: str
 ) -> pd.DataFrame | None:
     """
-    Load and merge all hourly CSV groups for one grid point.
+    Load and merge all hourly CSV groups for one grid point across multiple roots.
     Filters to study window after loading.
     """
     group_dfs = {}
     for group in HOURLY_GROUPS:
-        pattern = str(grid_dir / f"*hourly_{group}*.csv")
-        files = sorted(glob.glob(pattern))
+        files = []
+        # FIX 1: Sweep across both Main and Prelim directories
+        for gdir in grid_dirs:
+            pattern = str(gdir / f"*hourly_{group}*.csv")
+            files.extend(glob.glob(pattern))
+            
         if not files:
             continue
+            
         frames = []
         for f in files:
             try:
@@ -70,7 +75,7 @@ def _load_grid_hourly(
                 if TIME_COL not in df.columns:
                     continue
                 df[TIME_COL] = pd.to_datetime(df[TIME_COL], errors="coerce")
-                # Localize to IST (Open-Meteo was fetched with timezone=Asia/Kolkata)
+                # Localize to IST
                 if getattr(df[TIME_COL].dt, "tz", None) is None:
                     df[TIME_COL] = df[TIME_COL].dt.tz_localize(
                         "Asia/Kolkata", ambiguous="NaT", nonexistent="shift_forward"
@@ -78,44 +83,40 @@ def _load_grid_hourly(
                 frames.append(df)
             except Exception as e:
                 print(f"    Warning: could not read {f}: {e}")
+                
         if not frames:
             continue
+            
+        # Concat and drop duplicates will seamlessly stitch Prelim and Main overlaps
         merged_group = (
             pd.concat(frames, ignore_index=True)
             .drop_duplicates(subset=[TIME_COL])
             .sort_values(TIME_COL)
         )
-        # Drop metadata columns that vary per file
+        
         drop_meta = [
-            c
-            for c in merged_group.columns
-            if c
-            in {
-                "period_tag",
-                "month_tag",
-                "half_tag",
-                "grid_id",
-                "requested_latitude",
-                "requested_longitude",
-            }
+            c for c in merged_group.columns
+            if c in {"period_tag", "month_tag", "half_tag", "grid_id", 
+                     "requested_latitude", "requested_longitude"}
         ]
         merged_group = merged_group.drop(columns=drop_meta, errors="ignore")
         group_dfs[group] = merged_group
+        
     if not group_dfs:
         return None
-    # Merge all groups on time column
+        
     merged = None
     for group, df in group_dfs.items():
         if merged is None:
             merged = df
         else:
-            # Outer merge — some groups may have different row counts
             merged = merged.merge(
                 df, on=TIME_COL, how="outer", suffixes=("", f"_{group}")
             )
+            
     if merged is None or len(merged) == 0:
         return None
-    # Filter to study window
+        
     t_start = pd.Timestamp(study_start, tz="Asia/Kolkata")
     t_end = pd.Timestamp(study_end + " 23:59:59", tz="Asia/Kolkata")
     merged = merged[(merged[TIME_COL] >= t_start) & (merged[TIME_COL] <= t_end)]
@@ -125,18 +126,33 @@ def _load_grid_hourly(
 def consolidate_grid(
     weather_root: Path, study_start: str, study_end: str
 ) -> pd.DataFrame:
-    """Concat all grid points into master weather DataFrame."""
-    grid_dirs = sorted(
-        [d for d in weather_root.iterdir() if d.is_dir() and d.name.startswith("G")]
-    )
-    print(f"Grid directories found: {len(grid_dirs)}")
+    """Concat all grid points into master weather DataFrame, stitching Prelim data."""
+    
+    # FIX 2: Detect the Prelim directory side-by-side with WEATHER_DIR
+    prelim_root = weather_root.parent / f"{weather_root.name}_Prelim"
+    roots_to_scan = [weather_root]
+    if prelim_root.exists():
+        print(f"  [FIX] Found Prelim directory: {prelim_root.name}. Stitching timelines.")
+        roots_to_scan.append(prelim_root)
+        
+    # Find all unique GXXX grid IDs across all roots
+    grid_ids = set()
+    for root in roots_to_scan:
+        for d in root.iterdir():
+            if d.is_dir() and d.name.startswith("G"):
+                grid_ids.add(d.name)
+                
+    grid_ids = sorted(list(grid_ids))
+    print(f"Grid directories found across all roots: {len(grid_ids)}")
 
     # Load grid coordinates
-    grid_csv = list(weather_root.glob("*grid*points*.csv"))
+    grid_csv = []
+    for root in roots_to_scan:
+        grid_csv.extend(list(root.glob("*grid*points*.csv")))
+        
     if not grid_csv:
         raise FileNotFoundError(
-            f"Grid points CSV not found in {weather_root}. "
-            "Expected a file matching '*grid*points*.csv'."
+            f"Grid points CSV not found in {weather_root} or Prelim."
         )
     grid_meta = pd.read_csv(grid_csv[0])
     if "grid_id" not in grid_meta.columns:
@@ -145,49 +161,43 @@ def consolidate_grid(
     grid_meta = grid_meta.set_index("grid_id")
 
     all_frames = []
-    for gdir in grid_dirs:
-        gid = gdir.name
-        df = _load_grid_hourly(gdir, study_start, study_end)
+    for gid in grid_ids:
+        # Pass all available directories for this specific grid ID
+        gdirs = [root / gid for root in roots_to_scan if (root / gid).exists()]
+        
+        df = _load_grid_hourly(gdirs, study_start, study_end)
         if df is None or len(df) == 0:
             print(f"  {gid}: no hourly data loaded")
             continue
+            
         df["grid_id"] = gid
         if gid in grid_meta.index:
             df["grid_lat"] = grid_meta.loc[gid, "latitude"]
             df["grid_lng"] = grid_meta.loc[gid, "longitude"]
         all_frames.append(df)
-        print(f"  {gid}: {len(df):,} hourly rows")
+        print(f"  {gid}: {len(df):,} hourly rows stitched")
 
     if not all_frames:
         raise RuntimeError("No weather data loaded — check WEATHER_DIR path")
 
     master = pd.concat(all_frames, ignore_index=True)
 
-    # FIX 1: Map WMO weather codes to a linear severity scale BEFORE interpolation.
-    # This prevents the IDW math from averaging a thunderstorm (95) and clear sky (0) into fog (47.5).
+    # Map WMO weather codes to a linear severity scale BEFORE interpolation
     if "weather_code" in master.columns:
         wc = master["weather_code"]
         master["weather_severity"] = 0
-        master.loc[wc.isin(range(51, 58)), "weather_severity"] = 1  # drizzle
-        master.loc[wc.isin(range(61, 68)), "weather_severity"] = 2  # rain
-        master.loc[wc.isin(range(80, 83)), "weather_severity"] = 3  # shower
-        master.loc[wc.isin(range(95, 100)), "weather_severity"] = 4  # thunderstorm
-        master.loc[wc.isin([45, 48]), "weather_severity"] = 2       # fog
-        
-        # Overwrite the categorical code with the continuous severity score
-        # so the IDW engine can mathematically interpolate it safely.
+        master.loc[wc.isin(range(51, 58)), "weather_severity"] = 1  
+        master.loc[wc.isin(range(61, 68)), "weather_severity"] = 2  
+        master.loc[wc.isin(range(80, 83)), "weather_severity"] = 3  
+        master.loc[wc.isin(range(95, 100)), "weather_severity"] = 4 
+        master.loc[wc.isin([45, 48]), "weather_severity"] = 2       
         master["weather_code"] = master["weather_severity"]
 
     dup_count = master.duplicated(["grid_id", TIME_COL]).sum()
-
     if dup_count > 0:
-        raise ValueError(
-            f"Found {dup_count:,} duplicate grid_id-time rows in weather data"
-        )
+        raise ValueError(f"Found {dup_count:,} duplicate grid_id-time rows")
 
-    print(
-        f"Master grid weather: {len(master):,} rows  |  {master['grid_id'].nunique()} grid points"
-    )
+    print(f"Master grid weather: {len(master):,} rows | {master['grid_id'].nunique()} grids")
     return master
 
 
