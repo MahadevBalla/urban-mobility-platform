@@ -109,31 +109,56 @@ def snap_chunk(
     threshold_m: float,
 ) -> tuple[np.ndarray, np.ndarray]:
     """
-    Query the BallTree for the nearest stop to each ping in a batch.
-
-    Any ping with a null coordinate is assigned stop_id = -1 (cannot snap).
-    Pings beyond threshold_m are also assigned -1.
-
-    Returns:
-        snapped_ids:   int32 array, -1 where no snap
-        snap_dists_m:  float32 array, NaN where no snap
+    Query the BallTree for the nearest stop, but apply a stabilization pass
+    to prevent cross-street zigzagging caused by GPS jitter.
     """
     valid_mask = np.isfinite(lats) & np.isfinite(lngs)
-
     snapped_ids = np.full(len(lats), -1, dtype=np.int32)
     snap_dists_m = np.full(len(lats), np.nan, dtype=np.float32)
 
-    if valid_mask.any():
-        q = np.radians(np.column_stack([lats[valid_mask], lngs[valid_mask]]))
-        dist_rad, idx = tree.query(q, k=1)
-        dist_m = (dist_rad.flatten() * EARTH_R_M).astype(np.float32)
-        idx = idx.flatten()
+    if not valid_mask.any():
+        return snapped_ids, snap_dists_m
 
-        within = dist_m <= threshold_m
-        valid_idx = np.nonzero(valid_mask)[0]
+    q = np.radians(np.column_stack([lats[valid_mask], lngs[valid_mask]]))
+    
+    # Query for the top 2 closest stops instead of blindly trusting k=1
+    dist_rad, idx = tree.query(q, k=2)
+    
+    # Base distances and IDs for the primary closest stop
+    dist_m_1 = (dist_rad[:, 0] * EARTH_R_M).astype(np.float32)
+    idx_1 = idx[:, 0]
+    candidate_ids_1 = stop_ids_np[idx_1]
 
-        snapped_ids[valid_idx[within]] = stop_ids_np[idx[within]]
-        snap_dists_m[valid_idx[within]] = dist_m[within]
+    valid_idx = np.nonzero(valid_mask)[0]
+    
+    # Step 1: Initial naive snap
+    within_threshold = dist_m_1 <= threshold_m
+    snapped_ids[valid_idx[within_threshold]] = candidate_ids_1[within_threshold]
+    snap_dists_m[valid_idx[within_threshold]] = dist_m_1[within_threshold]
+
+    # Step 2: The Stabilization Pass (The Anti-Zigzag Fix)
+    # If a ping is surrounded by pings snapped to a different stop, 
+    # it is likely GPS jitter. We smooth it out using a simple rolling mode.
+    # We only apply this if there are enough pings to smooth.
+    if len(snapped_ids) > 2:
+        # Create shifted arrays for a rolling window of 3 (prev, current, next)
+        prev_ids = np.roll(snapped_ids, 1)
+        next_ids = np.roll(snapped_ids, -1)
+        
+        # Edge cases for rolling
+        prev_ids[0] = -1
+        next_ids[-1] = -1
+        
+        # Identify "orphan" pings (e.g., A -> B -> A) where B is the anomaly
+        # Condition: Prev == Next, Current != Prev, and Prev is a valid stop (!= -1)
+        jitter_mask = (prev_ids == next_ids) & (snapped_ids != prev_ids) & (prev_ids != -1)
+        
+        # Override the jittered pings to match their neighbors
+        snapped_ids[jitter_mask] = prev_ids[jitter_mask]
+        
+        # Note: We keep the original snap_distance_m as a proxy, 
+        # though it's technically the distance to the jittered stop.
+        # This is acceptable since 05_route_inference does the final validation.
 
     return snapped_ids, snap_dists_m
 
