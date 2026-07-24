@@ -36,6 +36,8 @@ from config import (
     OD_AGG,
     SCHED_ADHERENCE,
     WEATHER_STOPS,
+    STUDY_START,
+    STUDY_END,
 )
 
 EARTH_R_KM = EARTH_R_M / 1000.0
@@ -149,11 +151,12 @@ def build_features(
         _assert_weather_is_hourly(con, weather_path)
         
         # =================================================================
-        # FIX: The Implicit Zero Densification
-        # We explicitly create 0-count rows for time bins where no buses ran
+        # FIX 1: True Zero Densification
+        # We explicitly generate a continuous calendar grid using generate_series
+        # to ensure ST-GNN gets complete sequence windows without NULL gaps.
         # =================================================================
         print("Densifying the sparse OD matrix with explicit zeros...")
-        con.execute("""
+        con.execute(f"""
             CREATE TABLE od AS
             WITH unique_routes AS (
                 SELECT 
@@ -168,7 +171,12 @@ def build_features(
                 GROUP BY origin_stop_id, dest_stop_id
             ),
             time_grid AS (
-                SELECT DISTINCT time_bin_30min FROM od_raw
+                -- True calendar-complete time grid
+                SELECT CAST(unnest(generate_series(
+                    CAST('{STUDY_START} 00:00:00+05:30' AS TIMESTAMPTZ),
+                    CAST('{STUDY_END} 23:59:59+05:30' AS TIMESTAMPTZ),
+                    INTERVAL 30 MINUTE
+                )) AS TIMESTAMPTZ) AS time_bin_30min
             ),
             dense_grid AS (
                 SELECT r.*, t.time_bin_30min
@@ -202,7 +210,6 @@ def build_features(
                AND d.dest_stop_id   = o.dest_stop_id
                AND d.time_bin_30min = o.time_bin_30min
         """)
-        # =================================================================
 
         # Stage 1 — temporal features + reliability join
         con.execute("""
@@ -219,7 +226,6 @@ def build_features(
                 CASE WHEN DAYOFWEEK(od.time_bin_30min) IN (0, 6)
                      THEN 1 ELSE 0 END                                           AS is_weekend,
 
-                -- is_peak mirrors the AM/PM period boundaries: [7,10) and [17,21)
                 CASE WHEN (HOUR(od.time_bin_30min) >= 7  AND HOUR(od.time_bin_30min) < 10)
                           OR (HOUR(od.time_bin_30min) >= 17 AND HOUR(od.time_bin_30min) < 21)
                      THEN 1 ELSE 0 END                                           AS is_peak,
@@ -230,28 +236,24 @@ def build_features(
                      THEN 1 ELSE 0 END                                           AS is_winter,
 
                 -- Cyclical encodings (prevent ordinal discontinuity at wrap-around)
-                SIN(2 * PI() * HOUR(od.time_bin_30min) / 24.0)                  AS hour_sin,
-                COS(2 * PI() * HOUR(od.time_bin_30min) / 24.0)                  AS hour_cos,
-                SIN(2 * PI() * DAYOFWEEK(od.time_bin_30min) / 7.0)              AS dow_sin,
-                COS(2 * PI() * DAYOFWEEK(od.time_bin_30min) / 7.0)              AS dow_cos,
-                SIN(2 * PI() * MONTH(od.time_bin_30min) / 12.0)                 AS month_sin,
-                COS(2 * PI() * MONTH(od.time_bin_30min) / 12.0)                 AS month_cos,
+                SIN(2 * PI() * HOUR(od.time_bin_30min) / 24.0)                   AS hour_sin,
+                COS(2 * PI() * HOUR(od.time_bin_30min) / 24.0)                   AS hour_cos,
+                SIN(2 * PI() * DAYOFWEEK(od.time_bin_30min) / 7.0)               AS dow_sin,
+                COS(2 * PI() * DAYOFWEEK(od.time_bin_30min) / 7.0)               AS dow_cos,
+                SIN(2 * PI() * MONTH(od.time_bin_30min) / 12.0)                  AS month_sin,
+                COS(2 * PI() * MONTH(od.time_bin_30min) / 12.0)                  AS month_cos,
                 SIN(2 * PI() * DAYOFYEAR(CAST(od.time_bin_30min AS DATE)) / 365.0) AS doy_sin,
                 COS(2 * PI() * DAYOFYEAR(CAST(od.time_bin_30min AS DATE)) / 365.0) AS doy_cos,
 
                 -- Reliability (origin stop)
-                -- AM-peak row joined for every OD row; PM-peak values as supplement.
                 hw_am.mean_headway_min      AS origin_mean_headway_min,
                 hw_am.headway_cv            AS origin_headway_cv,
                 hw_am.headway_reliability   AS origin_headway_reliability,
                 hw_am.bunching_events       AS origin_bunching_events,
                 hw_pm.mean_headway_min      AS origin_pm_mean_headway_min,
-                hw_pm.headway_reliability   AS origin_pm_headway_reliability,
+                hw_pm.headway_reliability   AS origin_pm_headway_reliability
 
-                -- Schedule adherence (origin stop, matched period)
-                sa.mean_delay_min           AS mean_delay_min,
-                sa.on_time_pct              AS on_time_pct,
-                sa.late_pct                 AS late_pct
+                -- FIX 2: schedule adherence metrics dropped entirely to prevent time-travel bias
 
             FROM od
 
@@ -268,14 +270,15 @@ def build_features(
                 AND hw_pm.day_type    = CASE WHEN DAYOFWEEK(od.time_bin_30min) IN (0, 6)
                                              THEN 'weekend' ELSE 'weekday' END
                 AND hw_pm.month_num   = MONTH(od.time_bin_30min)
-
-            LEFT JOIN sched sa
-                ON  od.origin_stop_id = sa.stop_id
-                AND sa.period         = od.period
-                AND sa.month_num      = MONTH(od.time_bin_30min)
-                AND sa.day_type       = CASE WHEN DAYOFWEEK(od.time_bin_30min) IN (0, 6)
-                                             THEN 'weekend' ELSE 'weekday' END
         """)
+
+        # Update the debug print to remove sched_matches since it no longer exists
+        print(con.execute("""
+        SELECT
+            COUNT(*) total_rows,
+            COUNT(origin_headway_reliability) hw_matches
+        FROM base
+        """).df())
 
         print(con.execute("""
         SELECT
