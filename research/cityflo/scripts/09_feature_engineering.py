@@ -280,14 +280,6 @@ def build_features(
         FROM base
         """).df())
 
-        print(con.execute("""
-        SELECT
-            COUNT(*) total_rows,
-            COUNT(origin_headway_reliability) hw_matches,
-            COUNT(mean_delay_min) sched_matches
-        FROM base
-        """).df())
-
         # Stage 2 — lag / rolling features (strictly backward-looking)
         # FIX: Replaced physical ROWS with temporal RANGE to prevent time-travel on sparse data.
         con.execute("""
