@@ -215,12 +215,12 @@ def compute_reliability(
                 SELECT
                     snapped_stop_id,
                     vehicle_id,
-                    ride_date,
                     segment_id,
                     timestamp_ist,
                     CASE
                         WHEN LAG(snapped_stop_id) OVER (
-                            PARTITION BY vehicle_id, ride_date, segment_id
+                            -- FIX: Removed ride_date from PARTITION BY to prevent splitting dwells crossing midnight
+                            PARTITION BY vehicle_id, segment_id
                             ORDER BY timestamp_ist
                         ) = snapped_stop_id
                         THEN 0
@@ -232,7 +232,8 @@ def compute_reliability(
                 SELECT
                     *,
                     SUM(is_new_visit) OVER (
-                        PARTITION BY vehicle_id, ride_date, segment_id
+                        -- FIX: Removed ride_date from PARTITION BY
+                        PARTITION BY vehicle_id, segment_id
                         ORDER BY timestamp_ist
                         ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
                     ) AS visit_group
@@ -241,14 +242,14 @@ def compute_reliability(
             SELECT
                 snapped_stop_id AS stop_id,
                 vehicle_id,
-                ride_date,
                 segment_id,
                 visit_group,
-                MIN(timestamp_ist) AS arrival_time
+                MIN(timestamp_ist) AS arrival_time,
+                -- Derive the ride_date dynamically based on the actual arrival to keep downstream stats safe
+                CAST(MIN(timestamp_ist) AS DATE) AS ride_date
             FROM visit_groups
             GROUP BY
                 vehicle_id,
-                ride_date,
                 segment_id,
                 snapped_stop_id,
                 visit_group
