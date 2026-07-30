@@ -56,14 +56,26 @@ def discover_file_groups(data_dir: Path) -> list[list[Path]]:
         groups.setdefault(base, []).append((part_num, f))
 
     ordered_groups = []
-    for base, members in groups.items():
-        members.sort(key=lambda x: x[0])
-        if members[0][0] != 0:
-            print(f"  Skipping {base}: primary CSV not found.")
-            continue
-        ordered_groups.append([p for _, p in members])
 
-    return sorted(ordered_groups, key=lambda g: g[0].name)
+for base, members in groups.items():
+    members.sort(key=lambda x: x[0])
+
+    # If the primary CSV exists, keep the normal ordering.
+    if members[0][0] == 0:
+        ordered_groups.append([p for _, p in members])
+        continue
+
+    # No primary CSV found.
+    # Promote the earliest available part (e.g., part3 or part4) to act as the
+    # primary so scan_group() can read its header and ingest the remaining parts.
+    print(
+        f"  WARNING: {base}: primary CSV not found. "
+        f"Using {members[0][1].name} as the primary."
+    )
+
+    ordered_groups.append([p for _, p in members])
+
+return sorted(ordered_groups, key=lambda g: g[0].name)
 
 
 def _read_header(path: Path) -> list[str]:
