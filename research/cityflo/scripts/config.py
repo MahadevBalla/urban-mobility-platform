@@ -47,16 +47,16 @@ WEATHER_DIR = DATA_RAW / "WeatherData" / "mumbai_openmeteo_10km_grid_data"
 WARD_KML = DATA_RAW / "mumbai_wards.kml"
 
 # Default study period
-STUDY_START = "2021-09-01"
-STUDY_END = "2022-10-22"
+STUDY_START = "2026-01-01"
+STUDY_END = "2026-03-31"
 
 # Temporal train / validation / test split
 # train : STUDY_START  →  MODEL_TRAIN_END  (inclusive)
 # valid : MODEL_TRAIN_END < t ≤ MODEL_VALID_END
 # test  : MODEL_TEST_START  →  STUDY_END  (inclusive)
-MODEL_TRAIN_END = "2022-07-31"  # ~10 months of training data
-MODEL_VALID_END = "2022-08-31"  # August = validation
-MODEL_TEST_START = "2022-09-01"  # September–October = held-out test
+MODEL_TRAIN_END = "2026-01-31"   # January
+MODEL_VALID_END = "2026-02-28"   # February
+MODEL_TEST_START = "2026-03-01"  # March
 
 # GPS schema — legacy format
 LEGACY_COLS = [
