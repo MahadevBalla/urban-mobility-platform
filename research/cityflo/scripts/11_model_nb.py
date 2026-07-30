@@ -232,14 +232,19 @@ def run_nb(features_path: Path) -> None:
     stop_ward = pd.read_csv(stop_ward_path)
 
     # =====================================================================
-    # FIX 1: TEMPORAL TRIMMING (Drop the Dead of Night)
+    # FIX 1: TEMPORAL TRIMMING (Drop the Dead of Night Safely in IST)
     # Filter to only keep active transit hours (05:00 to 23:00)
     # =====================================================================
     print(f"Rows before temporal trim: {len(df):,}")
-    df["hour_of_day"] = df["time_bin_30min"].dt.hour
-    df = df[(df["hour_of_day"] >= 5) & (df["hour_of_day"] <= 23)].copy()
+    
+    # Convert UTC to IST temporarily just for the filter
+    ist_time = df["time_bin_30min"].dt.tz_convert("Asia/Kolkata")
+    df["hour_ist"] = ist_time.dt.hour
+    
+    # Keep only 05:00 to 23:00 local time
+    df = df[(df["hour_ist"] >= 5) & (df["hour_ist"] <= 23)].copy()
     print(f"Rows after temporal trim: {len(df):,}")
-    df = df.drop(columns=["hour_of_day"])
+    df = df.drop(columns=["hour_ist"])
 
     # =====================================================================
     # FIX 2: SPATIAL AGGREGATION (Stop-to-Stop -> Ward-to-Ward)
@@ -278,11 +283,17 @@ def run_nb(features_path: Path) -> None:
         "heat_stress": "max",
         "origin_headway_reliability": "mean",
         "origin_headway_cv": "mean",
+        
+        # CRITICAL FIX: Keep raw hour and dow for the baseline functions!
+        "hour": "first",
+        "dow": "first",
+        
         # Temporal features are identical for the time bin, so 'first' is safe
         "hour_sin": "first", "hour_cos": "first",
         "dow_sin": "first", "dow_cos": "first",
         "is_weekend": "first", "is_peak": "first",
         "is_monsoon": "first", "is_pre_monsoon": "first", "is_winter": "first",
+        
         # Keep a representative H3 hex for the baseline historical functions
         "origin_h3": "first"
     }
@@ -295,7 +306,7 @@ def run_nb(features_path: Path) -> None:
     
     print(f"Final Ward-level dense rows ready for NB Model: {len(df):,}")
     # =====================================================================
-
+        
     train_end = pd.Timestamp(MODEL_TRAIN_END, tz="UTC")
     valid_end = pd.Timestamp(MODEL_VALID_END, tz="UTC")
     test_start = pd.Timestamp(MODEL_TEST_START, tz="UTC")
@@ -434,7 +445,7 @@ def run_nb(features_path: Path) -> None:
         all_metrics.append(metrics)
 
         pf = split_df[
-            ["origin_stop_id", "dest_stop_id", "time_bin_30min", TARGET]
+            ["origin_ward", "dest_ward", "time_bin_30min", TARGET]
         ].copy()
         pf["nb_pred"] = y_pred
         pf["split"] = split_name
