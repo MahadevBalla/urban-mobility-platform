@@ -30,11 +30,11 @@ for _d in [DATA_PROCESSED, DATA_INTERIM, FIGURES, MODELS_DIR, TABLES_DIR]:
     _d.mkdir(parents=True, exist_ok=True)
 
 # Legacy GPS archive (2021–2024)
-GPS_FILES = [
-    DATA_RAW / "before_2022-10-22_698096e5f4994518a37a0b9c59bb9756_part2-007_",
-    DATA_RAW / "before_2022-10-22_698096e5f4994518a37a0b9c59bb9756_part3-006_",
-    DATA_RAW / "before_2022-10-22_698096e5f4994518a37a0b9c59bb9756-004_"
-]
+# GPS_FILES = [
+#     DATA_RAW / "before_2022-10-22_698096e5f4994518a37a0b9c59bb9756_part2-007_",
+#     DATA_RAW / "before_2022-10-22_698096e5f4994518a37a0b9c59bb9756_part3-006_",
+#     DATA_RAW / "before_2022-10-22_698096e5f4994518a37a0b9c59bb9756-004_"
+# ]
 
 
 # Current GPS archive (2024–2026)
