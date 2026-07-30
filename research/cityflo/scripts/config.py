@@ -38,20 +38,7 @@ for _d in [DATA_PROCESSED, DATA_INTERIM, FIGURES, MODELS_DIR, TABLES_DIR]:
 
 
 # Current GPS archive (2024–2026)
-CURRENT_DATA_DIR = [
-    DATA_RAW / "2026-01-a.csv",
-    DATA_RAW / "2026-01-a.csv_part2",
-    DATA_RAW / "2026-01-a.csv_part3",
-    DATA_RAW / "2026-01-a.csv_part4",
-    DATA_RAW / "2026-01-b.csv",
-    DATA_RAW / "2026-01-b.csv_part2",
-    DATA_RAW / "2026-01-b.csv_part3",
-    DATA_RAW / "2026-01-b.csv_part4",
-    DATA_RAW / "2026-02-a.csv_part4",
-    DATA_RAW / "2026-02-b.csv_part3",
-    DATA_RAW / "2026-03-04.csv",
-    DATA_RAW / "2026-03-04.csv_part2",
-]
+CURRENT_DATA_DIR = DATA_RAW / "2024-2026"
 
 # Reference data
 STOPS_FILE = DATA_PROCESSED / "stops_clean.csv"
