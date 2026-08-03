@@ -89,7 +89,19 @@ def _read_header(path: Path) -> list[str]:
 def scan_group(group: list[Path]) -> pl.LazyFrame:
     """Scan one logical CSV group into a single LazyFrame."""
     primary = group[0]
-    header_cols = _read_header(primary)
+
+    # If the first file is a continuation part (no header),
+    # borrow the schema from a known primary CSV.
+    if "_part" in primary.name:
+        header_source = next(
+            p for p in primary.parent.iterdir()
+            if p.suffix == ".csv" and "_part" not in p.name
+        )
+        header_cols = _read_header(header_source)
+        has_header = False
+    else:
+        header_cols = _read_header(primary)
+        has_header = True
 
     dtype_overrides = {c: CURRENT_DTYPES[c] for c in header_cols if c in CURRENT_DTYPES}
 
@@ -97,7 +109,8 @@ def scan_group(group: list[Path]) -> pl.LazyFrame:
     lfs.append(
         pl.scan_csv(
             primary,
-            has_header=True,
+            has_header=has_header,
+            new_columns=None if has_header else header_cols,
             schema_overrides=dtype_overrides,
             ignore_errors=True,
             null_values=["", "NULL", "null"],
