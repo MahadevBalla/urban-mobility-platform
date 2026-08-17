@@ -105,13 +105,13 @@ def main(bucket_id: int):
     print(f"Vehicles          : {before_vehicles}")
 
     lf = (
-        lf.sort(["vehicle_id", "ts_utc"])  # Explicit deterministic sort
+        lf.sort(["vehicle_id", "timestamp_ist"])  # Use IST to bypass the missing UTC column
         .unique(
-            subset=["vehicle_id", "ts_utc"],
+            subset=["vehicle_id", "timestamp_ist"],
             keep="first",
             maintain_order=True,
         )
-        .drop("ts_utc")
+        .drop(["ts_utc"], strict=False) # Drops it safely ONLY if it exists
     )
 
     after_dedupe = lf.select(pl.len()).collect().item()
