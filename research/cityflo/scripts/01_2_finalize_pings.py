@@ -76,15 +76,19 @@ def apply_gps_jump_filter(lf: pl.LazyFrame) -> pl.LazyFrame:
 
 def _find_bucket_input_files(bucket_id: int) -> list[Path]:
     """
-    Return ONLY current-format raw ingestion outputs for a bucket.
+    Dynamically returns all raw ingestion outputs for a bucket (both legacy and current).
+    Explicitly excludes 'pings_clean_' to prevent the script from recursively processing its own output.
     """
-    # 1. Use a broader glob to catch the February files that have '_part' in the name
+    # 1. Broad glob catches EVERYTHING assigned to this bucket
     all_bucket_files = PROCESSED_DIR.glob(f"*_bucket{bucket_id}.parquet")
     
-    # 2. Keep only current data by filtering OUT anything starting with "before_" (legacy data)
-    current_files = sorted([f for f in all_bucket_files if not f.name.startswith("before_")])
+    # 2. Keep all data types, but block the finalization outputs
+    target_files = sorted([
+        f for f in all_bucket_files 
+        if not f.name.startswith("pings_clean_")
+    ])
 
-    return current_files
+    return target_files
 
 
 def main(bucket_id: int):
