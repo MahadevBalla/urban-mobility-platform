@@ -5,7 +5,7 @@
 #SBATCH --cpus-per-task=16
 #SBATCH --mem=128G
 #SBATCH --time=12:00:00
-#SBATCH --array=0
+#SBATCH --array=0-7%2
 #SBATCH --output=logs/01_2_finalize_pings_%A_%a.out
 #SBATCH --error=logs/01_2_finalize_pings_%A_%a.err
 
