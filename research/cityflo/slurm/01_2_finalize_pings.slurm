@@ -5,14 +5,14 @@
 #SBATCH --cpus-per-task=16
 #SBATCH --mem=128G
 #SBATCH --time=12:00:00
-#SBATCH --array=0-7%2
-#SBATCH --output=logs/01_2_finalize_pings_%A_%a.out
-#SBATCH --error=logs/01_2_finalize_pings_%A_%a.err
+#SBATCH --output=logs/01_2_finalize_pings_%j.out
+#SBATCH --error=logs/01_2_finalize_pings_%j.err
+# NOTICE: No --array flag here either!
 
 set -euo pipefail
 
 echo "================================================="
-echo "01_2_finalize_pings.py  (bucket ${SLURM_ARRAY_TASK_ID})"
+echo "01_2_finalize_pings.py  (Sequential Buckets 0-7)"
 echo "Started: $(date)"
 echo "Node   : $(hostname)"
 echo "================================================="
@@ -25,7 +25,12 @@ CITYFLO_ROOT="/home/ride/25d0295/urban-mobility-platform/research/cityflo"
 cd "${CITYFLO_ROOT}"
 source .venv/bin/activate
 
-python scripts/01_2_finalize_pings.py --bucket_id "${SLURM_ARRAY_TASK_ID}"
+# Loop through all 8 buckets sequentially inside this single SLURM job
+for BUCKET in {0..7}; do
+    echo ""
+    echo "---> STARTING BUCKET ${BUCKET} <---"
+    python scripts/01_2_finalize_pings.py --bucket_id "${BUCKET}"
+done
 
-echo
-echo "Finished: $(date)"
+echo ""
+echo "Finished all 8 buckets successfully: $(date)"
