@@ -71,14 +71,10 @@ from config import (
 
 def _30min_bin_expr(col: str) -> str:
     """
-    Return a DuckDB SQL expression that floors a timestamptz column to the
-    nearest 30-minute boundary.
-
-    epoch(col) returns seconds as a DOUBLE (since timestamptz epoch is seconds).
-    We cast to BIGINT, integer-divide by 1800, then multiply back and convert
-    to timestamptz.
+    FIX: DuckDB '/' is float division. We must use time_bucket 
+    to properly floor the timestamp to a clean 30-minute grid.
     """
-    return f"to_timestamp((epoch({col})::BIGINT / 1800) * 1800)::TIMESTAMPTZ"
+    return f"time_bucket(INTERVAL '30 minutes', {col}::TIMESTAMPTZ)"
 
 
 def build_od_matrix(
@@ -329,6 +325,18 @@ def build_od_matrix(
         print(f"[TEST 2] False 'Valid' trips (< {OD_MIN_DURATION_MIN} absolute minutes): {fake_durations:,}")
         if fake_durations > 0:
             print("WARNING: DATEDIFF minute-boundary trap detected again in OD construction.")
+
+        # 3. Time Bin Purity Check (The DuckDB Trap)
+        unbinned_times = con.execute("""
+            SELECT COUNT(*) FROM od_agg 
+            WHERE EXTRACT(MINUTE FROM time_bin_30min) NOT IN (0, 30)
+               OR EXTRACT(SECOND FROM time_bin_30min) != 0
+        """).fetchone()[0]
+        
+        print(f"[TEST 3] Unbinned timestamps (DuckDB Trap): {unbinned_times:,}")
+        if unbinned_times > 0:
+            print("FATAL: Your 30-minute bins contain exact seconds! The JOIN in Phase 4 will fail.")
+            sys.exit(1) # We halt the pipeline immediately.
         # =====================================================================
 
         # Write outputs
