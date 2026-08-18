@@ -99,7 +99,7 @@ _OPTIONAL_FEATS: list[str] = [
     "lag_2_trip_count",
     "lag_week_trip_count",
     "rolling_24h_std",
-    "lag_day_trip_count"
+    "lag_day_trip_count",  # FIX 1: COMMA ADDED HERE
     # Leakage-safe hex demand (appended dynamically after split)
     "hex_avg_demand",
     "hex_demand_rank",
@@ -271,6 +271,32 @@ def run_xgboost(features_path: Path) -> None:
     # Drop any accidental duplicates (shouldn't happen)
     feat_cols = list(dict.fromkeys(feat_cols))
 
+    # =====================================================================
+    # FIX 2: CITYFLO DEBUG BLOCK: SPARSE MATRIX IMPUTATION
+    # =====================================================================
+    print("\n--- RUNNING SPARSE IMPUTATION ---")
+    # Explicitly treat missing lag/rolling trip counts as 0.0
+    # (a missing record in a sparse matrix means zero trips occurred)
+    sparse_zero_cols = [
+        "lag_1_trip_count", "lag_2_trip_count", "lag_day_trip_count", 
+        "lag_week_trip_count", "rolling_24h_mean", "rolling_24h_std"
+    ]
+    for col in sparse_zero_cols:
+        if col in train.columns:
+            train[col] = train[col].fillna(0.0)
+            valid[col] = valid[col].fillna(0.0)
+            test[col] = test[col].fillna(0.0)
+
+    # Impute remaining features with training median
+    for col in feat_cols:
+        if col not in sparse_zero_cols and col in train.columns:
+            median = train[col].median(skipna=True)
+            fill_val = 0.0 if pd.isna(median) else median
+            train[col] = train[col].fillna(fill_val)
+            valid[col] = valid[col].fillna(fill_val)
+            test[col] = test[col].fillna(fill_val)
+    # =====================================================================
+
     # Track row counts before dropna
     n_before = {"train": len(train), "valid": len(valid), "test": len(test)}
 
@@ -433,7 +459,7 @@ def run_xgboost(features_path: Path) -> None:
     # Save metrics (includes baselines)
     metrics_df = pd.DataFrame(all_metrics)
     metrics_df.to_csv(TABLES_DIR / "xgb_metrics.csv", index=False)
-    print(f"  Metrics     → {TABLES_DIR / 'xgb_metrics.csv'}")
+    print(f"  Metrics      → {TABLES_DIR / 'xgb_metrics.csv'}")
 
     # Helper for safe period metadata
     def _period_info(fold):
