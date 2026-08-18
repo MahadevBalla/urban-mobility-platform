@@ -358,6 +358,24 @@ def run_nb(features_path: Path) -> None:
     valid = valid.dropna(subset=required)
     test = test.dropna(subset=required)
 
+    # =====================================================================
+    # CITYFLO DEBUG BLOCK: THE ZERO-VARIANCE DUMMY TRAP
+    # =====================================================================
+    print("\n--- RUNNING COLLINEARITY DIAGNOSTICS ---")
+    
+    # Find any column that has zero variance (constant value) in the training set
+    constant_cols = [col for col in FEATURE_COLS if train[col].nunique() <= 1]
+    
+    if constant_cols:
+        print(f"[TEST 1] Constant features detected in train: {constant_cols}")
+        print("FATAL: These cause a singular matrix. The GLM log-link will explode in testing.")
+        print("Fixing by dynamically dropping them from the feature list...")
+        global FEATURE_COLS
+        FEATURE_COLS = [c for c in FEATURE_COLS if c not in constant_cols]
+    else:
+        print("[TEST 1] All features have variance > 0.")
+    # =====================================================================
+
     n_after = {"train": len(train), "valid": len(valid), "test": len(test)}
     print(
         "\nRows after dropna  "
